@@ -1,0 +1,12 @@
+# Dependências locais
+node_modules/
+dist/
+public/dist
+.env
+*.log
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
