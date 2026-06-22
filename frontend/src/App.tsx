@@ -4,7 +4,6 @@ import {
   Upload, 
   Copy, 
   Check, 
-  Edit3, 
   Save, 
   RefreshCw, 
   ExternalLink, 
@@ -100,8 +99,6 @@ export default function App() {
   
   // Dados processados
   const [data, setData] = useState<ScanData>(DEFAULT_SCAN_DATA);
-  const [editedData, setEditedData] = useState<ScanData>(DEFAULT_SCAN_DATA);
-  const [isEditing, setIsEditing] = useState(false);
   
   // Controle de erros
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +115,7 @@ export default function App() {
   // Estados de Duplicidade de Equipamento
   const [equipmentExistsInDb, setEquipmentExistsInDb] = useState(false);
   const [existingEquipmentData, setExistingEquipmentData] = useState<ScanData | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   // Referências para Stream da Câmera
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -377,6 +375,7 @@ export default function App() {
     setError(null);
     setEquipmentExistsInDb(false);
     setExistingEquipmentData(null);
+    setShowDuplicateModal(false);
     try {
       const response = await fetch('/api/scan-label', {
         method: 'POST',
@@ -390,10 +389,10 @@ export default function App() {
 
       if (result.success && result.data) {
         setData(result.data);
-        setEditedData(result.data);
         if (result.existsInDb) {
           setEquipmentExistsInDb(true);
           setExistingEquipmentData(result.existingData);
+          setShowDuplicateModal(true);
         }
         setScreen('result');
       } else {
@@ -415,30 +414,19 @@ export default function App() {
   };
 
   const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(editedData, null, 2));
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 2000);
-  };
-
-  const handleSaveEdit = () => {
-    setData(editedData);
-    setIsEditing(false);
-  };
-
-  const handleCancelEdit = () => {
-    setEditedData(data);
-    setIsEditing(false);
   };
 
   const resetAll = () => {
     setCapturedImage(null);
     setData(DEFAULT_SCAN_DATA);
-    setEditedData(DEFAULT_SCAN_DATA);
-    setIsEditing(false);
     setError(null);
     setEquipmentExistsInDb(false);
     setExistingEquipmentData(null);
     setDbMessage(null);
+    setShowDuplicateModal(false);
     setScreen('idle');
   };
 
@@ -1126,39 +1114,12 @@ export default function App() {
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-4">
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parâmetros analisados</span>
-                    
-                    {isEditing ? (
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={handleCancelEdit}
-                          className="text-xs font-medium text-slate-500 hover:text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
-                        >
-                          Cancelar
-                        </button>
-                        <button 
-                          onClick={handleSaveEdit}
-                          className="text-xs font-semibold text-white bg-[#003865] hover:bg-[#004e8c] px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all"
-                        >
-                          <Save className="w-3 h-3" />
-                          <span>Salvar</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => setIsEditing(true)}
-                        className="text-xs font-semibold text-[#003865] hover:text-[#004e8c] px-2.5 py-1 rounded-lg border border-blue-100 hover:bg-blue-50/50 flex items-center gap-1 transition-all"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                        <span>Editar</span>
-                      </button>
-                    )}
                   </div>
 
                   <div className="space-y-3.5">
                     {(Object.keys(fieldLabels) as Array<keyof ScanData>).map((field) => {
                       const label = fieldLabels[field];
                       const value = data[field];
-                      const editedValue = editedData[field];
 
                       return (
                         <div key={field} className="flex flex-col gap-1">
@@ -1166,60 +1127,33 @@ export default function App() {
                             {label}
                           </label>
                           
-                          {isEditing ? (
+                          <div className="relative flex items-center">
                             <input 
                               type="text"
-                              value={editedValue}
-                              onChange={(e) => setEditedData({ ...editedData, [field]: e.target.value })}
-                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-lg px-3 py-1.5 text-sm text-slate-800 outline-none transition-all"
+                              value={value}
+                              onChange={(e) => setData({ ...data, [field]: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-lg pl-3 pr-10 py-2 text-sm text-slate-800 outline-none transition-all font-medium"
+                              placeholder={`Insira o ${label.toLowerCase()}`}
                             />
-                          ) : (
-                            <div className="flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5 transition-colors group">
-                              <span className={`text-sm ${value ? 'text-slate-800 font-medium' : 'text-slate-400 italic'}`}>
-                                {value || 'Não encontrado'}
-                              </span>
-                              
-                              {value && (
-                                <button 
-                                  onClick={() => handleCopyField(field, value)}
-                                  className="text-slate-400 hover:text-[#003865] p-1 rounded-md hover:bg-white transition-all shadow-none hover:shadow-sm"
-                                  title="Copiar Campo"
-                                >
-                                  {copiedField === field ? (
-                                    <Check className="w-3.5 h-3.5 text-blue-600" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                          )}
+                            {value && (
+                              <button 
+                                onClick={() => handleCopyField(field, value)}
+                                className="absolute right-2 text-slate-400 hover:text-[#003865] p-1.5 rounded-md hover:bg-white transition-all"
+                                title="Copiar Campo"
+                              >
+                                {copiedField === field ? (
+                                  <Check className="w-3.5 h-3.5 text-blue-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-
-                {/* AVISO DE DUPLICIDADE */}
-                {equipmentExistsInDb && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2 text-xs text-amber-900">
-                    <div className="flex items-start gap-2 font-bold">
-                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                      <span>Atenção: Este equipamento (GPON: {data.gpon_sn}) já está cadastrado no banco!</span>
-                    </div>
-                    <p className="text-amber-800/90 leading-relaxed">
-                      Você pode editar os dados acima e clicar no botão abaixo para <strong>sobrescrever/atualizar</strong> os dados existentes.
-                    </p>
-                    {existingEquipmentData && (
-                      <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50 space-y-1 font-mono text-[10px] text-amber-800">
-                        <div className="font-bold border-b border-amber-200/50 pb-1 mb-1">Dados anteriores salvos:</div>
-                        <div>• Fabricante: {existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</div>
-                        <div>• MAC: {existingEquipmentData.mac}</div>
-                        <div>• Wi-Fi Key: {existingEquipmentData.wifi_key}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* BOTÃO DE SALVAR NO BANCO DE DADOS (POSTGRESQL) */}
                 <div className="space-y-2">
@@ -1244,6 +1178,7 @@ export default function App() {
                           setDbMessage({ type: 'success', text: result.message || 'Salvo no PostgreSQL!' });
                           // Desativar aviso após salvar com sucesso
                           setEquipmentExistsInDb(false);
+                          setShowDuplicateModal(false);
                         } else {
                           throw new Error(result.error || 'Erro ao conectar ao banco.');
                         }
@@ -1253,7 +1188,7 @@ export default function App() {
                         setIsSavingDb(false);
                       }
                     }}
-                    disabled={isSavingDb || isEditing}
+                    disabled={isSavingDb}
                     className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
                       equipmentExistsInDb 
                         ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
@@ -1321,10 +1256,43 @@ export default function App() {
                         </button>
                       </div>
                       <pre className="overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-48">
-                        {JSON.stringify(editedData, null, 2)}
+                        {JSON.stringify(data, null, 2)}
                       </pre>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* MODAL DE AVISO DE DUPLICIDADE */}
+            {showDuplicateModal && existingEquipmentData && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 animate-scaleUp">
+                  <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  
+                  <h3 className="font-bold text-base text-amber-800 text-center leading-snug">
+                    Atenção: Este equipamento já está cadastrado no banco!
+                  </h3>
+                  
+                  <p className="text-slate-600 text-xs text-center leading-relaxed">
+                    O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já existe no sistema. Você pode ajustar as informações na tela e clicar no botão abaixo para <strong className="text-amber-700">Sobrescrever/Atualizar</strong> os dados existentes.
+                  </p>
+                  
+                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">
+                    <div className="font-bold text-slate-700 border-b border-slate-200 pb-1 mb-1">Dados anteriores salvos:</div>
+                    <div>• Fabricante: <span className="font-medium text-slate-800">{existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</span></div>
+                    <div>• MAC: <span className="font-medium text-slate-800">{existingEquipmentData.mac}</span></div>
+                    <div>• Senha WIFI: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_key}</span></div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setShowDuplicateModal(false)}
+                    className="w-full bg-[#003865] hover:bg-[#004e8c] text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm"
+                  >
+                    Fechar e Editar
+                  </button>
                 </div>
               </div>
             )}
