@@ -420,7 +420,7 @@ app.get('/api/admin/users', async (req, res) => {
 // Rota para exportar todas as etiquetas em XML (somente Admin)
 app.get('/api/admin/export-xml', async (req, res) => {
   try {
-    const { adminEmail } = req.query;
+    const { adminEmail, serialNumber, mac, startDate, endDate } = req.query;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -431,7 +431,36 @@ app.get('/api/admin/export-xml', async (req, res) => {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem exportar o banco.' });
     }
 
-    const etiquetasRes = await dbPool.query('SELECT * FROM etiquetas_scan_onu ORDER BY data_leitura DESC');
+    let queryText = 'SELECT * FROM etiquetas_scan_onu WHERE 1=1';
+    const queryValues: any[] = [];
+    let paramCount = 1;
+
+    if (serialNumber) {
+      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount})`;
+      queryValues.push(`%${serialNumber}%`);
+      paramCount++;
+    }
+
+    if (mac) {
+      queryText += ` AND mac ILIKE $${paramCount}`;
+      queryValues.push(`%${mac}%`);
+      paramCount++;
+    }
+
+    if (startDate) {
+      queryText += ` AND data_leitura >= $${paramCount}`;
+      queryValues.push(startDate);
+      paramCount++;
+    }
+
+    if (endDate) {
+      queryText += ` AND data_leitura <= $${paramCount}`;
+      queryValues.push(`${endDate} 23:59:59`);
+      paramCount++;
+    }
+
+    queryText += ' ORDER BY data_leitura DESC';
+    const etiquetasRes = await dbPool.query(queryText, queryValues);
     
     // Construção do XML usando xmlbuilder2
     const root = create({ version: '1.0', encoding: 'UTF-8' })

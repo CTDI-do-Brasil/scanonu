@@ -63,6 +63,12 @@ export default function App() {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
+  // Filtros de Exportação
+  const [filterSerial, setFilterSerial] = useState('');
+  const [filterMac, setFilterMac] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+
   // Estados de Fluxo da Tela: 'idle', 'camera', 'processing', 'result'
   const [screen, setScreen] = useState<'idle' | 'camera' | 'processing' | 'result'>('idle');
   
@@ -215,7 +221,13 @@ export default function App() {
   const handleExportXML = async () => {
     if (!user || user.role !== 'admin') return;
     try {
-      const response = await fetch(`/api/admin/export-xml?adminEmail=${encodeURIComponent(user.email)}`);
+      const response = await fetch(
+        `/api/admin/export-xml?adminEmail=${encodeURIComponent(user.email)}` +
+        `&serialNumber=${encodeURIComponent(filterSerial)}` +
+        `&mac=${encodeURIComponent(filterMac)}` +
+        `&startDate=${encodeURIComponent(filterStartDate)}` +
+        `&endDate=${encodeURIComponent(filterEndDate)}`
+      );
       if (!response.ok) {
         throw new Error('Erro ao exportar banco.');
       }
@@ -561,16 +573,76 @@ export default function App() {
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-slate-800">Exportar Banco de Dados</h4>
-                  <p className="text-[11px] text-slate-400">Baixe todas as leituras de etiquetas em formato XML</p>
+                  <p className="text-[11px] text-slate-400">Configure filtros opcionais e baixe as leituras em XML</p>
                 </div>
               </div>
-              <button
-                onClick={handleExportXML}
-                className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
-              >
-                <Download className="w-4 h-4" />
-                <span>Baixar XML de Leituras</span>
-              </button>
+
+              {/* Filtros */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Serial Number</label>
+                  <input 
+                    type="text" 
+                    placeholder="GPON ou CPE Serial"
+                    value={filterSerial}
+                    onChange={(e) => setFilterSerial(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Endereço MAC</label>
+                  <input 
+                    type="text" 
+                    placeholder="MAC da ONU"
+                    value={filterMac}
+                    onChange={(e) => setFilterMac(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Inicial</label>
+                  <input 
+                    type="date" 
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Final</label>
+                  <input 
+                    type="date" 
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Botões de Ação do Filtro */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setFilterSerial('');
+                    setFilterMac('');
+                    setFilterStartDate('');
+                    setFilterEndDate('');
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all"
+                >
+                  Limpar
+                </button>
+                <button
+                  onClick={handleExportXML}
+                  className="flex-1 bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar XML de Leituras</span>
+                </button>
+              </div>
             </div>
 
             {/* Cadastrar Usuário */}
