@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { Pool } from 'pg';
+import { create } from 'xmlbuilder2';
 
 dotenv.config();
 
@@ -39,7 +40,7 @@ async function connectToDatabase() {
       dbConnected = true;
       console.log('Conexão estabelecida com sucesso com o PostgreSQL.');
 
-      // Criar a tabela automaticamente se não existir
+      // Criar a tabela de etiquetas
       const createTableQuery = `
         CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
           id SERIAL PRIMARY KEY,
@@ -56,16 +57,33 @@ async function connectToDatabase() {
         );
       `;
       await dbPool.query(createTableQuery);
-      
+
+      // Criar a tabela de usuários
+      const createUsersTableQuery = `
+        CREATE TABLE IF NOT EXISTS usuarios_scan_onu (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(150) UNIQUE NOT NULL,
+          senha VARCHAR(100) NOT NULL,
+          role VARCHAR(50) DEFAULT 'operador'
+        );
+      `;
+      await dbPool.query(createUsersTableQuery);
+      console.log('Tabelas de banco validadas/criadas com sucesso.');
+
       // Garantir que a constraint UNIQUE exista caso a tabela já tenha sido criada anteriormente sem ela
       try {
         await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
-        console.log('Constraint UNIQUE (gpon_sn) adicionada com sucesso.');
-      } catch (e) {
-        // Ignora erro se a constraint já existir
+        console.log('Constraint UNIQUE (gpon_sn) adicionada.');
+      } catch (e) {}
+
+      // Cadastrar o admin padrão se não houver usuários cadastrados no banco
+      const userCountRes = await dbPool.query('SELECT COUNT(*) FROM usuarios_scan_onu');
+      if (parseInt(userCountRes.rows[0].count) === 0) {
+        await dbPool.query(
+          "INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ('admin@scanonu.com', 'admin123', 'admin')"
+        );
+        console.log('Usuário admin padrão (admin@scanonu.com / admin123) cadastrado com sucesso.');
       }
-      
-      console.log('Tabela "etiquetas_scan_onu" validada/criada com sucesso no PostgreSQL.');
 
     } catch (err: any) {
       console.error('Falha ao conectar ou inicializar o PostgreSQL:', err.message || err);
@@ -309,6 +327,143 @@ app.post('/api/save-label', async (req, res) => {
       error: 'Não foi possível gravar os dados no PostgreSQL.',
       details: dbError.message || String(dbError)
     });
+  }
+});
+
+// Rota de login real usando o PostgreSQL
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, senha } = req.body;
+
+    if (!dbConnected || !dbPool) {
+      // Fallback local se o banco não estiver configurado para testes
+      if (email === 'admin@scanonu.com' && senha === 'admin123') {
+        return res.json({ success: true, user: { email, role: 'admin' } });
+      }
+      return res.status(401).json({ error: 'Banco desconectado. Credenciais inválidas.' });
+    }
+
+    const userRes = await dbPool.query(
+      'SELECT email, role FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
+      [email.trim().toLowerCase(), senha]
+    );
+
+    if (userRes.rowCount && userRes.rowCount > 0) {
+      return res.json({ 
+        success: true, 
+        user: userRes.rows[0] 
+      });
+    } else {
+      return res.status(401).json({ error: 'Credenciais inválidas. Verifique seu e-mail e senha.' });
+    }
+
+  } catch (err: any) {
+    console.error('Erro na rota de login:', err);
+    return res.status(500).json({ error: 'Erro interno ao validar login.' });
+  }
+});
+
+// Rota para cadastrar novos usuários (somente Admin)
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    const { email, senha, role, adminEmail } = req.body;
+
+    if (!dbConnected || !dbPool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    // Verificar se quem está requisitando é admin de verdade
+    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
+    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem cadastrar usuários.' });
+    }
+
+    await dbPool.query(
+      'INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ($1, $2, $3)',
+      [email.trim().toLowerCase(), senha, role || 'operador']
+    );
+
+    return res.json({ success: true, message: `Usuário ${email} cadastrado com sucesso!` });
+
+  } catch (err: any) {
+    console.error('Erro ao cadastrar usuário:', err);
+    if (err.code === '23505') { // Código de erro de chave duplicada no PostgreSQL
+      return res.status(400).json({ error: 'Este e-mail já está cadastrado.' });
+    }
+    return res.status(500).json({ error: 'Erro interno ao cadastrar usuário.' });
+  }
+});
+
+// Rota para listar usuários (somente Admin)
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const { adminEmail } = req.query;
+
+    if (!dbConnected || !dbPool) {
+      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'admin' }] });
+    }
+
+    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
+    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
+    const usersRes = await dbPool.query('SELECT id, email, role FROM usuarios_scan_onu ORDER BY email ASC');
+    return res.json({ success: true, users: usersRes.rows });
+
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao listar usuários.' });
+  }
+});
+
+// Rota para exportar todas as etiquetas em XML (somente Admin)
+app.get('/api/admin/export-xml', async (req, res) => {
+  try {
+    const { adminEmail } = req.query;
+
+    if (!dbConnected || !dbPool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
+    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem exportar o banco.' });
+    }
+
+    const etiquetasRes = await dbPool.query('SELECT * FROM etiquetas_scan_onu ORDER BY data_leitura DESC');
+    
+    // Construção do XML usando xmlbuilder2
+    const root = create({ version: '1.0', encoding: 'UTF-8' })
+      .ele('scanonu')
+        .ele('etiquetas');
+
+    etiquetasRes.rows.forEach((row) => {
+      root.ele('onu')
+        .ele('id').txt(String(row.id)).up()
+        .ele('fabricante').txt(row.fabricante || '').up()
+        .ele('modelo').txt(row.modelo || '').up()
+        .ele('cpe_sn').txt(row.cpe_sn || '').up()
+        .ele('gpon_sn').txt(row.gpon_sn || '').up()
+        .ele('mac').txt(row.mac || '').up()
+        .ele('wifi_key').txt(row.wifi_key || '').up()
+        .ele('usuario').txt(row.usuario || '').up()
+        .ele('senha').txt(row.senha || '').up()
+        .ele('operador_email').txt(row.operador_email || '').up()
+        .ele('data_leitura').txt(String(row.data_leitura)).up()
+      .up();
+    });
+
+    const xmlString = root.end({ prettyPrint: true });
+
+    // Definir os headers HTTP para forçar o download do arquivo XML
+    res.header('Content-Type', 'application/xml');
+    res.attachment('scanonu_etiquetas.xml');
+    return res.send(xmlString);
+
+  } catch (err: any) {
+    console.error('Erro ao exportar XML:', err);
+    return res.status(500).json({ error: 'Erro ao gerar arquivo XML.' });
   }
 });
 

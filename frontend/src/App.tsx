@@ -17,7 +17,10 @@ import {
   Lock,
   Mail,
   LogOut,
-  UserCheck
+  UserCheck,
+  Users,
+  UserPlus,
+  Download
 } from 'lucide-react';
 
 interface ScanData {
@@ -44,11 +47,21 @@ const DEFAULT_SCAN_DATA: ScanData = {
 
 export default function App() {
   // Autenticação
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Administração
+  const [adminTab, setAdminTab] = useState<'scan' | 'admin'>('scan');
+  const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string }>>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('operador');
+  const [adminMessage, setAdminMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Estados de Fluxo da Tela: 'idle', 'camera', 'processing', 'result'
   const [screen, setScreen] = useState<'idle' | 'camera' | 'processing' | 'result'>('idle');
@@ -87,9 +100,13 @@ export default function App() {
 
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
-    const authStatus = localStorage.getItem('scanonu_authenticated');
-    if (authStatus === 'true') {
-      setIsAuthenticated(true);
+    const storedUser = localStorage.getItem('scanonu_user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('scanonu_user');
+      }
     }
   }, []);
 
@@ -100,30 +117,120 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Buscar usuários quando na aba admin
+  const fetchUsers = async () => {
+    if (!user || user.role !== 'admin') return;
+    setIsLoadingUsers(true);
+    try {
+      const response = await fetch(`/api/admin/users?adminEmail=${encodeURIComponent(user.email)}`);
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setUsersList(result.users);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar usuários:', err);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (adminTab === 'admin') {
+      fetchUsers();
+    }
+  }, [adminTab]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
     setIsLoggingIn(true);
 
-    // Validação simples simulada (Credenciais padrão: admin@scanonu.com / admin123)
-    setTimeout(() => {
-      if (emailInput.trim().toLowerCase() === 'admin@scanonu.com' && passwordInput === 'admin123') {
-        setIsAuthenticated(true);
-        localStorage.setItem('scanonu_authenticated', 'true');
-        setIsLoggingIn(false);
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: emailInput, senha: passwordInput })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setUser(result.user);
+        localStorage.setItem('scanonu_user', JSON.stringify(result.user));
       } else {
-        setLoginError('Credenciais inválidas. Use admin@scanonu.com e admin123.');
-        setIsLoggingIn(false);
+        setLoginError(result.error || 'Credenciais inválidas. Verifique seu e-mail e senha.');
       }
-    }, 800);
+    } catch (err: any) {
+      setLoginError('Erro de conexão com o servidor.');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('scanonu_authenticated');
+    setUser(null);
+    localStorage.removeItem('scanonu_user');
     setEmailInput('');
     setPasswordInput('');
+    setAdminTab('scan');
     resetAll();
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || user.role !== 'admin') return;
+    setAdminMessage(null);
+    setIsCreatingUser(true);
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: newEmail,
+          senha: newPassword,
+          role: newRole,
+          adminEmail: user.email
+        })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setAdminMessage({ type: 'success', text: result.message || 'Usuário cadastrado com sucesso!' });
+        setNewEmail('');
+        setNewPassword('');
+        setNewRole('operador');
+        fetchUsers();
+      } else {
+        setAdminMessage({ type: 'error', text: result.error || 'Erro ao cadastrar usuário.' });
+      }
+    } catch (err) {
+      setAdminMessage({ type: 'error', text: 'Erro de conexão com o servidor.' });
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  const handleExportXML = async () => {
+    if (!user || user.role !== 'admin') return;
+    try {
+      const response = await fetch(`/api/admin/export-xml?adminEmail=${encodeURIComponent(user.email)}`);
+      if (!response.ok) {
+        throw new Error('Erro ao exportar banco.');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'scanonu_etiquetas.xml';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Erro ao exportar arquivo XML: ' + (err.message || err));
+    }
   };
 
   const startCamera = async () => {
@@ -282,7 +389,7 @@ export default function App() {
   };
 
   // RENDERIZAÇÃO DA ÁREA DE LOGIN
-  if (!isAuthenticated) {
+  if (!user) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-slate-50 text-slate-800 font-sans max-w-md mx-auto shadow-xl border-x border-slate-200/50 p-6">
         <div className="flex-1 flex flex-col justify-center">
@@ -398,8 +505,33 @@ export default function App() {
         </div>
       </header>
 
+      {user?.role === 'admin' && (
+        <div className="bg-white border-b border-slate-200/60 flex">
+          <button
+            onClick={() => setAdminTab('scan')}
+            className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
+              adminTab === 'scan'
+                ? 'border-teal-600 text-teal-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Escaneador
+          </button>
+          <button
+            onClick={() => setAdminTab('admin')}
+            className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
+              adminTab === 'admin'
+                ? 'border-teal-600 text-teal-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Painel Admin
+          </button>
+        </div>
+      )}
+
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 p-4 flex flex-col">
+      <main className="flex-1 p-4 flex flex-col space-y-4">
         {/* Notificação de Erro */}
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5 text-red-800 text-sm">
@@ -414,392 +546,534 @@ export default function App() {
           </div>
         )}
 
-        {/* 1. TELA INICIAL (IDLE) */}
-        {screen === 'idle' && (
-          <div className="flex-1 flex flex-col justify-between py-4 animate-fadeIn">
-            {/* Dicas Rápidas (Collapsible) */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm transition-all duration-300">
-              <button 
-                onClick={() => setShowTips(!showTips)}
-                className="w-full px-4 py-3 bg-slate-50/50 flex items-center justify-between hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-2 text-slate-700">
-                  <Info className="w-4 h-4 text-teal-600" />
-                  <span className="font-semibold text-sm">Dicas para melhor leitura</span>
+        {adminTab === 'admin' && user?.role === 'admin' ? (
+          // PAINEL ADMINISTRATIVO
+          <div className="space-y-6 animate-fadeIn">
+            {/* Exportar Banco em XML */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100">
+                  <Download className="w-5 h-5" />
                 </div>
-                {showTips ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-              
-              {showTips && (
-                <div className="p-4 border-t border-slate-100 text-xs text-slate-600 space-y-2.5 bg-white">
-                  <div className="flex gap-2">
-                    <span className="text-teal-600 font-bold">1.</span>
-                    <p>Evite reflexos de luz diretamente na etiqueta.</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-teal-600 font-bold">2.</span>
-                    <p>Mantenha a etiqueta focada e paralela à câmera.</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-teal-600 font-bold">3.</span>
-                    <p>Garanta boa iluminação sobre os dados do equipamento.</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-teal-600 font-bold">4.</span>
-                    <p>Se a câmera falhar, tire uma foto normal e envie pelo botão Galeria.</p>
-                  </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">Exportar Banco de Dados</h4>
+                  <p className="text-[11px] text-slate-400">Baixe todas as leituras de etiquetas em formato XML</p>
                 </div>
-              )}
-            </div>
-
-            {/* Painel Central Clean de Ação */}
-            <div className="my-10 flex-1 flex flex-col justify-center items-center text-center px-4">
-              <div className="w-20 h-20 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mb-6 border border-teal-100 shadow-inner">
-                <Camera className="w-10 h-10" />
               </div>
-              <h2 className="text-xl font-bold text-slate-800">Escaneador de ONU</h2>
-              <p className="text-slate-500 text-sm mt-2 max-w-xs">
-                Capture ou envie a etiqueta do equipamento para extrair os códigos de barra e credenciais instantaneamente.
-              </p>
-            </div>
-
-            {/* Botões de Ação */}
-            <div className="space-y-3">
-              <button 
-                onClick={startCamera}
-                className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-teal-600/15 transition-all"
-              >
-                <Camera className="w-5 h-5" />
-                <span>Tirar Foto (Câmera)</span>
-              </button>
-
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
-              >
-                <Upload className="w-5 h-5 text-slate-500" />
-                <span>Buscar Arquivo (Galeria)</span>
-              </button>
-              
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileUpload} 
-                accept="image/*" 
-                className="hidden" 
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 2. TELA DA CÂMERA (STREAM EM TEMPO REAL) */}
-        {screen === 'camera' && (
-          <div className="fixed inset-0 bg-black z-50 flex flex-col justify-between max-w-md mx-auto">
-            {/* Header da Câmera */}
-            <div className="p-4 flex justify-between items-center bg-black/40 backdrop-blur-sm z-10">
-              <span className="text-white font-medium text-sm">Escaneando etiqueta...</span>
-              <button 
-                onClick={cancelCamera}
-                className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur transition-all"
-              >
-                Cancelar
-              </button>
-            </div>
-
-            {/* Stream de Vídeo com Guia Retícula */}
-            <div className="relative flex-1 bg-neutral-950 flex items-center justify-center overflow-hidden">
-              <video 
-                ref={videoRef}
-                autoPlay 
-                playsInline
-                muted
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-              
-              {/* Retícula guia centralizada */}
-              <div className="relative w-72 h-44 border-2 border-dashed border-teal-400/80 rounded-xl flex flex-col items-center justify-between p-4 z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-                {/* Cantores destacados */}
-                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-teal-400 rounded-tl-lg"></div>
-                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-teal-400 rounded-tr-lg"></div>
-                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-teal-400 rounded-bl-lg"></div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-teal-400 rounded-br-lg"></div>
-                
-                <span className="text-white/40 text-[10px] uppercase tracking-wider font-bold mt-auto pb-2">
-                  Alinhe a etiqueta da ONU aqui
-                </span>
-              </div>
-            </div>
-
-            {/* Rodapé da Câmera com Botão de Captura */}
-            <div className="p-6 bg-black/60 backdrop-blur-sm flex justify-center z-10">
-              <button 
-                onClick={capturePhoto}
-                className="bg-teal-500 hover:bg-teal-400 active:scale-95 text-slate-950 font-bold px-6 py-4 rounded-full flex items-center gap-3 shadow-lg shadow-teal-500/20 transition-all text-sm uppercase tracking-wide"
-              >
-                <Camera className="w-5 h-5 fill-current" />
-                <span>Capturar Imagem</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 3. TELA DE PROCESSAMENTO (LOADING) */}
-        {screen === 'processing' && (
-          <div className="flex-1 flex flex-col items-center justify-center py-10 animate-fadeIn">
-            <div className="relative mb-8">
-              <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin"></div>
-            </div>
-            
-            <h3 className="text-lg font-bold text-slate-800">Processando imagem...</h3>
-            <p className="text-slate-400 text-xs mt-1">Extraindo dados usando Inteligência Artificial</p>
-
-            {/* Miniatura Grayscale */}
-            {capturedImage && (
-              <div className="mt-8 border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm w-36 aspect-[4/3] bg-slate-100">
-                <img 
-                  src={capturedImage} 
-                  alt="Etiqueta capturada" 
-                  className="w-full h-full object-cover filter grayscale contrast-125 opacity-70"
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. TELA DE RESULTADOS */}
-        {screen === 'result' && (
-          <div className="flex-1 flex flex-col py-2 animate-fadeIn space-y-5">
-            {/* Cabeçalho da Leitura */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Dados Extraídos</h3>
-                <p className="text-xs text-slate-400">Verifique e edite se necessário</p>
-              </div>
-              <button 
-                onClick={resetAll}
-                className="bg-teal-50 hover:bg-teal-100 text-teal-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Nova Leitura</span>
-              </button>
-            </div>
-
-            {/* Prévia da Foto Enviada */}
-            {capturedImage && (
-              <div className="rounded-xl overflow-hidden border border-slate-200 h-28 w-full bg-slate-100">
-                <img 
-                  src={capturedImage} 
-                  alt="Prévia da Etiqueta" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
-
-            {/* Container dos Campos Extraídos */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parâmetros analisados</span>
-                
-                {isEditing ? (
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={handleCancelEdit}
-                      className="text-xs font-medium text-slate-500 hover:text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={handleSaveEdit}
-                      className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all"
-                    >
-                      <Save className="w-3 h-3" />
-                      <span>Salvar</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => setIsEditing(true)}
-                    className="text-xs font-semibold text-teal-600 hover:text-teal-700 px-2.5 py-1 rounded-lg border border-teal-100 hover:bg-teal-50 flex items-center gap-1 transition-all"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Editar</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="space-y-3.5">
-                {(Object.keys(fieldLabels) as Array<keyof ScanData>).map((field) => {
-                  const label = fieldLabels[field];
-                  const value = data[field];
-                  const editedValue = editedData[field];
-
-                  return (
-                    <div key={field} className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-                        {label}
-                      </label>
-                      
-                      {isEditing ? (
-                        <input 
-                          type="text"
-                          value={editedValue}
-                          onChange={(e) => setEditedData({ ...editedData, [field]: e.target.value })}
-                          className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-lg px-3 py-1.5 text-sm text-slate-800 outline-none transition-all"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5 transition-colors group">
-                          <span className={`text-sm ${value ? 'text-slate-800 font-medium' : 'text-slate-400 italic'}`}>
-                            {value || 'Não encontrado'}
-                          </span>
-                          
-                          {value && (
-                            <button 
-                              onClick={() => handleCopyField(field, value)}
-                              className="text-slate-400 hover:text-teal-600 p-1 rounded-md hover:bg-white transition-all shadow-none hover:shadow-sm"
-                              title="Copiar Campo"
-                            >
-                              {copiedField === field ? (
-                                <Check className="w-3.5 h-3.5 text-green-600" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* AVISO DE DUPLICIDADE */}
-            {equipmentExistsInDb && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2 text-xs text-amber-900">
-                <div className="flex items-start gap-2 font-bold">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                  <span>Atenção: Este equipamento (GPON: {data.gpon_sn}) já está cadastrado no banco!</span>
-                </div>
-                <p className="text-amber-800/90 leading-relaxed">
-                  Você pode editar os dados acima e clicar no botão abaixo para <strong>sobrescrever/atualizar</strong> os dados existentes.
-                </p>
-                {existingEquipmentData && (
-                  <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50 space-y-1 font-mono text-[10px] text-amber-800">
-                    <div className="font-bold border-b border-amber-200/50 pb-1 mb-1">Dados anteriores salvos:</div>
-                    <div>• Fabricante: {existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</div>
-                    <div>• MAC: {existingEquipmentData.mac}</div>
-                    <div>• Wi-Fi Key: {existingEquipmentData.wifi_key}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* BOTÃO DE SALVAR NO BANCO DE DADOS (POSTGRESQL) */}
-            <div className="space-y-2">
               <button
-                onClick={async () => {
-                  setIsSavingDb(true);
-                  setDbMessage(null);
-                  try {
-                    const response = await fetch('/api/save-label', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        ...data,
-                        operador: emailInput || 'admin@scanonu.com',
-                        overwrite: equipmentExistsInDb // Se já existe, envia para sobrescrever
-                      })
-                    });
-                    const result = await response.json();
-                    if (result.success) {
-                      setDbMessage({ type: 'success', text: result.message || 'Salvo no PostgreSQL!' });
-                      // Desativar aviso após salvar com sucesso
-                      setEquipmentExistsInDb(false);
-                    } else {
-                      throw new Error(result.error || 'Erro ao conectar ao banco.');
-                    }
-                  } catch (err: any) {
-                    setDbMessage({ type: 'error', text: err.message || 'Falha ao salvar no banco.' });
-                  } finally {
-                    setIsSavingDb(false);
-                  }
-                }}
-                disabled={isSavingDb || isEditing}
-                className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
-                  equipmentExistsInDb 
-                    ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
-                    : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-teal-600/15 text-white'
-                }`}
+                onClick={handleExportXML}
+                className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
               >
-                {isSavingDb ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>{equipmentExistsInDb ? 'Sobrescrevendo dados...' : 'Gravando no PostgreSQL...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>{equipmentExistsInDb ? 'Sobrescrever/Atualizar no PostgreSQL' : 'Enviar para o PostgreSQL'}</span>
-                  </>
-                )}
+                <Download className="w-4 h-4" />
+                <span>Baixar XML de Leituras</span>
               </button>
+            </div>
 
-              {dbMessage && (
+            {/* Cadastrar Usuário */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">Cadastrar Novo Usuário</h4>
+                  <p className="text-[11px] text-slate-400">Crie credenciais de acesso para a equipe</p>
+                </div>
+              </div>
+
+              {adminMessage && (
                 <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
-                  dbMessage.type === 'success' 
+                  adminMessage.type === 'success' 
                     ? 'bg-green-50 border-green-200 text-green-800' 
                     : 'bg-red-50 border-red-200 text-red-800'
                 }`}>
-                  {dbMessage.type === 'success' ? (
+                  {adminMessage.type === 'success' ? (
                     <Check className="w-4 h-4 text-green-600" />
                   ) : (
                     <AlertTriangle className="w-4 h-4 text-red-600" />
                   )}
-                  <span>{dbMessage.text}</span>
+                  <span>{adminMessage.text}</span>
                 </div>
               )}
+
+              <form onSubmit={handleCreateUser} className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">E-mail</label>
+                  <input 
+                    type="email" 
+                    required
+                    placeholder="ex: operador@scanonu.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Senha</label>
+                  <input 
+                    type="password" 
+                    required
+                    placeholder="Senha temporária"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</label>
+                  <select
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                  >
+                    <option value="operador">Operador (Apenas scanner)</option>
+                    <option value="admin">Administrador (Scanner + Painel)</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={isCreatingUser}
+                  className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 disabled:bg-teal-600/60 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                >
+                  {isCreatingUser ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Cadastrar Usuário</span>
+                    </>
+                  )}
+                </button>
+              </form>
             </div>
 
-            {/* Seção Sanfonada (Collapsible Card) com JSON Cru */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
-              <button 
-                onClick={() => setShowJsonRaw(!showJsonRaw)}
-                className="w-full px-4 py-3 bg-slate-50/50 flex items-center justify-between hover:bg-slate-50 transition-colors"
-              >
-                <span className="font-semibold text-sm text-slate-700">JSON Estruturado</span>
-                {showJsonRaw ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-              
-              {showJsonRaw && (
-                <div className="p-4 border-t border-slate-100 bg-slate-900 text-slate-300 font-mono text-[10px] space-y-3">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span className="text-slate-500">raw_output.json</span>
-                    <button 
-                      onClick={handleCopyJson}
-                      className="text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800/80 hover:bg-slate-800 px-2 py-1 rounded-md transition-colors"
-                    >
-                      {copiedJson ? (
-                        <>
-                          <Check className="w-3 h-3 text-green-400" />
-                          <span>Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>Copiar JSON</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <pre className="overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-48">
-                    {JSON.stringify(editedData, null, 2)}
-                  </pre>
+            {/* Lista de Usuários */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">Usuários Cadastrados</h4>
+                  <p className="text-[11px] text-slate-400">Lista de e-mails ativos e suas permissões</p>
+                </div>
+              </div>
+
+              {isLoadingUsers ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-5 h-5 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <div className="border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-100">
+                  {usersList.map((usr) => (
+                    <div key={usr.email} className="px-3.5 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors">
+                      <div className="font-medium text-slate-700">{usr.email}</div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        usr.role === 'admin'
+                          ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                          : 'bg-teal-50 text-teal-700 border border-teal-100'
+                      }`}>
+                        {usr.role === 'admin' ? 'Admin' : 'Operador'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
+        ) : (
+          <>
+            {/* 1. TELA INICIAL (IDLE) */}
+            {screen === 'idle' && (
+              <div className="flex-1 flex flex-col justify-between py-4 animate-fadeIn">
+                {/* Dicas Rápidas (Collapsible) */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm transition-all duration-300">
+                  <button 
+                    onClick={() => setShowTips(!showTips)}
+                    className="w-full px-4 py-3 bg-slate-50/50 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <Info className="w-4 h-4 text-teal-600" />
+                      <span className="font-semibold text-sm">Dicas para melhor leitura</span>
+                    </div>
+                    {showTips ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  
+                  {showTips && (
+                    <div className="p-4 border-t border-slate-100 text-xs text-slate-600 space-y-2.5 bg-white">
+                      <div className="flex gap-2">
+                        <span className="text-teal-600 font-bold">1.</span>
+                        <p>Evite reflexos de luz diretamente na etiqueta.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-teal-600 font-bold">2.</span>
+                        <p>Mantenha a etiqueta focada e paralela à câmera.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-teal-600 font-bold">3.</span>
+                        <p>Garanta boa iluminação sobre os dados do equipamento.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-teal-600 font-bold">4.</span>
+                        <p>Se a câmera falhar, tire uma foto normal e envie pelo botão Galeria.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Painel Central Clean de Ação */}
+                <div className="my-10 flex-1 flex flex-col justify-center items-center text-center px-4">
+                  <div className="w-20 h-20 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mb-6 border border-teal-100 shadow-inner">
+                    <Camera className="w-10 h-10" />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Escaneador de ONU</h2>
+                  <p className="text-slate-500 text-sm mt-2 max-w-xs">
+                    Capture ou envie a etiqueta do equipamento para extrair os códigos de barra e credenciais instantaneamente.
+                  </p>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="space-y-3">
+                  <button 
+                    onClick={startCamera}
+                    className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-teal-600/15 transition-all"
+                  >
+                    <Camera className="w-5 h-5" />
+                    <span>Tirar Foto (Câmera)</span>
+                  </button>
+
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
+                  >
+                    <Upload className="w-5 h-5 text-slate-500" />
+                    <span>Buscar Arquivo (Galeria)</span>
+                  </button>
+                  
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileUpload} 
+                    accept="image/*" 
+                    className="hidden" 
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 2. TELA DA CÂMERA (STREAM EM TEMPO REAL) */}
+            {screen === 'camera' && (
+              <div className="fixed inset-0 bg-black z-50 flex flex-col justify-between max-w-md mx-auto">
+                {/* Header da Câmera */}
+                <div className="p-4 flex justify-between items-center bg-black/40 backdrop-blur-sm z-10">
+                  <span className="text-white font-medium text-sm">Escaneando etiqueta...</span>
+                  <button 
+                    onClick={cancelCamera}
+                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+
+                {/* Stream de Vídeo com Guia Retícula */}
+                <div className="relative flex-1 bg-neutral-950 flex items-center justify-center overflow-hidden">
+                  <video 
+                    ref={videoRef}
+                    autoPlay 
+                    playsInline
+                    muted
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                  
+                  {/* Retícula guia centralizada */}
+                  <div className="relative w-72 h-44 border-2 border-dashed border-teal-400/80 rounded-xl flex flex-col items-center justify-between p-4 z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                    {/* Cantores destacados */}
+                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-teal-400 rounded-tl-lg"></div>
+                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-teal-400 rounded-tr-lg"></div>
+                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-teal-400 rounded-bl-lg"></div>
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-teal-400 rounded-br-lg"></div>
+                    
+                    <span className="text-white/40 text-[10px] uppercase tracking-wider font-bold mt-auto pb-2">
+                      Alinhe a etiqueta da ONU aqui
+                    </span>
+                  </div>
+                </div>
+
+                {/* Rodapé da Câmera com Botão de Captura */}
+                <div className="p-6 bg-black/60 backdrop-blur-sm flex justify-center z-10">
+                  <button 
+                    onClick={capturePhoto}
+                    className="bg-teal-500 hover:bg-teal-400 active:scale-95 text-slate-950 font-bold px-6 py-4 rounded-full flex items-center gap-3 shadow-lg shadow-teal-500/20 transition-all text-sm uppercase tracking-wide"
+                  >
+                    <Camera className="w-5 h-5 fill-current" />
+                    <span>Capturar Imagem</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 3. TELA DE PROCESSAMENTO (LOADING) */}
+            {screen === 'processing' && (
+              <div className="flex-1 flex flex-col items-center justify-center py-10 animate-fadeIn">
+                <div className="relative mb-8">
+                  <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin"></div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-slate-800">Processando imagem...</h3>
+                <p className="text-slate-400 text-xs mt-1">Extraindo dados usando Inteligência Artificial</p>
+
+                {/* Miniatura Grayscale */}
+                {capturedImage && (
+                  <div className="mt-8 border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm w-36 aspect-[4/3] bg-slate-100">
+                    <img 
+                      src={capturedImage} 
+                      alt="Etiqueta capturada" 
+                      className="w-full h-full object-cover filter grayscale contrast-125 opacity-70"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 4. TELA DE RESULTADOS */}
+            {screen === 'result' && (
+              <div className="flex-1 flex flex-col py-2 animate-fadeIn space-y-5">
+                {/* Cabeçalho da Leitura */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Dados Extraídos</h3>
+                    <p className="text-xs text-slate-400">Verifique e edite se necessário</p>
+                  </div>
+                  <button 
+                    onClick={resetAll}
+                    className="bg-teal-50 hover:bg-teal-100 text-teal-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Nova Leitura</span>
+                  </button>
+                </div>
+
+                {/* Prévia da Foto Enviada */}
+                {capturedImage && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 h-28 w-full bg-slate-100">
+                    <img 
+                      src={capturedImage} 
+                      alt="Prévia da Etiqueta" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Container dos Campos Extraídos */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parâmetros analisados</span>
+                    
+                    {isEditing ? (
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={handleCancelEdit}
+                          className="text-xs font-medium text-slate-500 hover:text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          onClick={handleSaveEdit}
+                          className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all"
+                        >
+                          <Save className="w-3 h-3" />
+                          <span>Salvar</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="text-xs font-semibold text-teal-600 hover:text-teal-700 px-2.5 py-1 rounded-lg border border-teal-100 hover:bg-teal-50 flex items-center gap-1 transition-all"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Editar</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3.5">
+                    {(Object.keys(fieldLabels) as Array<keyof ScanData>).map((field) => {
+                      const label = fieldLabels[field];
+                      const value = data[field];
+                      const editedValue = editedData[field];
+
+                      return (
+                        <div key={field} className="flex flex-col gap-1">
+                          <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                            {label}
+                          </label>
+                          
+                          {isEditing ? (
+                            <input 
+                              type="text"
+                              value={editedValue}
+                              onChange={(e) => setEditedData({ ...editedData, [field]: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-lg px-3 py-1.5 text-sm text-slate-800 outline-none transition-all"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5 transition-colors group">
+                              <span className={`text-sm ${value ? 'text-slate-800 font-medium' : 'text-slate-400 italic'}`}>
+                                {value || 'Não encontrado'}
+                              </span>
+                              
+                              {value && (
+                                <button 
+                                  onClick={() => handleCopyField(field, value)}
+                                  className="text-slate-400 hover:text-teal-600 p-1 rounded-md hover:bg-white transition-all shadow-none hover:shadow-sm"
+                                  title="Copiar Campo"
+                                >
+                                  {copiedField === field ? (
+                                    <Check className="w-3.5 h-3.5 text-green-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* AVISO DE DUPLICIDADE */}
+                {equipmentExistsInDb && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2 text-xs text-amber-900">
+                    <div className="flex items-start gap-2 font-bold">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                      <span>Atenção: Este equipamento (GPON: {data.gpon_sn}) já está cadastrado no banco!</span>
+                    </div>
+                    <p className="text-amber-800/90 leading-relaxed">
+                      Você pode editar os dados acima e clicar no botão abaixo para <strong>sobrescrever/atualizar</strong> os dados existentes.
+                    </p>
+                    {existingEquipmentData && (
+                      <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50 space-y-1 font-mono text-[10px] text-amber-800">
+                        <div className="font-bold border-b border-amber-200/50 pb-1 mb-1">Dados anteriores salvos:</div>
+                        <div>• Fabricante: {existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</div>
+                        <div>• MAC: {existingEquipmentData.mac}</div>
+                        <div>• Wi-Fi Key: {existingEquipmentData.wifi_key}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* BOTÃO DE SALVAR NO BANCO DE DADOS (POSTGRESQL) */}
+                <div className="space-y-2">
+                  <button
+                    onClick={async () => {
+                      setIsSavingDb(true);
+                      setDbMessage(null);
+                      try {
+                        const response = await fetch('/api/save-label', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({
+                            ...data,
+                            operador: user?.email || 'admin@scanonu.com',
+                            overwrite: equipmentExistsInDb // Se já existe, envia para sobrescrever
+                          })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          setDbMessage({ type: 'success', text: result.message || 'Salvo no PostgreSQL!' });
+                          // Desativar aviso após salvar com sucesso
+                          setEquipmentExistsInDb(false);
+                        } else {
+                          throw new Error(result.error || 'Erro ao conectar ao banco.');
+                        }
+                      } catch (err: any) {
+                        setDbMessage({ type: 'error', text: err.message || 'Falha ao salvar no banco.' });
+                      } finally {
+                        setIsSavingDb(false);
+                      }
+                    }}
+                    disabled={isSavingDb || isEditing}
+                    className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
+                      equipmentExistsInDb 
+                        ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
+                        : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-teal-600/15 text-white'
+                    }`}
+                  >
+                    {isSavingDb ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>{equipmentExistsInDb ? 'Sobrescrevendo dados...' : 'Gravando no PostgreSQL...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>{equipmentExistsInDb ? 'Sobrescrever/Atualizar no PostgreSQL' : 'Enviar para o PostgreSQL'}</span>
+                      </>
+                    )}
+                  </button>
+
+                  {dbMessage && (
+                    <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+                      dbMessage.type === 'success' 
+                        ? 'bg-green-50 border-green-200 text-green-800' 
+                        : 'bg-red-50 border-red-200 text-red-800'
+                    }`}>
+                      {dbMessage.type === 'success' ? (
+                        <Check className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                      )}
+                      <span>{dbMessage.text}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Seção Sanfonada (Collapsible Card) com JSON Cru */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
+                  <button 
+                    onClick={() => setShowJsonRaw(!showJsonRaw)}
+                    className="w-full px-4 py-3 bg-slate-50/50 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                  >
+                    <span className="font-semibold text-sm text-slate-700">JSON Estruturado</span>
+                    {showJsonRaw ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  
+                  {showJsonRaw && (
+                    <div className="p-4 border-t border-slate-100 bg-slate-900 text-slate-300 font-mono text-[10px] space-y-3">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <span className="text-slate-500">raw_output.json</span>
+                        <button 
+                          onClick={handleCopyJson}
+                          className="text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800/80 hover:bg-slate-800 px-2 py-1 rounded-md transition-colors"
+                        >
+                          {copiedJson ? (
+                            <>
+                              <Check className="w-3 h-3 text-green-400" />
+                              <span>Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copiar JSON</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <pre className="overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-48">
+                        {JSON.stringify(editedData, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 
