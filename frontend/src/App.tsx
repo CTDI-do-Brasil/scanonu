@@ -678,7 +678,7 @@ export default function App() {
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                Exportar XML
+                Consulta
               </button>
               <button
                 onClick={() => setAdminSubTab('users')}
@@ -771,7 +771,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Sub-tab 2: Exportar Excel */}
+            {/* Sub-tab 2: Consultar e Exportar */}
             {adminSubTab === 'export' && (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
                 <div className="flex items-center gap-3">
@@ -779,8 +779,8 @@ export default function App() {
                     <Download className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-800">Exportar Banco de Dados</h4>
-                    <p className="text-[11px] text-slate-400">Configure filtros opcionais e baixe as leituras em Excel</p>
+                    <h4 className="font-bold text-sm text-slate-800">Consultar Banco de Dados</h4>
+                    <p className="text-[11px] text-slate-400">Configure filtros opcionais, faça buscas e baixe as leituras em Excel</p>
                   </div>
                 </div>
 
