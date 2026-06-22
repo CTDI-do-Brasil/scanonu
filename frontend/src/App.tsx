@@ -391,20 +391,20 @@ export default function App() {
   // RENDERIZAÇÃO DA ÁREA DE LOGIN
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col justify-between bg-slate-50 text-slate-800 font-sans max-w-md mx-auto shadow-xl border-x border-slate-200/50 p-6">
-        <div className="flex-1 flex flex-col justify-center">
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="bg-teal-600 text-white p-3.5 rounded-2xl shadow-lg shadow-teal-600/10 mb-3 animate-pulse-slow">
-              <Cpu className="w-8 h-8" />
-            </div>
-            <h1 className="font-extrabold text-2xl tracking-tight text-slate-800">Scan<span className="text-teal-600">ONU</span></h1>
-            <p className="text-slate-400 text-xs mt-1">Portal do Operador de Campo</p>
-          </div>
-
+      <div className="min-h-screen flex flex-col justify-between bg-[#002f56] text-slate-800 font-sans p-6">
+        <div className="flex-1 flex flex-col justify-center items-center w-full">
           {/* Card de Login */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-            <h2 className="text-base font-bold text-slate-700">Faça login para continuar</h2>
+          <div className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-sm space-y-6">
+            {/* Logo */}
+            <div className="flex flex-col items-center">
+              <div className="bg-[#003865] text-white p-3.5 rounded-2xl shadow-lg shadow-blue-900/20 mb-3 animate-pulse-slow">
+                <Cpu className="w-8 h-8" />
+              </div>
+              <h1 className="font-extrabold text-2xl tracking-tight text-slate-800">Scan<span className="text-[#003865]">ONU</span></h1>
+              <p className="text-slate-400 text-xs mt-1">Portal do Operador de Campo</p>
+            </div>
+
+            <h2 className="text-sm font-bold text-slate-700 text-center">Faça login para continuar</h2>
             
             {loginError && (
               <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800">
@@ -424,7 +424,7 @@ export default function App() {
                     placeholder="ex: admin@scanonu.com"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
                   />
                 </div>
               </div>
@@ -439,7 +439,7 @@ export default function App() {
                     placeholder="••••••••"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
                   />
                 </div>
               </div>
@@ -447,28 +447,28 @@ export default function App() {
               <button 
                 type="submit"
                 disabled={isLoggingIn}
-                className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 disabled:bg-teal-600/60 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
+                className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] disabled:bg-[#003865]/60 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm mt-2"
               >
                 {isLoggingIn ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
                   <>
                     <UserCheck className="w-4 h-4" />
-                    <span>Entrar</span>
+                    <span>Entrar no Sistema</span>
                   </>
                 )}
               </button>
             </form>
-          </div>
 
-          {/* Dica de credenciais para testes rápidos */}
-          <div className="mt-4 p-3 bg-slate-100/60 rounded-xl border border-slate-200/50 text-[10px] text-slate-400 text-center">
-            Use <strong className="text-slate-600">admin@scanonu.com</strong> e senha <strong className="text-slate-600">admin123</strong>
+            {/* Dica de credenciais para testes rápidos */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 text-center">
+              Use <strong className="text-slate-600">admin@scanonu.com</strong> e senha <strong className="text-slate-600">admin123</strong>
+            </div>
           </div>
         </div>
 
         {/* Footer Login */}
-        <footer className="py-2 text-center text-[10px] text-slate-400">
+        <footer className="py-2 text-center text-[10px] text-blue-200/50">
           ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo
         </footer>
       </div>
