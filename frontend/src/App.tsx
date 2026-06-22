@@ -379,7 +379,9 @@ export default function App() {
         }
         setScreen('result');
       } else {
-        throw new Error(result.error || 'Erro desconhecido ao ler a etiqueta.');
+        const errorMsg = result.error || 'Erro desconhecido ao ler a etiqueta.';
+        const detailsMsg = result.details ? ` Detalhes: ${JSON.stringify(result.details)}` : '';
+        throw new Error(errorMsg + detailsMsg);
       }
     } catch (err: any) {
       console.error(err);
