@@ -427,13 +427,13 @@ export default function App() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">E-mail</label>
+                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Usuário</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input 
-                    type="email" 
+                    type="text" 
                     required
-                    placeholder="ex: admin@scanonu.com"
+                    placeholder="ex: admin@scanonu.com ou lucas.albino"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
@@ -674,11 +674,11 @@ export default function App() {
 
               <form onSubmit={handleCreateUser} className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">E-mail</label>
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Usuário</label>
                   <input 
-                    type="email" 
+                    type="text" 
                     required
-                    placeholder="ex: operador@scanonu.com"
+                    placeholder="ex: lucas.albino ou operador@scanonu.com"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
