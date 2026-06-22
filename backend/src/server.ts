@@ -535,7 +535,7 @@ app.get('/api/admin/export-xml', async (req, res) => {
       paramCount++;
     }
 
-    queryText += ' ORDER BY data_leitura DESC';
+    queryText += ' ORDER BY id ASC';
     const etiquetasRes = await dbPool.query(queryText, queryValues);
     
     // Construção do XML usando xmlbuilder2
@@ -615,7 +615,7 @@ app.get('/api/admin/export-excel', async (req, res) => {
       paramCount++;
     }
 
-    queryText += ' ORDER BY data_leitura DESC';
+    queryText += ' ORDER BY id ASC';
     const etiquetasRes = await dbPool.query(queryText, queryValues);
 
     const dataRows = etiquetasRes.rows.map((row) => ({

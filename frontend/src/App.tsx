@@ -1155,58 +1155,70 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* BOTÃO DE SALVAR NO BANCO DE DADOS (POSTGRESQL) */}
+                {/* BOTÃO DE SALVAR NO BANCO DE DADOS (POSTGRESQL) OU NOVA CAPTURA */}
                 <div className="space-y-2">
-                  <button
-                    onClick={async () => {
-                      setIsSavingDb(true);
-                      setDbMessage(null);
-                      try {
-                        const response = await fetch('/api/save-label', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json'
-                          },
-                          body: JSON.stringify({
-                            ...data,
-                            operador: user?.email || 'admin@scanonu.com',
-                            overwrite: equipmentExistsInDb // Se já existe, envia para sobrescrever
-                          })
-                        });
-                        const result = await response.json();
-                        if (result.success) {
-                          setDbMessage({ type: 'success', text: result.message || 'Salvo no PostgreSQL!' });
-                          // Desativar aviso após salvar com sucesso
-                          setEquipmentExistsInDb(false);
-                          setShowDuplicateModal(false);
-                        } else {
-                          throw new Error(result.error || 'Erro ao conectar ao banco.');
+                  {dbMessage?.type === 'success' ? (
+                    <button
+                      onClick={resetAll}
+                      className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm animate-fadeIn"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Nova Captura / Novo Scan</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setIsSavingDb(true);
+                        setDbMessage(null);
+                        try {
+                          const response = await fetch('/api/save-label', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                              ...data,
+                              operador: user?.email || 'admin@scanonu.com',
+                              overwrite: equipmentExistsInDb // Se já existe, envia para sobrescrever
+                            })
+                          });
+                          const result = await response.json();
+                          if (result.success) {
+                            setDbMessage({ type: 'success', text: result.message || 'Salvo no PostgreSQL!' });
+                            // Limpar as informações do estado
+                            setData(DEFAULT_SCAN_DATA);
+                            setCapturedImage(null);
+                            setEquipmentExistsInDb(false);
+                            setShowDuplicateModal(false);
+                          } else {
+                            throw new Error(result.error || 'Erro ao conectar ao banco.');
+                          }
+                        } catch (err: any) {
+                          setDbMessage({ type: 'error', text: err.message || 'Falha ao salvar no banco.' });
+                        } finally {
+                          setIsSavingDb(false);
                         }
-                      } catch (err: any) {
-                        setDbMessage({ type: 'error', text: err.message || 'Falha ao salvar no banco.' });
-                      } finally {
-                        setIsSavingDb(false);
-                      }
-                    }}
-                    disabled={isSavingDb}
-                    className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
-                      equipmentExistsInDb 
-                        ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
-                        : 'bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] shadow-blue-900/10 text-white'
-                    }`}
-                  >
-                    {isSavingDb ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        <span>{equipmentExistsInDb ? 'Sobrescrevendo dados...' : 'Gravando no PostgreSQL...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        <span>{equipmentExistsInDb ? 'Sobrescrever/Atualizar no PostgreSQL' : 'Enviar para o PostgreSQL'}</span>
-                      </>
-                    )}
-                  </button>
+                      }}
+                      disabled={isSavingDb}
+                      className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
+                        equipmentExistsInDb 
+                          ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
+                          : 'bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] shadow-blue-900/10 text-white'
+                      }`}
+                    >
+                      {isSavingDb ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>{equipmentExistsInDb ? 'Sobrescrevendo dados...' : 'Gravando no PostgreSQL...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          <span>{equipmentExistsInDb ? 'Sobrescrever/Atualizar no PostgreSQL' : 'Enviar para o PostgreSQL'}</span>
+                        </>
+                      )}
+                    </button>
+                  )}
 
                   {dbMessage && (
                     <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
