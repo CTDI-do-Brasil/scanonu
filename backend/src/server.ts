@@ -28,11 +28,15 @@ async function connectToDatabase() {
   if (connectionString) {
     try {
       console.log(`Tentando conectar ao PostgreSQL...`);
+      const useSSL = !connectionString.includes('localhost') && 
+                     !connectionString.includes('127.0.0.1') && 
+                     !connectionString.includes('srv-captain') && 
+                     !connectionString.includes('sslmode=disable') &&
+                     process.env.DB_SSL !== 'false';
+
       dbPool = new Pool({
         connectionString: connectionString,
-        ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1')
-          ? false 
-          : { rejectUnauthorized: false } // Habilita SSL para conexões de produção na nuvem
+        ssl: useSSL ? { rejectUnauthorized: false } : false
       });
 
       // Validar conexão rodando um SELECT simples
