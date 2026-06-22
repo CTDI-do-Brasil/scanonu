@@ -581,9 +581,9 @@ app.get('/api/admin/export-xml', async (req, res) => {
       .ele('scanonu')
         .ele('etiquetas');
 
-    etiquetasRes.rows.forEach((row) => {
+    etiquetasRes.rows.forEach((row, index) => {
       root.ele('onu')
-        .ele('id').txt(String(row.id)).up()
+        .ele('id').txt(String(index + 1)).up()
         .ele('fabricante').txt(row.fabricante || '').up()
         .ele('modelo').txt(row.modelo || '').up()
         .ele('cpe_sn').txt(row.cpe_sn || '').up()
@@ -656,8 +656,8 @@ app.get('/api/admin/export-excel', async (req, res) => {
     queryText += ' ORDER BY id ASC';
     const etiquetasRes = await dbPool.query(queryText, queryValues);
 
-    const dataRows = etiquetasRes.rows.map((row) => ({
-      'ID': row.id,
+    const dataRows = etiquetasRes.rows.map((row, index) => ({
+      'ID': index + 1,
       'Fabricante': row.fabricante || '',
       'Modelo': row.modelo || '',
       'CPE Serial Number': row.cpe_sn || '',
