@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { Pool } from 'pg';
 import { create } from 'xmlbuilder2';
+import * as XLSX from 'xlsx';
 
 dotenv.config();
 
@@ -558,6 +559,87 @@ app.get('/api/admin/export-xml', async (req, res) => {
   } catch (err: any) {
     console.error('Erro ao exportar XML:', err);
     return res.status(500).json({ error: 'Erro ao gerar arquivo XML.' });
+  }
+});
+
+// Rota para exportar todas as etiquetas em Excel (somente Admin)
+app.get('/api/admin/export-excel', async (req, res) => {
+  try {
+    const { adminEmail, serialNumber, mac, startDate, endDate, modelo } = req.query;
+
+    if (!dbConnected || !dbPool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
+    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem exportar o banco.' });
+    }
+
+    let queryText = 'SELECT * FROM etiquetas_scan_onu WHERE 1=1';
+    const queryValues: any[] = [];
+    let paramCount = 1;
+
+    if (serialNumber) {
+      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount})`;
+      queryValues.push(`%${serialNumber}%`);
+      paramCount++;
+    }
+
+    if (mac) {
+      queryText += ` AND mac ILIKE $${paramCount}`;
+      queryValues.push(`%${mac}%`);
+      paramCount++;
+    }
+
+    if (modelo) {
+      queryText += ` AND modelo ILIKE $${paramCount}`;
+      queryValues.push(`%${modelo}%`);
+      paramCount++;
+    }
+
+    if (startDate) {
+      queryText += ` AND data_leitura >= $${paramCount}`;
+      queryValues.push(startDate);
+      paramCount++;
+    }
+
+    if (endDate) {
+      queryText += ` AND data_leitura <= $${paramCount}`;
+      queryValues.push(`${endDate} 23:59:59`);
+      paramCount++;
+    }
+
+    queryText += ' ORDER BY data_leitura DESC';
+    const etiquetasRes = await dbPool.query(queryText, queryValues);
+
+    const dataRows = etiquetasRes.rows.map((row) => ({
+      'ID': row.id,
+      'Fabricante': row.fabricante || '',
+      'Modelo': row.modelo || '',
+      'CPE Serial Number': row.cpe_sn || '',
+      'GPON Serial Number': row.gpon_sn || '',
+      'Endereço MAC': row.mac || '',
+      'Chave Wi-Fi': row.wifi_key || '',
+      'Usuário': row.usuario || '',
+      'Senha': row.senha || '',
+      'Operador': row.operador_email || '',
+      'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Etiquetas');
+
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=scanonu_etiquetas.xlsx');
+    return res.send(excelBuffer);
+
+  } catch (err: any) {
+    console.error('Erro ao exportar Excel:', err);
+    return res.status(500).json({ error: 'Erro ao gerar arquivo Excel.' });
   }
 });
 

@@ -283,6 +283,34 @@ export default function App() {
     }
   };
 
+  const handleExportExcel = async () => {
+    if (!user || user.role !== 'admin') return;
+    try {
+      const response = await fetch(
+        `/api/admin/export-excel?adminEmail=${encodeURIComponent(user.email)}` +
+        `&serialNumber=${encodeURIComponent(filterSerial)}` +
+        `&mac=${encodeURIComponent(filterMac)}` +
+        `&startDate=${encodeURIComponent(filterStartDate)}` +
+        `&endDate=${encodeURIComponent(filterEndDate)}` +
+        `&modelo=${encodeURIComponent(filterModel)}`
+      );
+      if (!response.ok) {
+        throw new Error('Erro ao exportar planilha Excel.');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'scanonu_etiquetas.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Erro ao exportar planilha Excel: ' + (err.message || err));
+    }
+  };
+
   const startCamera = async () => {
     setError(null);
     setScreen('camera');
@@ -806,7 +834,7 @@ export default function App() {
                 </div>
 
                 {/* Botões de Ação do Filtro */}
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-col sm:flex-row gap-2 pt-2">
                   <button
                     onClick={() => {
                       setFilterSerial('');
@@ -820,11 +848,18 @@ export default function App() {
                     Limpar
                   </button>
                   <button
-                    onClick={handleExportXML}
+                    onClick={handleExportExcel}
                     className="flex-1 bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Baixar XML de Leituras</span>
+                    <span>Baixar Planilha Excel (XLSX)</span>
+                  </button>
+                  <button
+                    onClick={handleExportXML}
+                    className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                  >
+                    <Download className="w-4 h-4 text-slate-500" />
+                    <span>Baixar XML</span>
                   </button>
                 </div>
               </div>
