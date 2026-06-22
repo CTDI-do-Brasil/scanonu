@@ -326,17 +326,35 @@ export default function App() {
     if (videoRef.current) {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      // Capturar na resolução nativa do vídeo para melhor qualidade OCR
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
+      
+      // Garantir dimensões válidas maiores que zero
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      canvas.width = w > 0 ? w : 1280;
+      canvas.height = h > 0 ? h : 720;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL('image/jpeg', 0.9);
-        setCapturedImage(base64);
-        stopCameraStream();
-        processImage(base64);
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          let base64 = '';
+          try {
+            base64 = canvas.toDataURL('image/jpeg', 0.9);
+          } catch (e) {
+            // Fallback para image/png se o Safari der erro de padrão de string
+            base64 = canvas.toDataURL('image/png');
+          }
+          
+          setCapturedImage(base64);
+          stopCameraStream();
+          processImage(base64);
+        } catch (drawErr: any) {
+          console.error('Erro ao desenhar/exportar imagem:', drawErr);
+          setError('Erro ao capturar a foto do dispositivo: ' + (drawErr.message || drawErr));
+          stopCameraStream();
+          setScreen('idle');
+        }
       }
     }
   };
