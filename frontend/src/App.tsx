@@ -1337,126 +1337,127 @@ export default function App() {
               </div>
             )}
 
-            {/* MODAL DE AVISO DE DUPLICIDADE */}
-            {showDuplicateModal && existingEquipmentData && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 animate-scaleUp">
-                  <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
-                    <AlertTriangle className="w-6 h-6" />
-                  </div>
-                  
-                  <h3 className="font-bold text-base text-amber-800 text-center leading-snug">
-                    Atenção: Este equipamento já está cadastrado no banco!
-                  </h3>
-                  
-                  <p className="text-slate-600 text-xs text-center leading-relaxed">
-                    O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já existe no sistema. Você pode ajustar as informações na tela e clicar no botão abaixo para <strong className="text-amber-700">Sobrescrever/Atualizar</strong> os dados existentes.
-                  </p>
-                  
-                  <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">
-                    <div className="font-bold text-slate-700 border-b border-slate-200 pb-1 mb-1">Dados anteriores salvos:</div>
-                    <div>• Fabricante: <span className="font-medium text-slate-800">{existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</span></div>
-                    <div>• MAC: <span className="font-medium text-slate-800">{existingEquipmentData.mac}</span></div>
-                    <div>• Senha WIFI: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_key}</span></div>
-                  </div>
-                  
-                  <button 
-                    onClick={() => setShowDuplicateModal(false)}
-                    className="w-full bg-[#003865] hover:bg-[#004e8c] text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm"
-                  >
-                    Fechar e Editar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* MODAL DE EDIÇÃO DE USUÁRIO / RESETAR SENHA */}
-            {editingUser && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <form 
-                  onSubmit={handleUpdateUser}
-                  className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 animate-scaleUp"
-                >
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                    <h3 className="font-bold text-sm text-slate-800">
-                      Editar Usuário
-                    </h3>
-                    <button 
-                      type="button" 
-                      onClick={() => setEditingUser(null)} 
-                      className="text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {editUserError && (
-                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800">
-                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
-                      <span>{editUserError}</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">E-mail / Usuário</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Nova Senha</label>
-                    <input 
-                      type="password" 
-                      placeholder="Deixe em branco para não alterar"
-                      value={editPassword}
-                      onChange={(e) => setEditPassword(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</label>
-                    <select
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                    >
-                      <option value="operador">Operador (Apenas scanner)</option>
-                      <option value="admin">Administrador (Scanner + Painel)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setEditingUser(null)}
-                      className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-xl text-xs transition-all"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      type="submit" 
-                      disabled={isUpdatingUser}
-                      className="flex-1 bg-[#003865] hover:bg-[#004e8c] text-white font-semibold py-2 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                    >
-                      {isUpdatingUser ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                        <span>Salvar</span>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
           </>
         )}
       </main>
+
+      {/* MODAL DE AVISO DE DUPLICIDADE */}
+      {showDuplicateModal && existingEquipmentData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 animate-scaleUp">
+            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            
+            <h3 className="font-bold text-base text-amber-800 text-center leading-snug">
+              Atenção: Este equipamento já está cadastrado no banco!
+            </h3>
+            
+            <p className="text-slate-600 text-xs text-center leading-relaxed">
+              O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já existe no sistema. Você pode ajustar as informações na tela e clicar no botão abaixo para <strong className="text-amber-700">Sobrescrever/Atualizar</strong> os dados existentes.
+            </p>
+            
+            <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">
+              <div className="font-bold text-slate-700 border-b border-slate-200 pb-1 mb-1">Dados anteriores salvos:</div>
+              <div>• Fabricante: <span className="font-medium text-slate-800">{existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</span></div>
+              <div>• MAC: <span className="font-medium text-slate-800">{existingEquipmentData.mac}</span></div>
+              <div>• Senha WIFI: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_key}</span></div>
+            </div>
+            
+            <button 
+              onClick={() => setShowDuplicateModal(false)}
+              className="w-full bg-[#003865] hover:bg-[#004e8c] text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm"
+            >
+              Fechar e Editar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO DE USUÁRIO / RESETAR SENHA */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form 
+            onSubmit={handleUpdateUser}
+            className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 animate-scaleUp"
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-800">
+                Editar Usuário
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setEditingUser(null)} 
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editUserError && (
+              <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                <span>{editUserError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">E-mail / Usuário</label>
+              <input 
+                type="text" 
+                required
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Nova Senha</label>
+              <input 
+                type="password" 
+                placeholder="Deixe em branco para não alterar"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</label>
+              <select
+                value={editRole}
+                onChange={(e) => setEditRole(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+              >
+                <option value="operador">Operador (Apenas scanner)</option>
+                <option value="admin">Administrador (Scanner + Painel)</option>
+              </select>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button 
+                type="button" 
+                onClick={() => setEditingUser(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-xl text-xs transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit" 
+                disabled={isUpdatingUser}
+                className="flex-1 bg-[#003865] hover:bg-[#004e8c] text-white font-semibold py-2 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {isUpdatingUser ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <span>Salvar</span>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* FOOTER */}
       <footer className="py-4 text-center border-t border-slate-200/60 bg-white">
