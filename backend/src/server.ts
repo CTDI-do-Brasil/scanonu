@@ -554,9 +554,37 @@ app.get('/api/admin/export-xml', async (req, res) => {
   }
 });
 
+import fs from 'fs';
+import path from 'path';
+
 // Todas as outras rotas GET servem o index.html do React em produção
 app.get('*', (req, res) => {
-  res.sendFile('index.html', { root: 'public' });
+  const indexPath = path.resolve('public/index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send(`
+      <html>
+        <head>
+          <title>ScanONU API</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #002f56; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .container { text-align: center; max-width: 600px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 16px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+            h1 { margin-bottom: 10px; font-weight: 800; }
+            p { font-size: 14px; opacity: 0.8; }
+            a { color: #38bdf8; text-decoration: none; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>ScanONU API Rodando 🚀</h1>
+            <p>O backend está funcionando normalmente na porta 3001.</p>
+            <p>Para interagir com o sistema no ambiente de desenvolvimento, acesse o frontend em: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
 });
 
 app.listen(PORT, () => {
