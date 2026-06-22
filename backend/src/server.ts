@@ -46,7 +46,7 @@ async function connectToDatabase() {
           fabricante VARCHAR(100) NOT NULL,
           modelo VARCHAR(100) NOT NULL,
           cpe_sn VARCHAR(100),
-          gpon_sn VARCHAR(100),
+          gpon_sn VARCHAR(100) UNIQUE, -- Adicionado UNIQUE para validação de duplicidade
           mac VARCHAR(100),
           wifi_key VARCHAR(100),
           usuario VARCHAR(100),
@@ -56,6 +56,15 @@ async function connectToDatabase() {
         );
       `;
       await dbPool.query(createTableQuery);
+      
+      // Garantir que a constraint UNIQUE exista caso a tabela já tenha sido criada anteriormente sem ela
+      try {
+        await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
+        console.log('Constraint UNIQUE (gpon_sn) adicionada com sucesso.');
+      } catch (e) {
+        // Ignora erro se a constraint já existir
+      }
+      
       console.log('Tabela "etiquetas_scan_onu" validada/criada com sucesso no PostgreSQL.');
 
     } catch (err: any) {
@@ -135,7 +144,7 @@ app.post('/api/scan-label', async (req, res) => {
     });
 
     let success = false;
-    let scanResult = null;
+    let scanResult: any = null;
     let errors: string[] = [];
 
     // Tentar processar a imagem utilizando cascata de modelos
@@ -184,7 +193,31 @@ app.post('/api/scan-label', async (req, res) => {
     }
 
     if (success && scanResult) {
-      return res.json({ success: true, data: scanResult });
+      // VERIFICAÇÃO DE DUPLICIDADE: antes de retornar, verificamos se o GPON_SN já existe no banco de dados
+      let existsInDb = false;
+      let existingData = null;
+
+      if (dbConnected && dbPool && scanResult.gpon_sn) {
+        try {
+          const checkRes = await dbPool.query(
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
+            [scanResult.gpon_sn]
+          );
+          if (checkRes.rowCount && checkRes.rowCount > 0) {
+            existsInDb = true;
+            existingData = checkRes.rows[0];
+          }
+        } catch (dbErr) {
+          console.error('Erro ao verificar duplicidade no scan-label:', dbErr);
+        }
+      }
+
+      return res.json({ 
+        success: true, 
+        data: scanResult,
+        existsInDb,
+        existingData
+      });
     } else {
       console.error("Todos os modelos na cascata falharam:", errors);
       return res.status(502).json({
@@ -204,13 +237,12 @@ app.post('/api/scan-label', async (req, res) => {
   }
 });
 
-// Nova rota para salvar os dados no banco PostgreSQL
+// Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', async (req, res) => {
   try {
-    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha, operador } = req.body;
+    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha, operador, overwrite } = req.body;
 
     if (!dbConnected || !dbPool) {
-      // Se o banco não estiver configurado/conectado, apenas simularemos o salvamento com sucesso
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
       return res.json({ 
         success: true, 
@@ -219,9 +251,33 @@ app.post('/api/save-label', async (req, res) => {
       });
     }
 
+    // Se não for pedido explicitamente para sobrescrever (overwrite = true), vamos verificar novamente
+    if (!overwrite) {
+      const checkRes = await dbPool.query('SELECT id FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+      if (checkRes.rowCount && checkRes.rowCount > 0) {
+        return res.status(409).json({
+          success: false,
+          conflict: true,
+          error: 'Equipamento com este GPON Serial já existe no banco de dados.'
+        });
+      }
+    }
+
+    // Usamos a sintaxe INSERT ... ON CONFLICT (gpon_sn) DO UPDATE para atualizar os valores se overwrite for verdadeiro
     const query = `
       INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha, operador_email)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (gpon_sn) 
+      DO UPDATE SET 
+        fabricante = EXCLUDED.fabricante,
+        modelo = EXCLUDED.modelo,
+        cpe_sn = EXCLUDED.cpe_sn,
+        mac = EXCLUDED.mac,
+        wifi_key = EXCLUDED.wifi_key,
+        usuario = EXCLUDED.usuario,
+        senha = EXCLUDED.senha,
+        operador_email = EXCLUDED.operador_email,
+        data_leitura = CURRENT_TIMESTAMP
     `;
 
     const values = [
@@ -237,11 +293,13 @@ app.post('/api/save-label', async (req, res) => {
     ];
 
     await dbPool.query(query, values);
-    console.log(`Nova ONU inserida com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
+    console.log(`Dados salvos/sobrescritos com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
     
     return res.json({ 
       success: true, 
-      message: 'Dados salvos com sucesso no PostgreSQL!' 
+      message: overwrite 
+        ? 'Dados atualizados/sobrescritos com sucesso no PostgreSQL!'
+        : 'Dados salvos com sucesso no PostgreSQL!' 
     });
 
   } catch (dbError: any) {

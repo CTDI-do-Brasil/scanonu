@@ -72,9 +72,13 @@ export default function App() {
   const [copiedJson, setCopiedJson] = useState(false);
   const [showJsonRaw, setShowJsonRaw] = useState(false);
 
-  // Estados de persistência com SQL Server
+  // Estados de persistência com SQL Server/Postgres
   const [isSavingDb, setIsSavingDb] = useState(false);
   const [dbMessage, setDbMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Estados de Duplicidade de Equipamento
+  const [equipmentExistsInDb, setEquipmentExistsInDb] = useState(false);
+  const [existingEquipmentData, setExistingEquipmentData] = useState<ScanData | null>(null);
 
   // Referências para Stream da Câmera
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -196,6 +200,8 @@ export default function App() {
   const processImage = async (base64Image: string) => {
     setScreen('processing');
     setError(null);
+    setEquipmentExistsInDb(false);
+    setExistingEquipmentData(null);
     try {
       const response = await fetch('/api/scan-label', {
         method: 'POST',
@@ -210,6 +216,10 @@ export default function App() {
       if (result.success && result.data) {
         setData(result.data);
         setEditedData(result.data);
+        if (result.existsInDb) {
+          setEquipmentExistsInDb(true);
+          setExistingEquipmentData(result.existingData);
+        }
         setScreen('result');
       } else {
         throw new Error(result.error || 'Erro desconhecido ao ler a etiqueta.');
@@ -249,6 +259,9 @@ export default function App() {
     setEditedData(DEFAULT_SCAN_DATA);
     setIsEditing(false);
     setError(null);
+    setEquipmentExistsInDb(false);
+    setExistingEquipmentData(null);
+    setDbMessage(null);
     setScreen('idle');
   };
 
@@ -660,7 +673,28 @@ export default function App() {
               </div>
             </div>
 
-            {/* BOTÃO DE SALVAR NO BANCO DE DADOS (SQL SERVER 2019) */}
+            {/* AVISO DE DUPLICIDADE */}
+            {equipmentExistsInDb && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2 text-xs text-amber-900">
+                <div className="flex items-start gap-2 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <span>Atenção: Este equipamento (GPON: {data.gpon_sn}) já está cadastrado no banco!</span>
+                </div>
+                <p className="text-amber-800/90 leading-relaxed">
+                  Você pode editar os dados acima e clicar no botão abaixo para <strong>sobrescrever/atualizar</strong> os dados existentes.
+                </p>
+                {existingEquipmentData && (
+                  <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/50 space-y-1 font-mono text-[10px] text-amber-800">
+                    <div className="font-bold border-b border-amber-200/50 pb-1 mb-1">Dados anteriores salvos:</div>
+                    <div>• Fabricante: {existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</div>
+                    <div>• MAC: {existingEquipmentData.mac}</div>
+                    <div>• Wi-Fi Key: {existingEquipmentData.wifi_key}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* BOTÃO DE SALVAR NO BANCO DE DADOS (POSTGRESQL) */}
             <div className="space-y-2">
               <button
                 onClick={async () => {
@@ -674,12 +708,15 @@ export default function App() {
                       },
                       body: JSON.stringify({
                         ...data,
-                        operador: emailInput || 'admin@scanonu.com'
+                        operador: emailInput || 'admin@scanonu.com',
+                        overwrite: equipmentExistsInDb // Se já existe, envia para sobrescrever
                       })
                     });
                     const result = await response.json();
                     if (result.success) {
-                      setDbMessage({ type: 'success', text: result.message || 'Salvo no SQL Server!' });
+                      setDbMessage({ type: 'success', text: result.message || 'Salvo no PostgreSQL!' });
+                      // Desativar aviso após salvar com sucesso
+                      setEquipmentExistsInDb(false);
                     } else {
                       throw new Error(result.error || 'Erro ao conectar ao banco.');
                     }
@@ -690,17 +727,21 @@ export default function App() {
                   }
                 }}
                 disabled={isSavingDb || isEditing}
-                className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-teal-600/15 transition-all text-sm"
+                className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
+                  equipmentExistsInDb 
+                    ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
+                    : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-teal-600/15 text-white'
+                }`}
               >
                 {isSavingDb ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Gravando no PostgreSQL...</span>
+                    <span>{equipmentExistsInDb ? 'Sobrescrevendo dados...' : 'Gravando no PostgreSQL...'}</span>
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>Enviar para o PostgreSQL</span>
+                    <span>{equipmentExistsInDb ? 'Sobrescrever/Atualizar no PostgreSQL' : 'Enviar para o PostgreSQL'}</span>
                   </>
                 )}
               </button>
