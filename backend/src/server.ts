@@ -158,11 +158,14 @@ app.post('/api/scan-label', async (req, res) => {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn("Aviso: GEMINI_API_KEY não configurada no arquivo .env. Tentando usar variável de ambiente global.");
+      return res.status(400).json({
+        success: false,
+        error: 'A variável de ambiente GEMINI_API_KEY não está configurada no servidor. Por favor, adicione-a nas variáveis de ambiente do seu aplicativo no painel do CapRover.'
+      });
     }
 
     const ai = new GoogleGenAI({
-      apiKey: apiKey || process.env.GEMINI_API_KEY
+      apiKey: apiKey
     });
 
     let success = false;
