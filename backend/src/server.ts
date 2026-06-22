@@ -412,6 +412,44 @@ app.post('/api/admin/users', async (req, res) => {
   }
 });
 
+// Rota para editar e resetar senhas de usuários (somente Admin)
+app.put('/api/admin/users', async (req, res) => {
+  try {
+    const { id, email, senha, role, adminEmail } = req.body;
+
+    if (!dbConnected || !dbPool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    // Verificar se quem está requisitando é admin de verdade
+    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
+    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem gerenciar usuários.' });
+    }
+
+    let queryText = '';
+    let queryValues = [];
+
+    if (senha && senha.trim() !== '') {
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3 WHERE id = $4';
+      queryValues = [email.trim().toLowerCase(), senha.trim(), role, id];
+    } else {
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2 WHERE id = $3';
+      queryValues = [email.trim().toLowerCase(), role, id];
+    }
+
+    await dbPool.query(queryText, queryValues);
+    return res.json({ success: true, message: `Usuário atualizado com sucesso!` });
+
+  } catch (err: any) {
+    console.error('Erro ao atualizar usuário:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Este e-mail já está sendo utilizado por outro usuário.' });
+    }
+    return res.status(500).json({ error: 'Erro interno ao atualizar usuário.' });
+  }
+});
+
 // Rota para listar usuários (somente Admin)
 app.get('/api/admin/users', async (req, res) => {
   try {

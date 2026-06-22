@@ -4,6 +4,7 @@ import {
   Upload, 
   Copy, 
   Check, 
+  Edit3,
   Save, 
   RefreshCw, 
   ExternalLink, 
@@ -63,6 +64,14 @@ export default function App() {
   const [adminMessage, setAdminMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  // Estados para edição/reset de senha de usuários
+  const [editingUser, setEditingUser] = useState<{ id?: number; email: string; role: string } | null>(null);
+  const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editRole, setEditRole] = useState('operador');
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [editUserError, setEditUserError] = useState<string | null>(null);
 
   // Filtros de Exportação
   const [filterSearch, setFilterSearch] = useState('');
@@ -251,6 +260,43 @@ export default function App() {
       setAdminMessage({ type: 'error', text: 'Erro de conexão com o servidor.' });
     } finally {
       setIsCreatingUser(false);
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || user.role !== 'admin' || !editingUser) return;
+    setEditUserError(null);
+    setIsUpdatingUser(true);
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: editingUser.id,
+          email: editEmail,
+          senha: editPassword,
+          role: editRole,
+          adminEmail: user.email
+        })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setAdminMessage({ type: 'success', text: result.message || 'Usuário atualizado com sucesso!' });
+        setEditingUser(null);
+        setEditEmail('');
+        setEditPassword('');
+        fetchUsers();
+      } else {
+        setEditUserError(result.error || 'Erro ao atualizar usuário.');
+      }
+    } catch (err) {
+      setEditUserError('Erro de conexão com o servidor.');
+    } finally {
+      setIsUpdatingUser(false);
     }
   };
 
@@ -912,13 +958,28 @@ export default function App() {
                       {usersList.map((usr) => (
                         <div key={usr.email} className="px-3.5 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors">
                           <div className="font-medium text-slate-700">{usr.email}</div>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            usr.role === 'admin'
-                              ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                              : 'bg-blue-50 text-[#003865] border border-blue-100'
-                          }`}>
-                            {usr.role === 'admin' ? 'Admin' : 'Operador'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              usr.role === 'admin'
+                                ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                : 'bg-blue-50 text-[#003865] border border-blue-100'
+                            }`}>
+                              {usr.role === 'admin' ? 'Admin' : 'Operador'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditingUser(usr);
+                                setEditEmail(usr.email);
+                                setEditPassword('');
+                                setEditRole(usr.role);
+                                setEditUserError(null);
+                              }}
+                              className="text-slate-400 hover:text-[#003865] p-1 rounded-md hover:bg-slate-100 transition-all"
+                              title="Editar Usuário / Resetar Senha"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1306,6 +1367,91 @@ export default function App() {
                     Fechar e Editar
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* MODAL DE EDIÇÃO DE USUÁRIO / RESETAR SENHA */}
+            {editingUser && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <form 
+                  onSubmit={handleUpdateUser}
+                  className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 animate-scaleUp"
+                >
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <h3 className="font-bold text-sm text-slate-800">
+                      Editar Usuário
+                    </h3>
+                    <button 
+                      type="button" 
+                      onClick={() => setEditingUser(null)} 
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {editUserError && (
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                      <span>{editUserError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">E-mail / Usuário</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Nova Senha</label>
+                    <input 
+                      type="password" 
+                      placeholder="Deixe em branco para não alterar"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</label>
+                    <select
+                      value={editRole}
+                      onChange={(e) => setEditRole(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    >
+                      <option value="operador">Operador (Apenas scanner)</option>
+                      <option value="admin">Administrador (Scanner + Painel)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setEditingUser(null)}
+                      className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-xl text-xs transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={isUpdatingUser}
+                      className="flex-1 bg-[#003865] hover:bg-[#004e8c] text-white font-semibold py-2 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      {isUpdatingUser ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      ) : (
+                        <span>Salvar</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
           </>
