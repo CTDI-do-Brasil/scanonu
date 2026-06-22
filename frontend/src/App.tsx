@@ -477,61 +477,65 @@ export default function App() {
 
   // APLICAÇÃO APÓS LOGADA (SCANNER)
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans max-w-md mx-auto shadow-xl border-x border-slate-200/50">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans w-full">
       {/* HEADER FIXO */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 py-3 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="bg-teal-600 text-white p-1.5 rounded-lg">
-            <Cpu className="w-5 h-5" />
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 py-3 px-4">
+        <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-[#003865] text-white p-1.5 rounded-lg">
+              <Cpu className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
           </div>
-          <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-teal-600">ONU</span></span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button 
-            onClick={openInNewTab}
-            className="text-slate-500 hover:text-teal-600 p-2 rounded-full hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-medium"
-            title="Abrir em Nova Aba"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
-          
-          <button 
-            onClick={handleLogout}
-            className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors flex items-center gap-1 text-xs font-medium border border-transparent hover:border-red-100"
-            title="Sair"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={openInNewTab}
+              className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-medium"
+              title="Abrir em Nova Aba"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+            
+            <button 
+              onClick={handleLogout}
+              className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors flex items-center gap-1 text-xs font-medium border border-transparent hover:border-red-100"
+              title="Sair"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </header>
 
       {user?.role === 'admin' && (
-        <div className="bg-white border-b border-slate-200/60 flex">
-          <button
-            onClick={() => setAdminTab('scan')}
-            className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
-              adminTab === 'scan'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Escaneador
-          </button>
-          <button
-            onClick={() => setAdminTab('admin')}
-            className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
-              adminTab === 'admin'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Painel Admin
-          </button>
+        <div className="bg-white border-b border-slate-200/60">
+          <div className="max-w-2xl mx-auto w-full flex">
+            <button
+              onClick={() => setAdminTab('scan')}
+              className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
+                adminTab === 'scan'
+                  ? 'border-[#003865] text-[#003865]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Escaneador
+            </button>
+            <button
+              onClick={() => setAdminTab('admin')}
+              className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
+                adminTab === 'admin'
+                  ? 'border-[#003865] text-[#003865]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Painel Admin
+            </button>
+          </div>
         </div>
       )}
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 p-4 flex flex-col space-y-4">
+      <main className="flex-1 p-4 flex flex-col space-y-4 max-w-2xl mx-auto w-full">
         {/* Notificação de Erro */}
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5 text-red-800 text-sm">
@@ -552,7 +556,7 @@ export default function App() {
             {/* Exportar Banco em XML */}
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
               <div className="flex items-center gap-3">
-                <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100">
+                <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
                   <Download className="w-5 h-5" />
                 </div>
                 <div>
@@ -562,7 +566,7 @@ export default function App() {
               </div>
               <button
                 onClick={handleExportXML}
-                className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
               >
                 <Download className="w-4 h-4" />
                 <span>Baixar XML de Leituras</span>
@@ -572,7 +576,7 @@ export default function App() {
             {/* Cadastrar Usuário */}
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
               <div className="flex items-center gap-3">
-                <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100">
+                <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
@@ -584,11 +588,11 @@ export default function App() {
               {adminMessage && (
                 <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
                   adminMessage.type === 'success' 
-                    ? 'bg-green-50 border-green-200 text-green-800' 
+                    ? 'bg-blue-50 border-blue-200 text-blue-800' 
                     : 'bg-red-50 border-red-200 text-red-800'
                 }`}>
                   {adminMessage.type === 'success' ? (
-                    <Check className="w-4 h-4 text-green-600" />
+                    <Check className="w-4 h-4 text-blue-600" />
                   ) : (
                     <AlertTriangle className="w-4 h-4 text-red-600" />
                   )}
@@ -605,7 +609,7 @@ export default function App() {
                     placeholder="ex: operador@scanonu.com"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
                   />
                 </div>
 
@@ -617,7 +621,7 @@ export default function App() {
                     placeholder="Senha temporária"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
                   />
                 </div>
 
@@ -626,7 +630,7 @@ export default function App() {
                   <select
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
                   >
                     <option value="operador">Operador (Apenas scanner)</option>
                     <option value="admin">Administrador (Scanner + Painel)</option>
@@ -636,7 +640,7 @@ export default function App() {
                 <button 
                   type="submit"
                   disabled={isCreatingUser}
-                  className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 disabled:bg-teal-600/60 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                  className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] disabled:bg-[#003865]/60 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
                 >
                   {isCreatingUser ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -653,7 +657,7 @@ export default function App() {
             {/* Lista de Usuários */}
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
               <div className="flex items-center gap-3">
-                <div className="bg-teal-50 text-teal-600 p-2.5 rounded-xl border border-teal-100">
+                <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
@@ -664,7 +668,7 @@ export default function App() {
 
               {isLoadingUsers ? (
                 <div className="flex items-center justify-center py-4">
-                  <div className="w-5 h-5 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-blue-900/20 border-t-[#003865] rounded-full animate-spin"></div>
                 </div>
               ) : (
                 <div className="border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-100">
@@ -674,7 +678,7 @@ export default function App() {
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                         usr.role === 'admin'
                           ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                          : 'bg-teal-50 text-teal-700 border border-teal-100'
+                          : 'bg-blue-50 text-[#003865] border border-blue-100'
                       }`}>
                         {usr.role === 'admin' ? 'Admin' : 'Operador'}
                       </span>
@@ -696,7 +700,7 @@ export default function App() {
                     className="w-full px-4 py-3 bg-slate-50/50 flex items-center justify-between hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-center gap-2 text-slate-700">
-                      <Info className="w-4 h-4 text-teal-600" />
+                      <Info className="w-4 h-4 text-[#003865]" />
                       <span className="font-semibold text-sm">Dicas para melhor leitura</span>
                     </div>
                     {showTips ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -705,19 +709,19 @@ export default function App() {
                   {showTips && (
                     <div className="p-4 border-t border-slate-100 text-xs text-slate-600 space-y-2.5 bg-white">
                       <div className="flex gap-2">
-                        <span className="text-teal-600 font-bold">1.</span>
+                        <span className="text-[#003865] font-bold">1.</span>
                         <p>Evite reflexos de luz diretamente na etiqueta.</p>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-teal-600 font-bold">2.</span>
+                        <span className="text-[#003865] font-bold">2.</span>
                         <p>Mantenha a etiqueta focada e paralela à câmera.</p>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-teal-600 font-bold">3.</span>
+                        <span className="text-[#003865] font-bold">3.</span>
                         <p>Garanta boa iluminação sobre os dados do equipamento.</p>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-teal-600 font-bold">4.</span>
+                        <span className="text-[#003865] font-bold">4.</span>
                         <p>Se a câmera falhar, tire uma foto normal e envie pelo botão Galeria.</p>
                       </div>
                     </div>
@@ -726,7 +730,7 @@ export default function App() {
 
                 {/* Painel Central Clean de Ação */}
                 <div className="my-10 flex-1 flex flex-col justify-center items-center text-center px-4">
-                  <div className="w-20 h-20 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mb-6 border border-teal-100 shadow-inner">
+                  <div className="w-20 h-20 bg-blue-50 text-[#003865] rounded-full flex items-center justify-center mb-6 border border-blue-100 shadow-inner">
                     <Camera className="w-10 h-10" />
                   </div>
                   <h2 className="text-xl font-bold text-slate-800">Escaneador de ONU</h2>
@@ -739,7 +743,7 @@ export default function App() {
                 <div className="space-y-3">
                   <button 
                     onClick={startCamera}
-                    className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-teal-600/15 transition-all"
+                    className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-900/10 transition-all"
                   >
                     <Camera className="w-5 h-5" />
                     <span>Tirar Foto (Câmera)</span>
@@ -789,12 +793,12 @@ export default function App() {
                   />
                   
                   {/* Retícula guia centralizada */}
-                  <div className="relative w-72 h-44 border-2 border-dashed border-teal-400/80 rounded-xl flex flex-col items-center justify-between p-4 z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                  <div className="relative w-72 h-44 border-2 border-dashed border-blue-400/80 rounded-xl flex flex-col items-center justify-between p-4 z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
                     {/* Cantores destacados */}
-                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-teal-400 rounded-tl-lg"></div>
-                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-teal-400 rounded-tr-lg"></div>
-                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-teal-400 rounded-bl-lg"></div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-teal-400 rounded-br-lg"></div>
+                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
+                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
+                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
                     
                     <span className="text-white/40 text-[10px] uppercase tracking-wider font-bold mt-auto pb-2">
                       Alinhe a etiqueta da ONU aqui
@@ -806,7 +810,7 @@ export default function App() {
                 <div className="p-6 bg-black/60 backdrop-blur-sm flex justify-center z-10">
                   <button 
                     onClick={capturePhoto}
-                    className="bg-teal-500 hover:bg-teal-400 active:scale-95 text-slate-950 font-bold px-6 py-4 rounded-full flex items-center gap-3 shadow-lg shadow-teal-500/20 transition-all text-sm uppercase tracking-wide"
+                    className="bg-[#003865] hover:bg-[#004e8c] active:scale-95 text-white font-bold px-6 py-4 rounded-full flex items-center gap-3 shadow-lg shadow-blue-900/10 transition-all text-sm uppercase tracking-wide"
                   >
                     <Camera className="w-5 h-5 fill-current" />
                     <span>Capturar Imagem</span>
@@ -819,7 +823,7 @@ export default function App() {
             {screen === 'processing' && (
               <div className="flex-1 flex flex-col items-center justify-center py-10 animate-fadeIn">
                 <div className="relative mb-8">
-                  <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin"></div>
+                  <div className="w-16 h-16 border-4 border-blue-100 border-t-[#003865] rounded-full animate-spin"></div>
                 </div>
                 
                 <h3 className="text-lg font-bold text-slate-800">Processando imagem...</h3>
@@ -849,7 +853,7 @@ export default function App() {
                   </div>
                   <button 
                     onClick={resetAll}
-                    className="bg-teal-50 hover:bg-teal-100 text-teal-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                    className="bg-blue-50 hover:bg-blue-100 text-[#003865] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Nova Leitura</span>
@@ -882,7 +886,7 @@ export default function App() {
                         </button>
                         <button 
                           onClick={handleSaveEdit}
-                          className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all"
+                          className="text-xs font-semibold text-white bg-[#003865] hover:bg-[#004e8c] px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all"
                         >
                           <Save className="w-3 h-3" />
                           <span>Salvar</span>
@@ -891,7 +895,7 @@ export default function App() {
                     ) : (
                       <button 
                         onClick={() => setIsEditing(true)}
-                        className="text-xs font-semibold text-teal-600 hover:text-teal-700 px-2.5 py-1 rounded-lg border border-teal-100 hover:bg-teal-50 flex items-center gap-1 transition-all"
+                        className="text-xs font-semibold text-[#003865] hover:text-[#004e8c] px-2.5 py-1 rounded-lg border border-blue-100 hover:bg-blue-50/50 flex items-center gap-1 transition-all"
                       >
                         <Edit3 className="w-3 h-3" />
                         <span>Editar</span>
@@ -916,7 +920,7 @@ export default function App() {
                               type="text"
                               value={editedValue}
                               onChange={(e) => setEditedData({ ...editedData, [field]: e.target.value })}
-                              className="w-full bg-slate-50 border border-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-lg px-3 py-1.5 text-sm text-slate-800 outline-none transition-all"
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-lg px-3 py-1.5 text-sm text-slate-800 outline-none transition-all"
                             />
                           ) : (
                             <div className="flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5 transition-colors group">
@@ -927,11 +931,11 @@ export default function App() {
                               {value && (
                                 <button 
                                   onClick={() => handleCopyField(field, value)}
-                                  className="text-slate-400 hover:text-teal-600 p-1 rounded-md hover:bg-white transition-all shadow-none hover:shadow-sm"
+                                  className="text-slate-400 hover:text-[#003865] p-1 rounded-md hover:bg-white transition-all shadow-none hover:shadow-sm"
                                   title="Copiar Campo"
                                 >
                                   {copiedField === field ? (
-                                    <Check className="w-3.5 h-3.5 text-green-600" />
+                                    <Check className="w-3.5 h-3.5 text-blue-600" />
                                   ) : (
                                     <Copy className="w-3.5 h-3.5" />
                                   )}
@@ -1002,7 +1006,7 @@ export default function App() {
                     className={`w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm ${
                       equipmentExistsInDb 
                         ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 shadow-amber-600/15 text-white' 
-                        : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-teal-600/15 text-white'
+                        : 'bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] shadow-blue-900/10 text-white'
                     }`}
                   >
                     {isSavingDb ? (
@@ -1021,11 +1025,11 @@ export default function App() {
                   {dbMessage && (
                     <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
                       dbMessage.type === 'success' 
-                        ? 'bg-green-50 border-green-200 text-green-800' 
+                        ? 'bg-blue-50 border-blue-200 text-blue-800' 
                         : 'bg-red-50 border-red-200 text-red-800'
                     }`}>
                       {dbMessage.type === 'success' ? (
-                        <Check className="w-4 h-4 text-green-600" />
+                        <Check className="w-4 h-4 text-blue-600" />
                       ) : (
                         <AlertTriangle className="w-4 h-4 text-red-600" />
                       )}
@@ -1054,7 +1058,7 @@ export default function App() {
                         >
                           {copiedJson ? (
                             <>
-                              <Check className="w-3 h-3 text-green-400" />
+                              <Check className="w-3 h-3 text-blue-400" />
                               <span>Copiado!</span>
                             </>
                           ) : (
@@ -1079,7 +1083,9 @@ export default function App() {
 
       {/* FOOTER */}
       <footer className="py-4 text-center border-t border-slate-200/60 bg-white">
-        <p className="text-[10px] text-slate-400">ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo</p>
+        <div className="max-w-2xl mx-auto w-full">
+          <p className="text-[10px] text-slate-400">ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo</p>
+        </div>
       </footer>
     </div>
   );
