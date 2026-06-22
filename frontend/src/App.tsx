@@ -29,6 +29,7 @@ interface ScanData {
   cpe_sn: string;
   gpon_sn: string;
   mac: string;
+  wifi_ssid: string;
   wifi_key: string;
   usuario: string;
   senha: string;
@@ -40,6 +41,7 @@ const DEFAULT_SCAN_DATA: ScanData = {
   cpe_sn: '',
   gpon_sn: '',
   mac: '',
+  wifi_ssid: '',
   wifi_key: '',
   usuario: '',
   senha: ''
@@ -64,8 +66,7 @@ export default function App() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Filtros de Exportação
-  const [filterSerial, setFilterSerial] = useState('');
-  const [filterMac, setFilterMac] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -255,41 +256,12 @@ export default function App() {
     }
   };
 
-  const handleExportXML = async () => {
-    if (!user || user.role !== 'admin') return;
-    try {
-      const response = await fetch(
-        `/api/admin/export-xml?adminEmail=${encodeURIComponent(user.email)}` +
-        `&serialNumber=${encodeURIComponent(filterSerial)}` +
-        `&mac=${encodeURIComponent(filterMac)}` +
-        `&startDate=${encodeURIComponent(filterStartDate)}` +
-        `&endDate=${encodeURIComponent(filterEndDate)}` +
-        `&modelo=${encodeURIComponent(filterModel)}`
-      );
-      if (!response.ok) {
-        throw new Error('Erro ao exportar banco.');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'scanonu_etiquetas.xml';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert('Erro ao exportar arquivo XML: ' + (err.message || err));
-    }
-  };
-
   const handleExportExcel = async () => {
     if (!user || user.role !== 'admin') return;
     try {
       const response = await fetch(
         `/api/admin/export-excel?adminEmail=${encodeURIComponent(user.email)}` +
-        `&serialNumber=${encodeURIComponent(filterSerial)}` +
-        `&mac=${encodeURIComponent(filterMac)}` +
+        `&search=${encodeURIComponent(filterSearch)}` +
         `&startDate=${encodeURIComponent(filterStartDate)}` +
         `&endDate=${encodeURIComponent(filterEndDate)}` +
         `&modelo=${encodeURIComponent(filterModel)}`
@@ -481,9 +453,10 @@ export default function App() {
     cpe_sn: 'CPE Serial (S/N)',
     gpon_sn: 'GPON Serial (S/N)',
     mac: 'Endereço MAC',
-    wifi_key: 'Chave do Wi-Fi',
+    wifi_ssid: 'SSID Wi-Fi',
+    wifi_key: 'Senha WIFI',
     usuario: 'Usuário Padrão',
-    senha: 'Senha Padrão (Pass)'
+    senha: 'Senha WEB'
   };
 
   // RENDERIZAÇÃO DA ÁREA DE LOGIN
@@ -764,7 +737,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Sub-tab 2: Exportar XML */}
+            {/* Sub-tab 2: Exportar Excel */}
             {adminSubTab === 'export' && (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
                 <div className="flex items-center gap-3">
@@ -773,30 +746,19 @@ export default function App() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-slate-800">Exportar Banco de Dados</h4>
-                    <p className="text-[11px] text-slate-400">Configure filtros opcionais e baixe as leituras em XML</p>
+                    <p className="text-[11px] text-slate-400">Configure filtros opcionais e baixe as leituras em Excel</p>
                   </div>
                 </div>
 
                 {/* Filtros */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Serial Number</label>
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">SN / MAC</label>
                     <input 
                       type="text" 
-                      placeholder="GPON ou CPE Serial"
-                      value={filterSerial}
-                      onChange={(e) => setFilterSerial(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Endereço MAC</label>
-                    <input 
-                      type="text" 
-                      placeholder="MAC da ONU"
-                      value={filterMac}
-                      onChange={(e) => setFilterMac(e.target.value)}
+                      placeholder="GPON SN, CPE SN ou MAC"
+                      value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
                     />
                   </div>
@@ -837,8 +799,7 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row gap-2 pt-2">
                   <button
                     onClick={() => {
-                      setFilterSerial('');
-                      setFilterMac('');
+                      setFilterSearch('');
                       setFilterStartDate('');
                       setFilterEndDate('');
                       setFilterModel('');
@@ -853,13 +814,6 @@ export default function App() {
                   >
                     <Download className="w-4 h-4" />
                     <span>Baixar Planilha Excel (XLSX)</span>
-                  </button>
-                  <button
-                    onClick={handleExportXML}
-                    className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
-                  >
-                    <Download className="w-4 h-4 text-slate-500" />
-                    <span>Baixar XML</span>
                   </button>
                 </div>
               </div>

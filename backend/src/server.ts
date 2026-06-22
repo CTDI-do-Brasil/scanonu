@@ -54,6 +54,7 @@ async function connectToDatabase() {
           cpe_sn VARCHAR(100),
           gpon_sn VARCHAR(100) UNIQUE, -- Adicionado UNIQUE para validação de duplicidade
           mac VARCHAR(100),
+          wifi_ssid VARCHAR(100), -- Novo campo
           wifi_key VARCHAR(100),
           usuario VARCHAR(100),
           senha VARCHAR(100),
@@ -74,6 +75,12 @@ async function connectToDatabase() {
       `;
       await dbPool.query(createUsersTableQuery);
       console.log('Tabelas de banco validadas/criadas com sucesso.');
+
+      // Garantir que a coluna wifi_ssid exista caso a tabela já tenha sido criada anteriormente
+      try {
+        await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
+        console.log('Coluna wifi_ssid verificada/adicionada com sucesso.');
+      } catch (e) {}
 
       // Garantir que a constraint UNIQUE exista caso a tabela já tenha sido criada anteriormente sem ela
       try {
@@ -118,15 +125,16 @@ const scanResponseSchema: Schema = {
     cpe_sn: { type: Type.STRING, description: 'CPE Serial Number / S/N do equipamento se disponível' },
     gpon_sn: { type: Type.STRING, description: 'GPON Serial Number (S/N) ou ALCL/ZTEG... Serial Number' },
     mac: { type: Type.STRING, description: 'Endereço MAC da ONU' },
+    wifi_ssid: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão (ex: SSID: FiberHome-xxxx) se impresso na etiqueta' },
     wifi_key: { type: Type.STRING, description: 'Chave/Senha do Wi-Fi padrão impresso na etiqueta' },
     usuario: { type: Type.STRING, description: 'Usuário padrão de login/administração se houver' },
     senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' }
   },
-  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_key', 'usuario', 'senha']
+  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_ssid', 'wifi_key', 'usuario', 'senha']
 };
 
 const SYSTEM_INSTRUCTION = `Você é um sistema de leitura de etiquetas de equipamentos de rede (ONU).
-Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, Wi-Fi Key (wifi_key), User name (usuario) e Password (senha).
+Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, SSID (wifi_ssid), Wi-Fi Key (wifi_key), User name (usuario) e Password (senha).
 Regras: Retorne apenas JSON válido conforme o esquema tipado. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados. O campo Password é crítico e deve ser analisado com máxima atenção. Se algum campo não for encontrado na etiqueta, deixe como string vazia ("").`;
 
 // Modelos do cascade em ordem de prioridade
@@ -226,7 +234,7 @@ app.post('/api/scan-label', async (req, res) => {
       if (dbConnected && dbPool && scanResult.gpon_sn) {
         try {
           const checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
             [scanResult.gpon_sn]
           );
           if (checkRes.rowCount && checkRes.rowCount > 0) {
@@ -266,7 +274,7 @@ app.post('/api/scan-label', async (req, res) => {
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', async (req, res) => {
   try {
-    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha, operador, overwrite } = req.body;
+    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, usuario, senha, operador, overwrite } = req.body;
 
     if (!dbConnected || !dbPool) {
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
@@ -291,14 +299,15 @@ app.post('/api/save-label', async (req, res) => {
 
     // Usamos a sintaxe INSERT ... ON CONFLICT (gpon_sn) DO UPDATE para atualizar os valores se overwrite for verdadeiro
     const query = `
-      INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_key, usuario, senha, operador_email)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, usuario, senha, operador_email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (gpon_sn) 
       DO UPDATE SET 
         fabricante = EXCLUDED.fabricante,
         modelo = EXCLUDED.modelo,
         cpe_sn = EXCLUDED.cpe_sn,
         mac = EXCLUDED.mac,
+        wifi_ssid = EXCLUDED.wifi_ssid,
         wifi_key = EXCLUDED.wifi_key,
         usuario = EXCLUDED.usuario,
         senha = EXCLUDED.senha,
@@ -312,6 +321,7 @@ app.post('/api/save-label', async (req, res) => {
       cpe_sn || '',
       gpon_sn || '',
       mac || '',
+      wifi_ssid || '',
       wifi_key || '',
       usuario || '',
       senha || '',
@@ -541,6 +551,7 @@ app.get('/api/admin/export-xml', async (req, res) => {
         .ele('cpe_sn').txt(row.cpe_sn || '').up()
         .ele('gpon_sn').txt(row.gpon_sn || '').up()
         .ele('mac').txt(row.mac || '').up()
+        .ele('wifi_ssid').txt(row.wifi_ssid || '').up()
         .ele('wifi_key').txt(row.wifi_key || '').up()
         .ele('usuario').txt(row.usuario || '').up()
         .ele('senha').txt(row.senha || '').up()
@@ -565,7 +576,7 @@ app.get('/api/admin/export-xml', async (req, res) => {
 // Rota para exportar todas as etiquetas em Excel (somente Admin)
 app.get('/api/admin/export-excel', async (req, res) => {
   try {
-    const { adminEmail, serialNumber, mac, startDate, endDate, modelo } = req.query;
+    const { adminEmail, search, startDate, endDate, modelo } = req.query;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -580,15 +591,9 @@ app.get('/api/admin/export-excel', async (req, res) => {
     const queryValues: any[] = [];
     let paramCount = 1;
 
-    if (serialNumber) {
-      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount})`;
-      queryValues.push(`%${serialNumber}%`);
-      paramCount++;
-    }
-
-    if (mac) {
-      queryText += ` AND mac ILIKE $${paramCount}`;
-      queryValues.push(`%${mac}%`);
+    if (search) {
+      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      queryValues.push(`%${search}%`);
       paramCount++;
     }
 
@@ -620,9 +625,10 @@ app.get('/api/admin/export-excel', async (req, res) => {
       'CPE Serial Number': row.cpe_sn || '',
       'GPON Serial Number': row.gpon_sn || '',
       'Endereço MAC': row.mac || '',
-      'Chave Wi-Fi': row.wifi_key || '',
+      'SSID Wi-Fi': row.wifi_ssid || '',
+      'Senha WIFI': row.wifi_key || '',
       'Usuário': row.usuario || '',
-      'Senha': row.senha || '',
+      'Senha WEB': row.senha || '',
       'Operador': row.operador_email || '',
       'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
     }));
