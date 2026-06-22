@@ -68,6 +68,25 @@ export default function App() {
   const [filterMac, setFilterMac] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterModel, setFilterModel] = useState('');
+  const [adminSubTab, setAdminSubTab] = useState<'metrics' | 'export' | 'users'>('metrics');
+
+  interface StatsData {
+    totalLabels: number;
+    totalUsers: number;
+    labelsByManufacturer: Array<{ fabricante: string; count: string }>;
+    labelsByModel: Array<{ modelo: string; count: string }>;
+    scansByOperator: Array<{ operador_email: string; count: string }>;
+  }
+
+  const [stats, setStats] = useState<StatsData>({
+    totalLabels: 0,
+    totalUsers: 0,
+    labelsByManufacturer: [],
+    labelsByModel: [],
+    scansByOperator: []
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   // Estados de Fluxo da Tela: 'idle', 'camera', 'processing', 'result'
   const [screen, setScreen] = useState<'idle' | 'camera' | 'processing' | 'result'>('idle');
@@ -140,9 +159,27 @@ export default function App() {
     }
   };
 
+  // Buscar estatísticas do banco de dados
+  const fetchStats = async () => {
+    if (!user || user.role !== 'admin') return;
+    setIsLoadingStats(true);
+    try {
+      const response = await fetch(`/api/admin/stats?adminEmail=${encodeURIComponent(user.email)}`);
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setStats(result.stats);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar estatísticas:', err);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
   useEffect(() => {
     if (adminTab === 'admin') {
       fetchUsers();
+      fetchStats();
     }
   }, [adminTab]);
 
@@ -226,7 +263,8 @@ export default function App() {
         `&serialNumber=${encodeURIComponent(filterSerial)}` +
         `&mac=${encodeURIComponent(filterMac)}` +
         `&startDate=${encodeURIComponent(filterStartDate)}` +
-        `&endDate=${encodeURIComponent(filterEndDate)}`
+        `&endDate=${encodeURIComponent(filterEndDate)}` +
+        `&modelo=${encodeURIComponent(filterModel)}`
       );
       if (!response.ok) {
         throw new Error('Erro ao exportar banco.');
@@ -563,202 +601,334 @@ export default function App() {
         )}
 
         {adminTab === 'admin' && user?.role === 'admin' ? (
-          // PAINEL ADMINISTRATIVO
+          // PAINEL ADMINISTRATIVO COM SUB-TABS
           <div className="space-y-6 animate-fadeIn">
-            {/* Exportar Banco em XML */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
-                  <Download className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800">Exportar Banco de Dados</h4>
-                  <p className="text-[11px] text-slate-400">Configure filtros opcionais e baixe as leituras em XML</p>
-                </div>
-              </div>
-
-              {/* Filtros */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Serial Number</label>
-                  <input 
-                    type="text" 
-                    placeholder="GPON ou CPE Serial"
-                    value={filterSerial}
-                    onChange={(e) => setFilterSerial(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Endereço MAC</label>
-                  <input 
-                    type="text" 
-                    placeholder="MAC da ONU"
-                    value={filterMac}
-                    onChange={(e) => setFilterMac(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Inicial</label>
-                  <input 
-                    type="date" 
-                    value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Final</label>
-                  <input 
-                    type="date" 
-                    value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Botões de Ação do Filtro */}
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => {
-                    setFilterSerial('');
-                    setFilterMac('');
-                    setFilterStartDate('');
-                    setFilterEndDate('');
-                  }}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all"
-                >
-                  Limpar
-                </button>
-                <button
-                  onClick={handleExportXML}
-                  className="flex-1 bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Baixar XML de Leituras</span>
-                </button>
-              </div>
+            {/* Sub-navegação do Painel Admin */}
+            <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+              <button
+                onClick={() => setAdminSubTab('metrics')}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
+                  adminSubTab === 'metrics'
+                    ? 'bg-white text-[#003865] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Métricas
+              </button>
+              <button
+                onClick={() => setAdminSubTab('export')}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
+                  adminSubTab === 'export'
+                    ? 'bg-white text-[#003865] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Exportar XML
+              </button>
+              <button
+                onClick={() => setAdminSubTab('users')}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
+                  adminSubTab === 'users'
+                    ? 'bg-white text-[#003865] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Usuários
+              </button>
             </div>
 
-            {/* Cadastrar Usuário */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
-                  <UserPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800">Cadastrar Novo Usuário</h4>
-                  <p className="text-[11px] text-slate-400">Crie credenciais de acesso para a equipe</p>
-                </div>
-              </div>
-
-              {adminMessage && (
-                <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
-                  adminMessage.type === 'success' 
-                    ? 'bg-blue-50 border-blue-200 text-blue-800' 
-                    : 'bg-red-50 border-red-200 text-red-800'
-                }`}>
-                  {adminMessage.type === 'success' ? (
-                    <Check className="w-4 h-4 text-blue-600" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-red-600" />
-                  )}
-                  <span>{adminMessage.text}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleCreateUser} className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Usuário</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="ex: lucas.albino ou operador@scanonu.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Senha</label>
-                  <input 
-                    type="password" 
-                    required
-                    placeholder="Senha temporária"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</label>
-                  <select
-                    value={newRole}
-                    onChange={(e) => setNewRole(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                  >
-                    <option value="operador">Operador (Apenas scanner)</option>
-                    <option value="admin">Administrador (Scanner + Painel)</option>
-                  </select>
-                </div>
-
-                <button 
-                  type="submit"
-                  disabled={isCreatingUser}
-                  className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] disabled:bg-[#003865]/60 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
-                >
-                  {isCreatingUser ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <UserPlus className="w-4 h-4" />
-                      <span>Cadastrar Usuário</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-
-            {/* Lista de Usuários */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800">Usuários Cadastrados</h4>
-                  <p className="text-[11px] text-slate-400">Lista de e-mails ativos e suas permissões</p>
-                </div>
-              </div>
-
-              {isLoadingUsers ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="w-5 h-5 border-2 border-blue-900/20 border-t-[#003865] rounded-full animate-spin"></div>
-                </div>
-              ) : (
-                <div className="border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-100">
-                  {usersList.map((usr) => (
-                    <div key={usr.email} className="px-3.5 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors">
-                      <div className="font-medium text-slate-700">{usr.email}</div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        usr.role === 'admin'
-                          ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                          : 'bg-blue-50 text-[#003865] border border-blue-100'
-                      }`}>
-                        {usr.role === 'admin' ? 'Admin' : 'Operador'}
-                      </span>
+            {/* Sub-tab 1: Métricas / Dashboard */}
+            {adminSubTab === 'metrics' && (
+              <div className="space-y-6 animate-fadeIn">
+                {isLoadingStats ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border-4 border-blue-100 border-t-[#003865] rounded-full animate-spin"></div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Grid de Contadores */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total de Leituras</span>
+                        <span className="text-3xl font-extrabold text-[#003865]">{stats.totalLabels}</span>
+                      </div>
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total de Usuários</span>
+                        <span className="text-3xl font-extrabold text-[#003865]">{stats.totalUsers}</span>
+                      </div>
                     </div>
-                  ))}
+
+                    {/* Rankings / Leaderboards */}
+                    <div className="space-y-4">
+                      {/* Por Fabricante */}
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                        <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wider mb-3">Leituras por Fabricante</h4>
+                        {stats.labelsByManufacturer && stats.labelsByManufacturer.length > 0 ? (
+                          <div className="space-y-2">
+                            {stats.labelsByManufacturer.map((item, index) => (
+                              <div key={item.fabricante || index} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-b-0">
+                                <span className="font-medium text-slate-700">{item.fabricante || 'Desconhecido'}</span>
+                                <span className="font-bold bg-blue-50 text-[#003865] px-2.5 py-0.5 rounded-full text-[10px]">{item.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Nenhum dado registrado.</p>
+                        )}
+                      </div>
+
+                      {/* Por Modelo */}
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                        <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wider mb-3">Leituras por Modelo</h4>
+                        {stats.labelsByModel && stats.labelsByModel.length > 0 ? (
+                          <div className="space-y-2">
+                            {stats.labelsByModel.map((item, index) => (
+                              <div key={item.modelo || index} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-b-0">
+                                <span className="font-medium text-slate-700">{item.modelo || 'Desconhecido'}</span>
+                                <span className="font-bold bg-blue-50 text-[#003865] px-2.5 py-0.5 rounded-full text-[10px]">{item.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Nenhum dado registrado.</p>
+                        )}
+                      </div>
+
+                      {/* Por Operador */}
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                        <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wider mb-3">Ranking de Operadores</h4>
+                        {stats.scansByOperator && stats.scansByOperator.length > 0 ? (
+                          <div className="space-y-2">
+                            {stats.scansByOperator.map((item, index) => (
+                              <div key={item.operador_email || index} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-b-0">
+                                <span className="font-medium text-slate-700">{item.operador_email || 'Desconhecido'}</span>
+                                <span className="font-bold bg-blue-50 text-[#003865] px-2.5 py-0.5 rounded-full text-[10px]">{item.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Nenhum dado registrado.</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Sub-tab 2: Exportar XML */}
+            {adminSubTab === 'export' && (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800">Exportar Banco de Dados</h4>
+                    <p className="text-[11px] text-slate-400">Configure filtros opcionais e baixe as leituras em XML</p>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {/* Filtros */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Serial Number</label>
+                    <input 
+                      type="text" 
+                      placeholder="GPON ou CPE Serial"
+                      value={filterSerial}
+                      onChange={(e) => setFilterSerial(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Endereço MAC</label>
+                    <input 
+                      type="text" 
+                      placeholder="MAC da ONU"
+                      value={filterMac}
+                      onChange={(e) => setFilterMac(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Modelo</label>
+                    <input 
+                      type="text" 
+                      placeholder="Modelo da ONU"
+                      value={filterModel}
+                      onChange={(e) => setFilterModel(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Inicial</label>
+                    <input 
+                      type="date" 
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Final</label>
+                    <input 
+                      type="date" 
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Botões de Ação do Filtro */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      setFilterSerial('');
+                      setFilterMac('');
+                      setFilterStartDate('');
+                      setFilterEndDate('');
+                      setFilterModel('');
+                    }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all"
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    onClick={handleExportXML}
+                    className="flex-1 bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Baixar XML de Leituras</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tab 3: Cadastro e Lista de Usuários */}
+            {adminSubTab === 'users' && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* Cadastrar Usuário */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
+                      <UserPlus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-800">Cadastrar Novo Usuário</h4>
+                      <p className="text-[11px] text-slate-400">Crie credenciais de acesso para a equipe</p>
+                    </div>
+                  </div>
+
+                  {adminMessage && (
+                    <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+                      adminMessage.type === 'success' 
+                        ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                        : 'bg-red-50 border-red-200 text-red-800'
+                    }`}>
+                      {adminMessage.type === 'success' ? (
+                        <Check className="w-4 h-4 text-blue-600" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                      )}
+                      <span>{adminMessage.text}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleCreateUser} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Usuário</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="ex: lucas.albino ou operador@scanonu.com"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Senha</label>
+                      <input 
+                        type="password" 
+                        required
+                        placeholder="Senha temporária"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Perfil</label>
+                      <select
+                        value={newRole}
+                        onChange={(e) => setNewRole(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                      >
+                        <option value="operador">Operador (Apenas scanner)</option>
+                        <option value="admin">Administrador (Scanner + Painel)</option>
+                      </select>
+                    </div>
+
+                    <button 
+                      type="submit"
+                      disabled={isCreatingUser}
+                      className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] disabled:bg-[#003865]/60 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                    >
+                      {isCreatingUser ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4" />
+                          <span>Cadastrar Usuário</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Lista de Usuários */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-800">Usuários Cadastrados</h4>
+                      <p className="text-[11px] text-slate-400">Lista de e-mails ativos e suas permissões</p>
+                    </div>
+                  </div>
+
+                  {isLoadingUsers ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="w-5 h-5 border-2 border-blue-900/20 border-t-[#003865] rounded-full animate-spin"></div>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-100">
+                      {usersList.map((usr) => (
+                        <div key={usr.email} className="px-3.5 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/50 transition-colors">
+                          <div className="font-medium text-slate-700">{usr.email}</div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            usr.role === 'admin'
+                              ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                              : 'bg-blue-50 text-[#003865] border border-blue-100'
+                          }`}>
+                            {usr.role === 'admin' ? 'Admin' : 'Operador'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>

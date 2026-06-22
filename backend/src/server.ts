@@ -417,10 +417,62 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+// Rota para obter estatísticas do painel Admin
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const { adminEmail } = req.query;
+
+    if (!dbConnected || !dbPool) {
+      return res.json({
+        success: true,
+        stats: {
+          totalLabels: 0,
+          totalUsers: 1,
+          labelsByManufacturer: [],
+          labelsByModel: [],
+          scansByOperator: []
+        }
+      });
+    }
+
+    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
+    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
+    const totalLabelsRes = await dbPool.query('SELECT COUNT(*) FROM etiquetas_scan_onu');
+    const totalUsersRes = await dbPool.query('SELECT COUNT(*) FROM usuarios_scan_onu');
+    
+    const mfgRes = await dbPool.query(
+      'SELECT fabricante, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY fabricante ORDER BY count DESC LIMIT 10'
+    );
+    const modelRes = await dbPool.query(
+      'SELECT modelo, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY modelo ORDER BY count DESC LIMIT 10'
+    );
+    const opRes = await dbPool.query(
+      'SELECT operador_email, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY operador_email ORDER BY count DESC LIMIT 10'
+    );
+
+    return res.json({
+      success: true,
+      stats: {
+        totalLabels: parseInt(totalLabelsRes.rows[0].count),
+        totalUsers: parseInt(totalUsersRes.rows[0].count),
+        labelsByManufacturer: mfgRes.rows,
+        labelsByModel: modelRes.rows,
+        scansByOperator: opRes.rows
+      }
+    });
+  } catch (err: any) {
+    console.error('Erro ao buscar estatísticas:', err);
+    return res.status(500).json({ error: 'Erro interno ao buscar estatísticas.' });
+  }
+});
+
 // Rota para exportar todas as etiquetas em XML (somente Admin)
 app.get('/api/admin/export-xml', async (req, res) => {
   try {
-    const { adminEmail, serialNumber, mac, startDate, endDate } = req.query;
+    const { adminEmail, serialNumber, mac, startDate, endDate, modelo } = req.query;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -444,6 +496,12 @@ app.get('/api/admin/export-xml', async (req, res) => {
     if (mac) {
       queryText += ` AND mac ILIKE $${paramCount}`;
       queryValues.push(`%${mac}%`);
+      paramCount++;
+    }
+
+    if (modelo) {
+      queryText += ` AND modelo ILIKE $${paramCount}`;
+      queryValues.push(`%${modelo}%`);
       paramCount++;
     }
 
