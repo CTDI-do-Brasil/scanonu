@@ -162,10 +162,25 @@ Regras:
 
 // Modelos do cascade em ordem de prioridade
 const MODEL_CASCADE = [
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
   'gemini-1.5-pro'
 ];
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function isRateLimitError(err: any): boolean {
+  const errMsg = String(err.message || JSON.stringify(err) || '').toLowerCase();
+  return (
+    errMsg.includes('429') ||
+    errMsg.includes('quota') ||
+    errMsg.includes('limit') ||
+    errMsg.includes('resource_exhausted') ||
+    (err.status && err.status === 429) ||
+    (err.code && err.code === 429)
+  );
+}
 
 app.post('/api/scan-label', async (req, res) => {
   try {
@@ -203,48 +218,66 @@ app.post('/api/scan-label', async (req, res) => {
     let scanResult: any = null;
     let errors: string[] = [];
 
-    // Tentar processar a imagem utilizando cascata de modelos
+    // Tentar processar a imagem utilizando cascata de modelos com retentativas para 429
     for (const modelName of MODEL_CASCADE) {
-      try {
-        console.log(`Tentando processar a imagem com o modelo: ${modelName}`);
-        
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: SYSTEM_INSTRUCTION
-                },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        attempts++;
+        try {
+          console.log(`Tentando processar a imagem com o modelo: ${modelName} (Tentativa ${attempts}/${maxAttempts})`);
+          
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: SYSTEM_INSTRUCTION
+                  },
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: base64Data
+                    }
                   }
-                }
-              ]
+                ]
+              }
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: scanResponseSchema,
+              temperature: 0.1
             }
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: scanResponseSchema,
-            temperature: 0.1
-          }
-        });
+          });
 
-        const responseText = response.text;
-        if (responseText) {
-          scanResult = JSON.parse(responseText);
-          success = true;
-          console.log(`Sucesso com o modelo ${modelName}!`);
-          break;
-        } else {
-          throw new Error('Resposta vazia retornada pelo modelo.');
+          const responseText = response.text;
+          if (responseText) {
+            scanResult = JSON.parse(responseText);
+            success = true;
+            console.log(`Sucesso com o modelo ${modelName}!`);
+            break;
+          } else {
+            throw new Error('Resposta vazia retornada pelo modelo.');
+          }
+        } catch (err: any) {
+          console.error(`Falha no modelo ${modelName} (Tentativa ${attempts}/${maxAttempts}):`, err.message || err);
+          
+          if (isRateLimitError(err) && attempts < maxAttempts) {
+            console.log(`Erro de limite de cota (429) detectado. Aguardando 3 segundos antes de tentar novamente...`);
+            await sleep(3000);
+            continue;
+          }
+          
+          errors.push(`${modelName} (Tentativa ${attempts}): ${err.message || JSON.stringify(err)}`);
+          break; // Passa para o próximo modelo na cascata
         }
-      } catch (err: any) {
-        console.error(`Falha no modelo ${modelName}:`, err.message || err);
-        errors.push(`${modelName}: ${err.message || JSON.stringify(err)}`);
+      }
+      
+      if (success) {
+        break;
       }
     }
 

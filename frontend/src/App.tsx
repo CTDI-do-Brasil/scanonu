@@ -515,6 +515,11 @@ export default function App() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
+        if (i > 0) {
+          // Atraso de 1.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+        
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
