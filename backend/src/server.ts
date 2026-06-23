@@ -131,14 +131,19 @@ const scanResponseSchema: Schema = {
     wifi_ssid_5g: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão de 5GHz (se houver duas redes SSIDs na etiqueta, caso contrário deixe em branco)' },
     wifi_key: { type: Type.STRING, description: 'Chave/Senha do Wi-Fi padrão impresso na etiqueta' },
     usuario: { type: Type.STRING, description: 'Usuário padrão de login/administração se houver' },
-    senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' }
+    senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' },
+    reimpressa: { type: Type.BOOLEAN, description: 'Indica se a etiqueta foi identificada como reimpressa (true) ou original de fábrica (false).' }
   },
-  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_ssid', 'wifi_ssid_5g', 'wifi_key', 'usuario', 'senha']
+  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_ssid', 'wifi_ssid_5g', 'wifi_key', 'usuario', 'senha', 'reimpressa']
 };
 
 const SYSTEM_INSTRUCTION = `Você é um sistema de leitura de etiquetas de equipamentos de rede (ONU).
-Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, SSID 2.4GHz/Único (wifi_ssid), SSID 5GHz se houver (wifi_ssid_5g), Wi-Fi Key (wifi_key), User name (usuario) e Password (senha).
-Regras: Retorne apenas JSON válido conforme o esquema tipado. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados. Se houver dois SSIDs na etiqueta (um de 2.4GHz e um de 5GHz), separe-os colocando o de 2.4GHz em wifi_ssid e o de 5GHz em wifi_ssid_5g. Se houver apenas uma rede SSID, coloque-a em wifi_ssid e deixe wifi_ssid_5g vazio (""). O campo Password é crítico e deve ser analisado com máxima atenção. Se algum campo não for encontrado na etiqueta, deixe como string vazia ("").`;
+Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, SSID 2.4GHz/Único (wifi_ssid), SSID 5GHz se houver (wifi_ssid_5g), Wi-Fi Key (wifi_key), User name (usuario), Senha WEB (senha) e se a etiqueta é reimpressa (reimpressa).
+Regras: 
+1. Retorne apenas JSON válido conforme o esquema tipado.
+2. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados.
+3. Se houver dois SSIDs na etiqueta, separe-os.
+4. Identifique se a etiqueta é uma etiqueta reimpressa (campo 'reimpressa' como true): Etiquetas reimpressas (ou segundas vias) são impressas em impressora térmica/laser adesiva manual, apresentam fontes levemente borradas ou mais grossas, papel adesivo branco comum, por vezes coladas com rugas, dobras ou desalinhadas em relação ao rebaixo plástico original do equipamento. Etiquetas originais de fábrica (campo 'reimpressa' como false) são perfeitamente alinhadas, integradas, sem rugas de colagem e com impressão industrial nítida.`;
 
 // Modelos do cascade em ordem de prioridade
 const MODEL_CASCADE = [

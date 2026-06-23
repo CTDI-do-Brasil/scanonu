@@ -34,6 +34,7 @@ interface ScanData {
   wifi_key: string;
   usuario: string;
   senha: string;
+  reimpressa?: boolean;
 }
 
 interface BatchItem {
@@ -59,7 +60,8 @@ const DEFAULT_SCAN_DATA: ScanData = {
   wifi_ssid_5g: '',
   wifi_key: '',
   usuario: '',
-  senha: ''
+  senha: '',
+  reimpressa: false
 };
 
 function applyMacSsidRules(currentData: ScanData): ScanData {
@@ -535,7 +537,14 @@ export default function App() {
           if (result.success && result.data) {
             let processedData = applyMacSsidRules(result.data);
             
-            if (result.existsInDb) {
+            if (result.data.reimpressa) {
+              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                ...item, 
+                data: processedData, 
+                status: 'error',
+                errorMsg: 'Etiqueta Reimpressa Bloqueada'
+              } : item));
+            } else if (result.existsInDb) {
               setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
                 ...item, 
                 data: processedData, 
@@ -628,7 +637,14 @@ export default function App() {
       if (result.success && result.data) {
         let processedData = applyMacSsidRules(result.data);
         
-        if (result.existsInDb) {
+        if (result.data.reimpressa) {
+          setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+            ...it, 
+            data: processedData, 
+            status: 'error',
+            errorMsg: 'Etiqueta Reimpressa Bloqueada'
+          } : it));
+        } else if (result.existsInDb) {
           setBatchResults(prev => prev.map(it => it.id === itemId ? { 
             ...it, 
             data: processedData, 
@@ -711,6 +727,9 @@ export default function App() {
       const result = await response.json();
 
       if (result.success && result.data) {
+        if (result.data.reimpressa) {
+          throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
+        }
         setData(applyMacSsidRules(result.data));
         if (result.existsInDb) {
           setEquipmentExistsInDb(true);
@@ -761,7 +780,7 @@ export default function App() {
   };
 
   // Mapeamento amigável para rótulos de campos
-  const fieldLabels: Record<keyof ScanData, string> = {
+  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa'> = {
     fabricante: 'Fabricante',
     modelo: 'Modelo',
     cpe_sn: 'CPE Serial (S/N)',
@@ -1581,9 +1600,9 @@ export default function App() {
                   </div>
 
                   <div className="space-y-3.5">
-                    {(Object.keys(fieldLabels) as Array<keyof ScanData>).map((field) => {
+                    {(Object.keys(fieldLabels) as Array<keyof typeof fieldLabels>).map((field) => {
                       const label = fieldLabels[field];
-                      const value = data[field];
+                      const value = data[field] || '';
 
                       return (
                         <div key={field} className="flex flex-col gap-1">
