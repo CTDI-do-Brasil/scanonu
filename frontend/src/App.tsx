@@ -191,7 +191,7 @@ export default function App() {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [batchResults, setBatchResults] = useState<BatchItem[]>([]);
-  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  const [batchStartTime, setBatchStartTime] = useState<number>(0);
 
   // Referências para Stream da Câmera
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -507,10 +507,10 @@ export default function App() {
         });
       }
       setBatchResults(items);
+      setBatchStartTime(Date.now());
 
       // Processar cada imagem em lote sequencialmente
       for (let i = 0; i < files.length; i++) {
-        setCurrentBatchIndex(i);
         const file = files[i];
         
         const base64 = await new Promise<string>((resolve) => {
@@ -603,6 +603,95 @@ export default function App() {
     }
   };
 
+  const retryBatchItem = async (itemId: string) => {
+    const item = batchResults.find(it => it.id === itemId);
+    if (!item || !item.image) return;
+
+    setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+      ...it, 
+      status: 'processing', 
+      errorMsg: null,
+      dbMessage: null 
+    } : it));
+
+    try {
+      const response = await fetch('/api/scan-label', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ image: item.image })
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        let processedData = applyMacSsidRules(result.data);
+        
+        if (result.existsInDb) {
+          setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+            ...it, 
+            data: processedData, 
+            status: 'duplicate',
+            existsInDb: true,
+            existingData: result.existingData
+          } : it));
+        } else {
+          // Gravar automaticamente no banco de dados
+          setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+            ...it, 
+            data: processedData,
+            isSaving: true
+          } : it));
+
+          try {
+            const saveResponse = await fetch('/api/save-label', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                ...processedData,
+                operador: user?.email || 'admin@scanonu.com',
+                overwrite: false
+              })
+            });
+            const saveResult = await saveResponse.json();
+            if (saveResult.success) {
+              setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+                ...it, 
+                status: 'saved',
+                isSaving: false,
+                dbMessage: { type: 'success', text: 'Salvo no banco!' }
+              } : it));
+            } else {
+              throw new Error(saveResult.error || 'Erro ao salvar no banco.');
+            }
+          } catch (saveErr: any) {
+            setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+              ...it, 
+              status: 'error',
+              isSaving: false,
+              errorMsg: saveErr.message || 'Falha ao salvar no banco.' 
+            } : it));
+          }
+        }
+      } else {
+        const errorMsg = result.error || 'Erro ao ler a etiqueta.';
+        setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+          ...it, 
+          status: 'error', 
+          errorMsg: errorMsg 
+        } : it));
+      }
+    } catch (err: any) {
+      setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+        ...it, 
+        status: 'error', 
+        errorMsg: err.message || 'Erro de conexão.' 
+      } : it));
+    }
+  };
 
   const processImage = async (base64Image: string) => {
     setScreen('processing');
@@ -664,7 +753,6 @@ export default function App() {
     setIsBatchMode(false);
     setIsBatchProcessing(false);
     setBatchResults([]);
-    setCurrentBatchIndex(0);
     setScreen('idle');
   };
 
@@ -1185,37 +1273,60 @@ export default function App() {
           // TELA DE PROCESSAMENTO EM LOTE (BATCH)
           <div className="flex-1 flex flex-col py-2 animate-fadeIn space-y-5">
             {/* Cabeçalho do Lote */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Envio em Lote</h3>
-                {isBatchProcessing ? (
-                  <p className="text-xs text-slate-500 animate-pulse">
-                    Processando imagem {currentBatchIndex + 1} de {batchResults.length}...
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-400">
-                    Processamento concluído. {batchResults.filter(it => it.status === 'saved').length} salvos com sucesso, {batchResults.filter(it => it.status === 'duplicate').length} ignorados (já existem), {batchResults.filter(it => it.status === 'error').length} falhas.
-                  </p>
-                )}
-              </div>
-              <button 
-                onClick={resetAll}
-                className="bg-blue-50 hover:bg-blue-100 text-[#003865] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Nova Captura / Limpar</span>
-              </button>
-            </div>
+            {(() => {
+              const processedCount = batchResults.filter(it => it.status !== 'pending' && it.status !== 'processing').length;
+              const percent = batchResults.length > 0 ? Math.round((processedCount / batchResults.length) * 100) : 0;
+              
+              let etaText = "";
+              if (isBatchProcessing) {
+                if (processedCount > 0 && batchStartTime > 0) {
+                  const elapsed = Date.now() - batchStartTime;
+                  const avgTime = elapsed / processedCount;
+                  const remaining = batchResults.length - processedCount;
+                  const etaSeconds = Math.round((remaining * avgTime) / 1000);
+                  etaText = `(Tempo restante: ~${etaSeconds}s)`;
+                } else {
+                  const etaSeconds = (batchResults.length - processedCount) * 4;
+                  etaText = `(Tempo restante: ~${etaSeconds}s)`;
+                }
+              }
 
-            {/* Barra de Progresso do Lote */}
-            {isBatchProcessing && (
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="bg-[#003865] h-full transition-all duration-300"
-                  style={{ width: `${((currentBatchIndex) / batchResults.length) * 100}%` }}
-                ></div>
-              </div>
-            )}
+              return (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Envio em Lote</h3>
+                      {isBatchProcessing ? (
+                        <p className="text-xs text-slate-500 animate-pulse">
+                          Enviando: {percent}% ({processedCount} de {batchResults.length}) {etaText}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-slate-400">
+                          Processamento concluído. {batchResults.filter(it => it.status === 'saved').length} salvos com sucesso, {batchResults.filter(it => it.status === 'duplicate').length} ignorados (já existem), {batchResults.filter(it => it.status === 'error').length} falhas.
+                        </p>
+                      )}
+                    </div>
+                    <button 
+                      onClick={resetAll}
+                      className="bg-blue-50 hover:bg-blue-100 text-[#003865] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Nova Captura / Limpar</span>
+                    </button>
+                  </div>
+
+                  {/* Barra de Progresso do Lote */}
+                  {isBatchProcessing && (
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-[#003865] h-full transition-all duration-300"
+                        style={{ width: `${percent}%` }}
+                      ></div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Lista de Itens do Lote */}
             <div className="space-y-3">
@@ -1262,6 +1373,14 @@ export default function App() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {item.status === 'error' && (
+                        <button
+                          onClick={() => retryBatchItem(item.id)}
+                          className="bg-red-100 hover:bg-red-200 text-red-700 px-2.5 py-1 rounded-full text-[9px] font-bold transition-all border border-red-200"
+                        >
+                          Reenviar
+                        </button>
+                      )}
                       <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold ${badgeClass}`}>
                         {badgeText}
                       </span>
