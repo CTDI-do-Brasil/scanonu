@@ -54,7 +54,8 @@ async function connectToDatabase() {
           cpe_sn VARCHAR(100),
           gpon_sn VARCHAR(100) UNIQUE, -- Adicionado UNIQUE para validação de duplicidade
           mac VARCHAR(100),
-          wifi_ssid VARCHAR(100), -- Novo campo
+          wifi_ssid VARCHAR(100),
+          wifi_ssid_5g VARCHAR(100), -- Novo campo
           wifi_key VARCHAR(100),
           usuario VARCHAR(100),
           senha VARCHAR(100),
@@ -79,7 +80,8 @@ async function connectToDatabase() {
       // Garantir que a coluna wifi_ssid exista caso a tabela já tenha sido criada anteriormente
       try {
         await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
-        console.log('Coluna wifi_ssid verificada/adicionada com sucesso.');
+        await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
+        console.log('Colunas de SSID verificadas/adicionadas com sucesso.');
       } catch (e) {}
 
       // Garantir que a constraint UNIQUE exista caso a tabela já tenha sido criada anteriormente sem ela
@@ -125,17 +127,18 @@ const scanResponseSchema: Schema = {
     cpe_sn: { type: Type.STRING, description: 'CPE Serial Number / S/N do equipamento se disponível' },
     gpon_sn: { type: Type.STRING, description: 'GPON Serial Number (S/N) ou ALCL/ZTEG... Serial Number' },
     mac: { type: Type.STRING, description: 'Endereço MAC da ONU' },
-    wifi_ssid: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão (ex: SSID: FiberHome-xxxx) se impresso na etiqueta' },
+    wifi_ssid: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão de 2.4GHz ou rede única' },
+    wifi_ssid_5g: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão de 5GHz (se houver duas redes SSIDs na etiqueta, caso contrário deixe em branco)' },
     wifi_key: { type: Type.STRING, description: 'Chave/Senha do Wi-Fi padrão impresso na etiqueta' },
     usuario: { type: Type.STRING, description: 'Usuário padrão de login/administração se houver' },
     senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' }
   },
-  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_ssid', 'wifi_key', 'usuario', 'senha']
+  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_ssid', 'wifi_ssid_5g', 'wifi_key', 'usuario', 'senha']
 };
 
 const SYSTEM_INSTRUCTION = `Você é um sistema de leitura de etiquetas de equipamentos de rede (ONU).
-Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, SSID (wifi_ssid), Wi-Fi Key (wifi_key), User name (usuario) e Password (senha).
-Regras: Retorne apenas JSON válido conforme o esquema tipado. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados. O campo Password é crítico e deve ser analisado com máxima atenção. Se algum campo não for encontrado na etiqueta, deixe como string vazia ("").`;
+Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, SSID 2.4GHz/Único (wifi_ssid), SSID 5GHz se houver (wifi_ssid_5g), Wi-Fi Key (wifi_key), User name (usuario) e Password (senha).
+Regras: Retorne apenas JSON válido conforme o esquema tipado. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados. Se houver dois SSIDs na etiqueta (um de 2.4GHz e um de 5GHz), separe-os colocando o de 2.4GHz em wifi_ssid e o de 5GHz em wifi_ssid_5g. Se houver apenas uma rede SSID, coloque-a em wifi_ssid e deixe wifi_ssid_5g vazio (""). O campo Password é crítico e deve ser analisado com máxima atenção. Se algum campo não for encontrado na etiqueta, deixe como string vazia ("").`;
 
 // Modelos do cascade em ordem de prioridade
 const MODEL_CASCADE = [
@@ -234,7 +237,7 @@ app.post('/api/scan-label', async (req, res) => {
       if (dbConnected && dbPool && scanResult.gpon_sn) {
         try {
           const checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
             [scanResult.gpon_sn]
           );
           if (checkRes.rowCount && checkRes.rowCount > 0) {
@@ -274,7 +277,7 @@ app.post('/api/scan-label', async (req, res) => {
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', async (req, res) => {
   try {
-    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, usuario, senha, operador, overwrite } = req.body;
+    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador, overwrite } = req.body;
 
     if (!dbConnected || !dbPool) {
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
@@ -299,8 +302,8 @@ app.post('/api/save-label', async (req, res) => {
 
     // Usamos a sintaxe INSERT ... ON CONFLICT (gpon_sn) DO UPDATE para atualizar os valores se overwrite for verdadeiro
     const query = `
-      INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, usuario, senha, operador_email)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (gpon_sn) 
       DO UPDATE SET 
         fabricante = EXCLUDED.fabricante,
@@ -308,6 +311,7 @@ app.post('/api/save-label', async (req, res) => {
         cpe_sn = EXCLUDED.cpe_sn,
         mac = EXCLUDED.mac,
         wifi_ssid = EXCLUDED.wifi_ssid,
+        wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
         wifi_key = EXCLUDED.wifi_key,
         usuario = EXCLUDED.usuario,
         senha = EXCLUDED.senha,
@@ -322,6 +326,7 @@ app.post('/api/save-label', async (req, res) => {
       gpon_sn || '',
       mac || '',
       wifi_ssid || '',
+      wifi_ssid_5g || '',
       wifi_key || '',
       usuario || '',
       senha || '',
@@ -590,6 +595,7 @@ app.get('/api/admin/export-xml', async (req, res) => {
         .ele('gpon_sn').txt(row.gpon_sn || '').up()
         .ele('mac').txt(row.mac || '').up()
         .ele('wifi_ssid').txt(row.wifi_ssid || '').up()
+        .ele('wifi_ssid_5g').txt(row.wifi_ssid_5g || '').up()
         .ele('wifi_key').txt(row.wifi_key || '').up()
         .ele('usuario').txt(row.usuario || '').up()
         .ele('senha').txt(row.senha || '').up()
@@ -663,7 +669,8 @@ app.get('/api/admin/export-excel', async (req, res) => {
       'CPE Serial Number': row.cpe_sn || '',
       'GPON Serial Number': row.gpon_sn || '',
       'Endereço MAC': row.mac || '',
-      'SSID Wi-Fi': row.wifi_ssid || '',
+      'SSID Wi-Fi 2.4G / Único': row.wifi_ssid || '',
+      'SSID Wi-Fi 5G': row.wifi_ssid_5g || '',
       'Senha WIFI': row.wifi_key || '',
       'Usuário': row.usuario || '',
       'Senha WEB': row.senha || '',

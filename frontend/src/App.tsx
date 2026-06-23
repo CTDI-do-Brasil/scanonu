@@ -30,6 +30,7 @@ interface ScanData {
   gpon_sn: string;
   mac: string;
   wifi_ssid: string;
+  wifi_ssid_5g: string;
   wifi_key: string;
   usuario: string;
   senha: string;
@@ -42,6 +43,7 @@ const DEFAULT_SCAN_DATA: ScanData = {
   gpon_sn: '',
   mac: '',
   wifi_ssid: '',
+  wifi_ssid_5g: '',
   wifi_key: '',
   usuario: '',
   senha: ''
@@ -487,7 +489,8 @@ export default function App() {
     cpe_sn: 'CPE Serial (S/N)',
     gpon_sn: 'GPON Serial (S/N)',
     mac: 'Endereço MAC',
-    wifi_ssid: 'SSID Wi-Fi',
+    wifi_ssid: 'SSID Wi-Fi 2.4GHz / Único',
+    wifi_ssid_5g: 'SSID Wi-Fi 5GHz',
     wifi_key: 'Senha WIFI',
     usuario: 'Usuário Padrão',
     senha: 'Senha WEB'
@@ -1361,6 +1364,10 @@ export default function App() {
               <div className="font-bold text-slate-700 border-b border-slate-200 pb-1 mb-1">Dados anteriores salvos:</div>
               <div>• Fabricante: <span className="font-medium text-slate-800">{existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</span></div>
               <div>• MAC: <span className="font-medium text-slate-800">{existingEquipmentData.mac}</span></div>
+              <div>• SSID 2.4G / Único: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_ssid || 'Não cadastrado'}</span></div>
+              {existingEquipmentData.wifi_ssid_5g && (
+                <div>• SSID 5G: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_ssid_5g}</span></div>
+              )}
               <div>• Senha WIFI: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_key}</span></div>
             </div>
             
