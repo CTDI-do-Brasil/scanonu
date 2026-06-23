@@ -1423,7 +1423,7 @@ export default function App() {
                           <div className="text-[10px] text-slate-400 font-mono">GPON: {item.data.gpon_sn}</div>
                         )}
                         {item.errorMsg && (
-                          <div className="text-[10px] text-red-500 mt-0.5 max-w-[150px] sm:max-w-xs truncate">{item.errorMsg}</div>
+                          <div className="text-[10px] text-red-500 mt-0.5 max-w-[150px] sm:max-w-xs break-words whitespace-normal">{item.errorMsg}</div>
                         )}
                       </div>
                     </div>
