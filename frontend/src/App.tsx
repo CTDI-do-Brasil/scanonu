@@ -516,8 +516,8 @@ export default function App() {
         const file = files[i];
         
         if (i > 0) {
-          // Atraso de 1.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          // Atraso de 4.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini (Free Tier)
+          await new Promise(resolve => setTimeout(resolve, 4500));
         }
         
         const base64 = await new Promise<string>((resolve) => {
@@ -724,8 +724,8 @@ export default function App() {
     for (let i = 0; i < failedItems.length; i++) {
       const item = failedItems[i];
       if (i > 0) {
-        // Atraso de 1.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Atraso de 4.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini (Free Tier)
+        await new Promise(resolve => setTimeout(resolve, 4500));
       }
       await retryBatchItem(item.id);
     }
