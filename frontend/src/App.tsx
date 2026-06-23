@@ -36,6 +36,19 @@ interface ScanData {
   senha: string;
 }
 
+interface BatchItem {
+  id: string;
+  fileName: string;
+  image: string;
+  data: ScanData;
+  status: 'pending' | 'processing' | 'success' | 'error' | 'duplicate' | 'saved';
+  existsInDb: boolean;
+  existingData: ScanData | null;
+  errorMsg: string | null;
+  dbMessage: { type: 'success' | 'error'; text: string } | null;
+  isSaving: boolean;
+}
+
 const DEFAULT_SCAN_DATA: ScanData = {
   fabricante: '',
   modelo: '',
@@ -173,6 +186,12 @@ export default function App() {
   const [equipmentExistsInDb, setEquipmentExistsInDb] = useState(false);
   const [existingEquipmentData, setExistingEquipmentData] = useState<ScanData | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
+  // Estados de Processamento em Lote (Batch)
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchResults, setBatchResults] = useState<BatchItem[]>([]);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
 
   // Referências para Stream da Câmera
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -451,9 +470,13 @@ export default function App() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (files.length === 1) {
+      // Fluxo de arquivo único existente
+      const file = files[0];
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64 = reader.result as string;
@@ -461,8 +484,125 @@ export default function App() {
         processImage(base64);
       };
       reader.readAsDataURL(file);
+    } else {
+      // Fluxo de processamento em Lote (Batch)
+      setScreen('idle');
+      setIsBatchMode(true);
+      setIsBatchProcessing(true);
+      setBatchResults([]);
+      
+      const items: BatchItem[] = [];
+      for (let i = 0; i < files.length; i++) {
+        items.push({
+          id: `batch_${Date.now()}_${i}`,
+          fileName: files[i].name,
+          image: '',
+          data: { ...DEFAULT_SCAN_DATA },
+          status: 'pending',
+          existsInDb: false,
+          existingData: null,
+          errorMsg: null,
+          dbMessage: null,
+          isSaving: false
+        });
+      }
+      setBatchResults(items);
+
+      // Processar cada imagem em lote sequencialmente
+      for (let i = 0; i < files.length; i++) {
+        setCurrentBatchIndex(i);
+        const file = files[i];
+        
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+
+        setBatchResults(prev => prev.map((item, idx) => idx === i ? { ...item, image: base64, status: 'processing' } : item));
+
+        try {
+          const response = await fetch('/api/scan-label', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: base64 })
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.data) {
+            let processedData = applyMacSsidRules(result.data);
+            
+            if (result.existsInDb) {
+              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                ...item, 
+                data: processedData, 
+                status: 'duplicate',
+                existsInDb: true,
+                existingData: result.existingData
+              } : item));
+            } else {
+              // Gravar automaticamente no banco de dados
+              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                ...item, 
+                data: processedData,
+                isSaving: true
+              } : item));
+
+              try {
+                const saveResponse = await fetch('/api/save-label', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    ...processedData,
+                    operador: user?.email || 'admin@scanonu.com',
+                    overwrite: false
+                  })
+                });
+                const saveResult = await saveResponse.json();
+                if (saveResult.success) {
+                  setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                    ...item, 
+                    status: 'saved',
+                    isSaving: false,
+                    dbMessage: { type: 'success', text: 'Salvo no banco!' }
+                  } : item));
+                } else {
+                  throw new Error(saveResult.error || 'Erro ao salvar no banco.');
+                }
+              } catch (saveErr: any) {
+                setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                  ...item, 
+                  status: 'error',
+                  isSaving: false,
+                  errorMsg: saveErr.message || 'Falha ao salvar no banco.' 
+                } : item));
+              }
+            }
+          } else {
+            const errorMsg = result.error || 'Erro ao ler a etiqueta.';
+            setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+              ...item, 
+              status: 'error', 
+              errorMsg: errorMsg 
+            } : item));
+          }
+        } catch (err: any) {
+          setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+            ...item, 
+            status: 'error', 
+            errorMsg: err.message || 'Erro de conexão.' 
+          } : item));
+        }
+      }
+      setIsBatchProcessing(false);
     }
   };
+
 
   const processImage = async (base64Image: string) => {
     setScreen('processing');
@@ -521,6 +661,10 @@ export default function App() {
     setExistingEquipmentData(null);
     setDbMessage(null);
     setShowDuplicateModal(false);
+    setIsBatchMode(false);
+    setIsBatchProcessing(false);
+    setBatchResults([]);
+    setCurrentBatchIndex(0);
     setScreen('idle');
   };
 
@@ -1037,6 +1181,96 @@ export default function App() {
               </div>
             )}
           </div>
+        ) : isBatchMode ? (
+          // TELA DE PROCESSAMENTO EM LOTE (BATCH)
+          <div className="flex-1 flex flex-col py-2 animate-fadeIn space-y-5">
+            {/* Cabeçalho do Lote */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Envio em Lote</h3>
+                {isBatchProcessing ? (
+                  <p className="text-xs text-slate-500 animate-pulse">
+                    Processando imagem {currentBatchIndex + 1} de {batchResults.length}...
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    Processamento concluído. {batchResults.filter(it => it.status === 'saved').length} salvos com sucesso, {batchResults.filter(it => it.status === 'duplicate').length} ignorados (já existem), {batchResults.filter(it => it.status === 'error').length} falhas.
+                  </p>
+                )}
+              </div>
+              <button 
+                onClick={resetAll}
+                className="bg-blue-50 hover:bg-blue-100 text-[#003865] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Nova Captura / Limpar</span>
+              </button>
+            </div>
+
+            {/* Barra de Progresso do Lote */}
+            {isBatchProcessing && (
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-[#003865] h-full transition-all duration-300"
+                  style={{ width: `${((currentBatchIndex) / batchResults.length) * 100}%` }}
+                ></div>
+              </div>
+            )}
+
+            {/* Lista de Itens do Lote */}
+            <div className="space-y-3">
+              {batchResults.map((item) => {
+                let badgeClass = "bg-slate-100 text-slate-600 border border-slate-200";
+                let badgeText = "Aguardando";
+                
+                if (item.status === 'processing') {
+                  badgeClass = "bg-blue-50 text-blue-700 border border-blue-100 animate-pulse";
+                  badgeText = "Processando...";
+                } else if (item.status === 'success') {
+                  badgeClass = "bg-green-50 text-green-700 border border-green-100";
+                  badgeText = "Processado";
+                } else if (item.status === 'duplicate') {
+                  badgeClass = "bg-amber-50 text-amber-700 border border-amber-100";
+                  badgeText = "Ignorado (Já Existe)";
+                } else if (item.status === 'saved') {
+                  badgeClass = "bg-emerald-50 text-emerald-700 border border-emerald-100";
+                  badgeText = "Salvo com sucesso!";
+                } else if (item.status === 'error') {
+                  badgeClass = "bg-red-50 text-red-700 border border-red-100";
+                  badgeText = "Falha no Envio";
+                }
+
+                return (
+                  <div key={item.id} className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm transition-all p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {item.image ? (
+                        <img src={item.image} alt="ONU" className="w-10 h-10 object-cover rounded-lg border border-slate-200" />
+                      ) : (
+                        <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-lg border border-slate-200 flex items-center justify-center">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold text-xs text-slate-700 truncate max-w-[150px] sm:max-w-xs">{item.fileName}</div>
+                        {item.data.gpon_sn && (
+                          <div className="text-[10px] text-slate-400 font-mono">GPON: {item.data.gpon_sn}</div>
+                        )}
+                        {item.errorMsg && (
+                          <div className="text-[10px] text-red-500 mt-0.5 max-w-[150px] sm:max-w-xs truncate">{item.errorMsg}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold ${badgeClass}`}>
+                        {badgeText}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
           <>
             {/* 1. TELA INICIAL (IDLE) */}
@@ -1112,6 +1346,7 @@ export default function App() {
                     onChange={handleFileUpload} 
                     accept="image/*" 
                     className="hidden" 
+                    multiple
                   />
                 </div>
               </div>

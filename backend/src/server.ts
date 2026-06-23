@@ -288,57 +288,76 @@ app.post('/api/save-label', async (req, res) => {
       });
     }
 
-    // Se não for pedido explicitamente para sobrescrever (overwrite = true), vamos verificar novamente
-    if (!overwrite) {
-      const checkRes = await dbPool.query('SELECT id FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
-      if (checkRes.rowCount && checkRes.rowCount > 0) {
+    const checkRes = await dbPool.query('SELECT id FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    const exists = checkRes.rowCount && checkRes.rowCount > 0;
+
+    if (exists) {
+      if (!overwrite) {
         return res.status(409).json({
           success: false,
           conflict: true,
           error: 'Equipamento com este GPON Serial já existe no banco de dados.'
         });
       }
+
+      // Se for para sobrescrever, usamos um UPDATE que NÃO consome a sequence SERIAL!
+      const updateQuery = `
+        UPDATE etiquetas_scan_onu 
+        SET 
+          fabricante = $1,
+          modelo = $2,
+          cpe_sn = $3,
+          mac = $4,
+          wifi_ssid = $5,
+          wifi_ssid_5g = $6,
+          wifi_key = $7,
+          usuario = $8,
+          senha = $9,
+          operador_email = $10,
+          data_leitura = CURRENT_TIMESTAMP
+        WHERE gpon_sn = $11
+      `;
+      const updateValues = [
+        fabricante || '',
+        modelo || '',
+        cpe_sn || '',
+        mac || '',
+        wifi_ssid || '',
+        wifi_ssid_5g || '',
+        wifi_key || '',
+        usuario || '',
+        senha || '',
+        operador || 'sistema',
+        gpon_sn
+      ];
+      await dbPool.query(updateQuery, updateValues);
+      console.log(`Dados atualizados com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
+    } else {
+      // Se não existe, fazemos um INSERT normal (que consome a sequence normalmente e cria o id consecutivo correto)
+      const insertQuery = `
+        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `;
+      const insertValues = [
+        fabricante || '',
+        modelo || '',
+        cpe_sn || '',
+        gpon_sn || '',
+        mac || '',
+        wifi_ssid || '',
+        wifi_ssid_5g || '',
+        wifi_key || '',
+        usuario || '',
+        senha || '',
+        operador || 'sistema'
+      ];
+      await dbPool.query(insertQuery, insertValues);
+      console.log(`Dados salvos com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
     }
 
-    // Usamos a sintaxe INSERT ... ON CONFLICT (gpon_sn) DO UPDATE para atualizar os valores se overwrite for verdadeiro
-    const query = `
-      INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (gpon_sn) 
-      DO UPDATE SET 
-        fabricante = EXCLUDED.fabricante,
-        modelo = EXCLUDED.modelo,
-        cpe_sn = EXCLUDED.cpe_sn,
-        mac = EXCLUDED.mac,
-        wifi_ssid = EXCLUDED.wifi_ssid,
-        wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
-        wifi_key = EXCLUDED.wifi_key,
-        usuario = EXCLUDED.usuario,
-        senha = EXCLUDED.senha,
-        operador_email = EXCLUDED.operador_email,
-        data_leitura = CURRENT_TIMESTAMP
-    `;
-
-    const values = [
-      fabricante || '',
-      modelo || '',
-      cpe_sn || '',
-      gpon_sn || '',
-      mac || '',
-      wifi_ssid || '',
-      wifi_ssid_5g || '',
-      wifi_key || '',
-      usuario || '',
-      senha || '',
-      operador || 'sistema'
-    ];
-
-    await dbPool.query(query, values);
-    console.log(`Dados salvos/sobrescritos com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
-    
     return res.json({ 
       success: true, 
-      message: overwrite 
+      message: exists 
         ? 'Dados atualizados/sobrescritos com sucesso no PostgreSQL!'
         : 'Dados salvos com sucesso no PostgreSQL!' 
     });
