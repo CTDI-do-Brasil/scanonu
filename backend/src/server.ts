@@ -721,6 +721,55 @@ app.get('/api/admin/export-excel', async (req, res) => {
 import fs from 'fs';
 import path from 'path';
 
+// Rota da API externa para consulta de unidades (ex: integração com C#)
+app.get('/api/external/units', async (req, res) => {
+  try {
+    const { gpon_sn, mac, search } = req.query;
+
+    // Proteção por chave de API (opcional, pode ser definida no .env como EXTERNAL_API_KEY)
+    const apiKeyHeader = req.headers['x-api-key'];
+    const expectedApiKey = process.env.EXTERNAL_API_KEY;
+    if (expectedApiKey && apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ success: false, error: 'Chave de API inválida ou ausente no cabeçalho X-API-Key.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    let queryText = 'SELECT id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
+    const queryValues: any[] = [];
+    let paramCount = 1;
+
+    if (gpon_sn) {
+      queryText += ` AND gpon_sn = $${paramCount}`;
+      queryValues.push(gpon_sn);
+      paramCount++;
+    } else if (mac) {
+      queryText += ` AND mac = $${paramCount}`;
+      queryValues.push(mac);
+      paramCount++;
+    } else if (search) {
+      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      queryValues.push(`%${search}%`);
+      paramCount++;
+    }
+
+    queryText += ' ORDER BY data_leitura DESC';
+    const result = await dbPool.query(queryText, queryValues);
+
+    return res.json({
+      success: true,
+      count: result.rowCount,
+      units: result.rows
+    });
+
+  } catch (err: any) {
+    console.error('Erro na API externa de consulta:', err);
+    return res.status(500).json({ success: false, error: 'Erro interno ao consultar unidades.' });
+  }
+});
+
 // Todas as outras rotas GET servem o index.html do React em produção
 app.get('*', (req, res) => {
   const indexPath = path.resolve('public/index.html');
