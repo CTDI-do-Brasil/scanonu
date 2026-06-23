@@ -23,6 +23,9 @@ app.use(express.static('public'));
 let dbConnected = false;
 let dbPool: Pool | null = null;
 
+// Guardar os últimos erros de escaneamento para diagnóstico
+let lastScanErrors: any[] = [];
+
 // Tenta conectar ao banco de dados se a variável DATABASE_URL existir
 async function connectToDatabase() {
   const connectionString = process.env.DATABASE_URL;
@@ -130,6 +133,17 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     databaseConnected: dbConnected 
+  });
+});
+
+// Diagnóstico de erros de escaneamento
+app.get('/api/debug-errors', (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    dbConnected,
+    hasApiKey: !!process.env.GEMINI_API_KEY,
+    apiKeyLength: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length : 0,
+    lastScanErrors
   });
 });
 
@@ -313,6 +327,11 @@ app.post('/api/scan-label', async (req, res) => {
       });
     } else {
       console.error("Todos os modelos na cascata falharam:", errors);
+      lastScanErrors.push({
+        timestamp: new Date().toISOString(),
+        errors: errors
+      });
+      if (lastScanErrors.length > 50) lastScanErrors.shift();
       return res.status(502).json({
         success: false,
         error: 'Não foi possível extrair os dados da etiqueta. Todos os modelos de visão falharam.',
@@ -322,6 +341,11 @@ app.post('/api/scan-label', async (req, res) => {
 
   } catch (globalError: any) {
     console.error('Erro interno do servidor:', globalError);
+    lastScanErrors.push({
+      timestamp: new Date().toISOString(),
+      globalError: globalError.message || String(globalError)
+    });
+    if (lastScanErrors.length > 50) lastScanErrors.shift();
     return res.status(500).json({
       success: false,
       error: 'Erro interno no servidor ao processar a imagem.',
