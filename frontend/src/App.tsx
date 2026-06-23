@@ -49,6 +49,52 @@ const DEFAULT_SCAN_DATA: ScanData = {
   senha: ''
 };
 
+function applyMacSsidRules(currentData: ScanData): ScanData {
+  if (!currentData.mac) return currentData;
+  
+  // Clean MAC (remove colons, hyphens, spaces, and make uppercase)
+  const cleanMac = currentData.mac.replace(/[:\s-]/g, '').toUpperCase();
+  if (cleanMac.length < 4) return currentData;
+  
+  const last4Hex = cleanMac.slice(-4);
+  const last4Int = parseInt(last4Hex, 16);
+  if (isNaN(last4Int)) return currentData;
+
+  const modelUpper = (currentData.modelo || '').toUpperCase();
+  const mfgUpper = (currentData.fabricante || '').toUpperCase();
+  const dataCopy = { ...currentData };
+  
+  // Rule 1: KAON
+  if (modelUpper.includes('KAON') || mfgUpper.includes('KAON')) {
+    dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
+    dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
+  }
+  
+  // Rule 2 & 3: F@ST 5655V2
+  else if (modelUpper.includes('5655V2') || modelUpper.includes('5655 V2')) {
+    // Check which format to use. We check if current scanned SSID has "LIVE" or if the 5G SSID has value
+    const isLiveTim = (dataCopy.wifi_ssid || '').toUpperCase().includes('LIVE') || 
+                      (dataCopy.wifi_ssid_5g || '').toUpperCase().includes('LIVE') ||
+                      (dataCopy.wifi_ssid === '' && dataCopy.wifi_ssid_5g !== '');
+    
+    if (isLiveTim) {
+      // Subtract 3 in hexadecimal
+      const sub3Int = (last4Int - 3 + 0x10000) % 0x10000;
+      const sub3Hex = sub3Int.toString(16).toUpperCase().padStart(4, '0');
+      dataCopy.wifi_ssid = `LIVE TIM_${sub3Hex}_2G`;
+      dataCopy.wifi_ssid_5g = `LIVE TIM_${sub3Hex}_5G`;
+    } else {
+      // Subtract 7 in hexadecimal (TIM_ULTRAFIBRA_XXXX)
+      const sub7Int = (last4Int - 7 + 0x10000) % 0x10000;
+      const sub7Hex = sub7Int.toString(16).toUpperCase().padStart(4, '0');
+      dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${sub7Hex}`;
+      dataCopy.wifi_ssid_5g = ''; // Only one Wi-Fi network
+    }
+  }
+  
+  return dataCopy;
+}
+
 export default function App() {
   // Autenticação
   const [user, setUser] = useState<{ email: string; role: string } | null>(null);
@@ -436,7 +482,7 @@ export default function App() {
       const result = await response.json();
 
       if (result.success && result.data) {
-        setData(result.data);
+        setData(applyMacSsidRules(result.data));
         if (result.existsInDb) {
           setEquipmentExistsInDb(true);
           setExistingEquipmentData(result.existingData);
@@ -1195,7 +1241,14 @@ export default function App() {
                             <input 
                               type="text"
                               value={value}
-                              onChange={(e) => setData({ ...data, [field]: e.target.value })}
+                              onChange={(e) => {
+                                const newValue = e.target.value;
+                                let updated = { ...data, [field]: newValue };
+                                if (field === 'mac' || field === 'modelo' || field === 'fabricante') {
+                                  updated = applyMacSsidRules(updated);
+                                }
+                                setData(updated);
+                              }}
                               className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-lg pl-3 pr-10 py-2 text-sm text-slate-800 outline-none transition-all font-medium"
                               placeholder={`Insira o ${label.toLowerCase()}`}
                             />
