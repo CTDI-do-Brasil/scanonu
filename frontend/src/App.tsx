@@ -599,10 +599,11 @@ export default function App() {
             }
           } else {
             const errorMsg = result.error || 'Erro ao ler a etiqueta.';
+            const detailsMsg = result.details ? ` Detalhes: ${JSON.stringify(result.details)}` : '';
             setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
               ...item, 
               status: 'error', 
-              errorMsg: errorMsg 
+              errorMsg: errorMsg + detailsMsg 
             } : item));
           }
         } catch (err: any) {
@@ -699,10 +700,11 @@ export default function App() {
         }
       } else {
         const errorMsg = result.error || 'Erro ao ler a etiqueta.';
+        const detailsMsg = result.details ? ` Detalhes: ${JSON.stringify(result.details)}` : '';
         setBatchResults(prev => prev.map(it => it.id === itemId ? { 
           ...it, 
           status: 'error', 
-          errorMsg: errorMsg 
+          errorMsg: errorMsg + detailsMsg 
         } : it));
       }
     } catch (err: any) {
