@@ -147,9 +147,9 @@ const scanResponseSchema: Schema = {
     wifi_key: { type: Type.STRING, description: 'Chave/Senha do Wi-Fi padrão impresso na etiqueta' },
     usuario: { type: Type.STRING, description: 'Usuário padrão de login/administração se houver' },
     senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' },
-    reimpressa: { type: Type.BOOLEAN, description: 'Indica se a etiqueta foi identificada como reimpressa (true) ou original de fábrica (false).' }
+    reimpressa: { type: Type.STRING, description: 'Retorne "sim" se a etiqueta for detectada como reimpressa/térmica/laser manual, ou "nao" se for a original de fábrica.' }
   },
-  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_ssid', 'wifi_ssid_5g', 'wifi_key', 'usuario', 'senha', 'reimpressa']
+  required: ['fabricante', 'modelo', 'gpon_sn', 'mac', 'reimpressa']
 };
 
 const SYSTEM_INSTRUCTION = `Você é um sistema de leitura de etiquetas de equipamentos de rede (ONU).
@@ -158,14 +158,13 @@ Regras:
 1. Retorne apenas JSON válido conforme o esquema tipado.
 2. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados.
 3. Se houver dois SSIDs na etiqueta, separe-os.
-4. Identifique se a etiqueta é uma etiqueta reimpressa (campo 'reimpressa' como true): Etiquetas reimpressas (ou segundas vias) são impressas em impressora térmica/laser adesiva manual, apresentam fontes levemente borradas ou mais grossas, papel adesivo branco comum, por vezes coladas com rugas, dobras ou desalinhadas em relação ao rebaixo plástico original do equipamento. Etiquetas originais de fábrica (campo 'reimpressa' como false) são perfeitamente alinhadas, integradas, sem rugas de colagem e com impressão industrial nítida.`;
+4. Identifique se a etiqueta é uma etiqueta reimpressa (campo 'reimpressa' como "sim"): Etiquetas reimpressas (ou segundas vias) são impressas em impressora térmica/laser adesiva manual, apresentam fontes levemente borradas ou mais grossas, papel adesivo branco comum, por vezes coladas com rugas, dobras ou desalinhadas em relação ao rebaixo plástico original do equipamento. Etiquetas originais de fábrica (campo 'reimpressa' como "nao") são perfeitamente alinhadas, integradas, sem rugas de colagem e com impressão industrial nítida.`;
 
 // Modelos do cascade em ordem de prioridade
 const MODEL_CASCADE = [
-  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-3.5-flash'
+  'gemini-1.5-pro'
 ];
 
 app.post('/api/scan-label', async (req, res) => {
@@ -250,6 +249,10 @@ app.post('/api/scan-label', async (req, res) => {
     }
 
     if (success && scanResult) {
+      // Converter a resposta da reimpressão ("sim"/"nao") para boolean seguro
+      const isReimpressa = String(scanResult.reimpressa).toLowerCase().trim() === 'sim';
+      scanResult.reimpressa = isReimpressa;
+
       // VERIFICAÇÃO DE DUPLICIDADE: antes de retornar, verificamos se o GPON_SN já existe no banco de dados
       let existsInDb = false;
       let existingData = null;
