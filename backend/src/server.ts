@@ -149,7 +149,7 @@ const scanResponseSchema: Schema = {
     senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' },
     reimpressa: { type: Type.STRING, description: 'Retorne "sim" se a etiqueta for detectada como reimpressa/térmica/laser manual, ou "nao" se for a original de fábrica.' }
   },
-  required: ['fabricante', 'modelo', 'gpon_sn', 'mac', 'reimpressa']
+  required: ['gpon_sn', 'reimpressa']
 };
 
 const SYSTEM_INSTRUCTION = `Você é um sistema de leitura de etiquetas de equipamentos de rede (ONU).

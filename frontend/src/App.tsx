@@ -714,6 +714,25 @@ export default function App() {
     }
   };
 
+  const retryAllFailedBatchItems = async () => {
+    const failedItems = batchResults.filter(it => it.status === 'error');
+    if (failedItems.length === 0) return;
+
+    setIsBatchProcessing(true);
+    setBatchStartTime(Date.now());
+
+    for (let i = 0; i < failedItems.length; i++) {
+      const item = failedItems[i];
+      if (i > 0) {
+        // Atraso de 1.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      await retryBatchItem(item.id);
+    }
+
+    setIsBatchProcessing(false);
+  };
+
   const processImage = async (base64Image: string) => {
     setScreen('processing');
     setError(null);
@@ -1330,13 +1349,24 @@ export default function App() {
                         </p>
                       )}
                     </div>
-                    <button 
-                      onClick={resetAll}
-                      className="bg-blue-50 hover:bg-blue-100 text-[#003865] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Nova Captura / Limpar</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {!isBatchProcessing && batchResults.some(it => it.status === 'error') && (
+                        <button 
+                          onClick={retryAllFailedBatchItems}
+                          className="bg-red-50 hover:bg-red-100 text-red-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-red-100"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Reenviar Falhas ({batchResults.filter(it => it.status === 'error').length})</span>
+                        </button>
+                      )}
+                      <button 
+                        onClick={resetAll}
+                        className="bg-blue-50 hover:bg-blue-100 text-[#003865] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Nova Captura / Limpar</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Barra de Progresso do Lote */}
