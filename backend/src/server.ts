@@ -48,11 +48,10 @@ async function connectToDatabase() {
       // Criar a tabela de etiquetas
       const createTableQuery = `
         CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
-          id SERIAL PRIMARY KEY,
+          gpon_sn VARCHAR(100) PRIMARY KEY,
           fabricante VARCHAR(100) NOT NULL,
           modelo VARCHAR(100) NOT NULL,
           cpe_sn VARCHAR(100),
-          gpon_sn VARCHAR(100) UNIQUE, -- Adicionado UNIQUE para validação de duplicidade
           mac VARCHAR(100),
           wifi_ssid VARCHAR(100),
           wifi_ssid_5g VARCHAR(100), -- Novo campo
@@ -76,6 +75,22 @@ async function connectToDatabase() {
       `;
       await dbPool.query(createUsersTableQuery);
       console.log('Tabelas de banco validadas/criadas com sucesso.');
+
+      // Migração para remover a coluna ID caso ela já exista no banco
+      try {
+        const checkColumn = await dbPool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='id'"
+        );
+        if (checkColumn.rowCount && checkColumn.rowCount > 0) {
+          console.log('Migrando banco: removendo coluna ID e definindo gpon_sn como PRIMARY KEY...');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP CONSTRAINT IF EXISTS etiquetas_scan_onu_pkey CASCADE');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS id CASCADE');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD PRIMARY KEY (gpon_sn)');
+          console.log('Migração concluída com sucesso!');
+        }
+      } catch (migrationErr: any) {
+        console.error('Erro na migração da tabela de etiquetas:', migrationErr.message || migrationErr);
+      }
 
       // Garantir que a coluna wifi_ssid exista caso a tabela já tenha sido criada anteriormente
       try {
@@ -293,7 +308,7 @@ app.post('/api/save-label', async (req, res) => {
       });
     }
 
-    const checkRes = await dbPool.query('SELECT id FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    const checkRes = await dbPool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
 
     if (exists) {
@@ -602,7 +617,7 @@ app.get('/api/admin/export-xml', async (req, res) => {
       paramCount++;
     }
 
-    queryText += ' ORDER BY id ASC';
+    queryText += ' ORDER BY data_leitura ASC';
     const etiquetasRes = await dbPool.query(queryText, queryValues);
     
     // Construção do XML usando xmlbuilder2
@@ -683,7 +698,7 @@ app.get('/api/admin/export-excel', async (req, res) => {
       paramCount++;
     }
 
-    queryText += ' ORDER BY id ASC';
+    queryText += ' ORDER BY data_leitura ASC';
     const etiquetasRes = await dbPool.query(queryText, queryValues);
 
     const dataRows = etiquetasRes.rows.map((row, index) => ({
@@ -737,7 +752,7 @@ app.get('/api/external/units', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
-    let queryText = 'SELECT id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
+    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
