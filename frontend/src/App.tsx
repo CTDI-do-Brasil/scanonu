@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+// @ts-ignore
+import logoCtdi from './assets/logo-ctdi.png';
 import { 
   Camera, 
   Upload, 
@@ -828,24 +830,20 @@ export default function App() {
           {/* Card de Login */}
           <div className="bg-white rounded-[2.5rem] px-8 py-10 shadow-2xl w-full max-w-sm flex flex-col items-center">
             {/* Logo CTDI */}
-            <div className="mb-6 flex flex-col items-center">
-              <svg viewBox="0 0 200 50" className="w-52 h-14 mb-2" xmlns="http://www.w3.org/2000/svg">
-                {/* Diamond 1 */}
-                <polygon points="5,25 28,5 51,25 28,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
-                {/* Diamond 2 */}
-                <polygon points="51,25 74,5 97,25 74,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
-                {/* Diamond 3 */}
-                <polygon points="97,25 120,5 143,25 120,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
-                {/* Diamond 4 */}
-                <polygon points="143,25 166,5 189,25 166,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
-                
-                {/* Letters */}
-                <text x="28" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">C</text>
-                <text x="74" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">T</text>
-                <text x="120" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">D</text>
-                <text x="166" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">I</text>
-              </svg>
-              <h1 className="font-black text-3xl tracking-widest text-[#002f56] uppercase mt-2">Mídias</h1>
+            <div className="mb-4 flex flex-col items-center">
+              <img src={logoCtdi} alt="Logo CTDI" className="w-48 h-auto object-contain mb-1" />
+              <h1 className="font-black text-2xl tracking-widest text-[#002f56] uppercase mt-1">Mídias</h1>
+            </div>
+
+            {/* Logo ScanONU */}
+            <div className="mb-6 flex flex-col items-center border-t border-slate-100 w-full pt-4">
+              <div className="flex items-center gap-2">
+                <div className="bg-[#003865] text-white p-1.5 rounded-lg">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
+              </div>
+              <p className="text-slate-400 text-[10px] mt-0.5">Portal do Operador de Campo</p>
             </div>
 
             {loginError && (
