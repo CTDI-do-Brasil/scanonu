@@ -453,6 +453,65 @@ function parseOcrText(text: string): any {
     }
   }
 
+  // Tentar reconstruir o MAC se ele estiver ausente ou incompleto usando os dados do SSID
+  if (!mac || mac.length < 12) {
+    let ssidHex = '';
+    const ssidToUse = wifi_ssid || wifi_ssid_5g;
+    if (ssidToUse) {
+      const match = ssidToUse.toUpperCase().match(/(?:LIVE TIM_|TIM_ULTRAFIBRA_|TIM_ULTRAFIBRA)([0-9A-F]{4})/i);
+      if (match && match[1]) {
+        ssidHex = match[1];
+      }
+    }
+    
+    if (ssidHex) {
+      let expectedLast4 = '';
+      const isLiveTim = ssidToUse.toUpperCase().includes('LIVE');
+      const isUltrafibra = ssidToUse.toUpperCase().includes('ULTRAFIBRA');
+      const last4Int = parseInt(ssidHex, 16);
+      
+      if (!isNaN(last4Int)) {
+        if (isLiveTim) {
+          const macInt = (last4Int + 3) % 0x10000;
+          expectedLast4 = macInt.toString(16).toUpperCase().padStart(4, '0');
+        } else if (isUltrafibra) {
+          const macInt = (last4Int + 7) % 0x10000;
+          expectedLast4 = macInt.toString(16).toUpperCase().padStart(4, '0');
+        } else {
+          expectedLast4 = ssidHex;
+        }
+      }
+      
+      if (expectedLast4) {
+        const macPrefixes = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6'];
+        const allWords = text.match(/\b[0-9A-Z]{6,16}\b/ig) || [];
+        for (const w of allWords) {
+          let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+          if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
+          else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
+          
+          for (const prefix of macPrefixes) {
+            if (cleanW.startsWith(prefix)) {
+              if (cleanW.length === 8) {
+                mac = cleanW + expectedLast4;
+                break;
+              }
+              if (cleanW.length === 10) {
+                if (cleanW.endsWith(expectedLast4.substring(0, 2))) {
+                  mac = cleanW.substring(0, 8) + expectedLast4;
+                } else {
+                  mac = cleanW.substring(0, 8) + expectedLast4;
+                }
+                break;
+              }
+            }
+          }
+          if (mac && mac.length === 12) break;
+        }
+      }
+    }
+  }
+
   // 7. Identificar Senha do Wi-Fi (Wi-Fi Key / WPA Key)
   let wifi_key = '';
   
@@ -499,11 +558,14 @@ function parseOcrText(text: string): any {
     const words = text.match(/\b[A-Za-z0-9]{8,12}\b/g) || [];
     for (const w of words) {
       const lowerW = w.toLowerCase();
+      const isMacPrefix = ['8020da', 'd87d7f', '700b01', '786559', '346ba6'].some(p => lowerW.startsWith(p));
+      
       if (
         lowerW !== gpon_sn.toLowerCase() &&
         lowerW !== cpe_sn.toLowerCase() &&
         lowerW !== mac.toLowerCase() &&
         !lowerW.startsWith('smbs') &&
+        !isMacPrefix &&
         !rejectRegex.test(lowerW)
       ) {
         if (/^[a-z0-9]{10}$/.test(lowerW)) {
