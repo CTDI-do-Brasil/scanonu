@@ -13,7 +13,7 @@ const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 if (ai) {
   console.log('Cliente Gemini Vision API inicializado com sucesso.');
 } else {
-  console.warn('Variável de ambiente GEMINI_API_KEY não configurada. Usando OCR local (Tesseract.js) como padrão.');
+  console.warn('Variável de ambiente GEMINI_API_KEY não configurada. O serviço de leitura de etiquetas está inativo (OCR local descontinuado).');
 }
 
 
@@ -211,7 +211,7 @@ function correctMacPrefix(mac: string): string {
 
 app.post('/api/scan-label', async (req, res) => {
   let scanResult: any = null;
-  const scanSource = 'gemini-vision';
+  let scanSource = 'gemini-vision';
 
   try {
     const { image } = req.body;
@@ -252,38 +252,74 @@ Siga atentamente as instruções abaixo para cada campo:
 10. senha: Senha padrão de acesso web (geralmente curta, minúsculas/números).
 11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Data
+    let response;
+    const maxAttempts = 2;
+    let lastError: any = null;
+
+    // Tentamos gemini-2.5-flash primeiro (até maxAttempts vezes) e depois gemini-1.5-flash
+    for (const modelName of ['gemini-2.5-flash', 'gemini-1.5-flash']) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data
+                }
+              },
+              prompt
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  fabricante: { type: Type.STRING },
+                  modelo: { type: Type.STRING },
+                  cpe_sn: { type: Type.STRING },
+                  gpon_sn: { type: Type.STRING },
+                  mac: { type: Type.STRING },
+                  wifi_ssid: { type: Type.STRING },
+                  wifi_ssid_5g: { type: Type.STRING },
+                  wifi_key: { type: Type.STRING },
+                  usuario: { type: Type.STRING },
+                  senha: { type: Type.STRING },
+                  reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
+                },
+                required: ['gpon_sn']
+              }
+            }
+          });
+          scanSource = `gemini-vision (${modelName})`;
+          break;
+        } catch (err: any) {
+          lastError = err;
+          const errMsg = err?.message || String(err);
+          console.warn(`Erro no modelo ${modelName} na tentativa ${attempt}/${maxAttempts}:`, errMsg);
+          
+          if (errMsg.includes('Validation') || errMsg.includes('Schema')) {
+            break; // Se for erro de validação do próprio código/schema, não adianta re-tentar
           }
-        },
-        prompt
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            fabricante: { type: Type.STRING },
-            modelo: { type: Type.STRING },
-            cpe_sn: { type: Type.STRING },
-            gpon_sn: { type: Type.STRING },
-            mac: { type: Type.STRING },
-            wifi_ssid: { type: Type.STRING },
-            wifi_ssid_5g: { type: Type.STRING },
-            wifi_key: { type: Type.STRING },
-            usuario: { type: Type.STRING },
-            senha: { type: Type.STRING },
-            reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
-          },
-          required: ['gpon_sn']
+          
+          if (attempt < maxAttempts) {
+            const delay = attempt * 1500; // 1.5s na primeira tentativa
+            console.log(`Aguardando ${delay}ms antes de tentar novamente...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
         }
       }
-    });
+      if (response) {
+        break;
+      }
+      console.log(`Modelo ${modelName} falhou. Tentando alternar para o próximo modelo de fallback...`);
+    }
+
+    if (!response) {
+      throw lastError || new Error('Não foi possível obter resposta da API do Gemini com nenhum modelo.');
+    }
 
     const responseText = response.text;
     console.log('--- Resposta bruta do Gemini ---');
