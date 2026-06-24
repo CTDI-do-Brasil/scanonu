@@ -676,7 +676,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Rota para cadastrar novos usuários (somente Admin)
-app.post('/api/admin/users', authenticateSession, async (req, res) => {
+app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
     const { email, senha, role } = req.body;
 
@@ -706,7 +706,7 @@ app.post('/api/admin/users', authenticateSession, async (req, res) => {
 });
 
 // Rota para editar e resetar senhas de usuários (somente Admin)
-app.put('/api/admin/users', authenticateSession, async (req, res) => {
+app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
     const { id, email, senha, role } = req.body;
 
@@ -743,7 +743,7 @@ app.put('/api/admin/users', authenticateSession, async (req, res) => {
 });
 
 // Rota para listar usuários (somente Admin)
-app.get('/api/admin/users', authenticateSession, async (req, res) => {
+app.get('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) {
       return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'admin' }] });
@@ -763,7 +763,7 @@ app.get('/api/admin/users', authenticateSession, async (req, res) => {
 });
 
 // Rota para obter estatísticas do painel Admin
-app.get('/api/admin/stats', authenticateSession, async (req, res) => {
+app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) {
       return res.json({
@@ -812,7 +812,7 @@ app.get('/api/admin/stats', authenticateSession, async (req, res) => {
 });
 
 // Rota para exportar todas as etiquetas em XML (somente Admin)
-app.get('/api/admin/export-xml', authenticateSession, async (req, res) => {
+app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any) => {
   try {
     const { serialNumber, mac, startDate, endDate, modelo } = req.query;
 
@@ -898,7 +898,7 @@ app.get('/api/admin/export-xml', authenticateSession, async (req, res) => {
 });
 
 // Rota para exportar todas as etiquetas em Excel (somente Admin)
-app.get('/api/admin/export-excel', authenticateSession, async (req, res) => {
+app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: any) => {
   try {
     const { search, startDate, endDate, modelo } = req.query;
 
