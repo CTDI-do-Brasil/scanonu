@@ -25,6 +25,7 @@ let dbPool: Pool | null = null;
 
 // Guardar os últimos erros de escaneamento para diagnóstico
 let lastScanErrors: any[] = [];
+let lastScans: any[] = [];
 
 // Tenta conectar ao banco de dados se a variável DATABASE_URL existir
 async function connectToDatabase() {
@@ -147,6 +148,15 @@ app.get('/api/debug-errors', (req, res) => {
   });
 });
 
+// Diagnóstico de todos os escaneamentos (sucesso e falha)
+app.get('/api/debug-scans', (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    dbConnected,
+    lastScans
+  });
+});
+
 // Função de parsing baseada em RegEx para extrair dados estruturados do OCR
 function parseOcrText(text: string): any {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -160,11 +170,10 @@ function parseOcrText(text: string): any {
   else if (upperText.includes('INTELBRAS')) fabricante = 'Intelbras';
   else if (upperText.includes('NOKIA')) fabricante = 'Nokia';
   else if (upperText.includes('ALCATEL')) fabricante = 'Alcatel';
-  else if (upperText.includes('SAGEMCOM') || upperText.includes('SAGEM')) fabricante = 'Sagemcom';
+  else if (upperText.includes('SAGEMCOM') || upperText.includes('SAGEM') || upperText.includes('SMBS')) fabricante = 'SagemCOM';
 
   // 2. Identificar GPON SN
   let gpon_sn = '';
-  
   const gponPatterns = [
     /\b(SMBS[0-9A-Z]{8})\b/i,     // Sagemcom
     /\b(ZTEG[0-9A-Z]{8})\b/i,     // ZTE
@@ -183,54 +192,81 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // Fallback para qualquer palavra de 12 caracteres com prefixo comum
+  // Fallback for GPON SN
   if (!gpon_sn) {
-    const words = text.match(/\b[A-Z0-9]{12}\b/ig) || [];
-    for (const word of words) {
-      const upperWord = word.toUpperCase();
-      if (/^(SMBS|ZTEG|FHTT|ALCL|HWTC|ELFC)/i.test(upperWord)) {
-        gpon_sn = upperWord;
-        break;
-      }
+    const laxMatch = text.match(/\b(SMBS|ZTEG|FHTT|ALCL|HWTC|ELFC)[0-9A-Z]{7,9}\b/i);
+    if (laxMatch) {
+      gpon_sn = laxMatch[0].toUpperCase();
     }
   }
 
-  // Se o GPON SN começa com SMBS, o fabricante é Sagemcom
+  // Correção de erros comuns de OCR no GPON SN do Sagemcom
   if (gpon_sn.startsWith('SMBS')) {
-    fabricante = 'Sagemcom';
+    fabricante = 'SagemCOM';
+    const prefix = 'SMBS';
+    let rest = gpon_sn.substring(4);
+    rest = rest.replace(/O/g, '0');
+    gpon_sn = prefix + rest;
   }
 
-  // 3. Identificar MAC
+  // 3. Identificar MAC (clean 12-char hex string)
   let mac = '';
   const macPattern = /\b([0-9A-F]{2}[:.-]){5}([0-9A-F]{2})\b/i;
   const macMatch = text.match(macPattern);
   if (macMatch) {
-    mac = macMatch[0].replace(/[-.]/g, ':').toUpperCase();
+    mac = macMatch[0].replace(/[^0-9A-F]/ig, '').toUpperCase();
   } else {
-    // Tenta encontrar uma palavra de 12 caracteres hexadecimais (excluindo o GPON)
+    for (const line of lines) {
+      if (/MAC/i.test(line)) {
+        const words = line.match(/\b[0-9A-Z]{10,14}\b/ig) || [];
+        for (const w of words) {
+          const cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+          if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS')) {
+            let corrected = cleanW;
+            corrected = corrected.replace(/G/g, '6');
+            corrected = corrected.replace(/O/g, '0');
+            corrected = corrected.replace(/I/g, '1');
+            corrected = corrected.replace(/l/g, '1');
+            corrected = corrected.replace(/Z/g, '2');
+            corrected = corrected.replace(/S/g, '5');
+            if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
+              mac = corrected;
+              break;
+            }
+          }
+        }
+        if (mac) break;
+      }
+    }
+  }
+
+  // Fallback geral para MAC
+  if (!mac) {
     const hexWords = text.match(/\b[0-9A-F]{12}\b/ig) || [];
     for (const word of hexWords) {
       const upperWord = word.toUpperCase();
-      if (upperWord !== gpon_sn && !upperWord.startsWith('SMBS') && !upperWord.startsWith('ZTEG') && !upperWord.startsWith('FHTT')) {
-        // Formatar como XX:XX:XX:XX:XX:XX
-        mac = upperWord.match(/.{1,2}/g)?.join(':') || upperWord;
+      if (upperWord !== gpon_sn && !upperWord.startsWith('SMBS')) {
+        mac = upperWord;
         break;
       }
     }
   }
 
-  // 4. Identificar CPE SN (geralmente começa com N e tem 12-14 caracteres, ex: N7191434Y002263)
+  // 4. Identificar CPE SN (N + 7 dígitos + 1 letra + 6 dígitos)
   let cpe_sn = '';
-  const sagemcomCpePattern = /\b(N\d{7}[A-Z]\d{6})\b/i;
+  const sagemcomCpePattern = /\b(N[7T]\d{6}[A-Z]\d{6})\b/i;
   const cpeMatch = text.match(sagemcomCpePattern);
   if (cpeMatch) {
-    cpe_sn = cpeMatch[1].toUpperCase();
+    cpe_sn = cpeMatch[1].toUpperCase().replace(/^NT/, 'N7');
   } else {
     for (const line of lines) {
-      if (/CPE\s*S\/?N|CPE\s*SN|PRODUCT\s*ID|PROD\s*ID/i.test(line)) {
+      if (/CPE/i.test(line)) {
         const val = getValueAfterSeparator(line);
         if (val && val.length >= 8) {
           cpe_sn = val.replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
+          if (cpe_sn.startsWith('NT')) {
+            cpe_sn = 'N7' + cpe_sn.substring(2);
+          }
           break;
         }
       }
@@ -250,12 +286,28 @@ function parseOcrText(text: string): any {
   }
 
   if (!modelo) {
-    const knownModels = ['F@st 3895', 'F@ST3895', 'F670L', 'HG8145V5', 'EG8145V5', 'F6600', 'F680', 'F673', 'XC-FIT-150', 'F670', 'F601', '120-W'];
+    const knownModels = ['F@st 3895', 'F@ST3895', 'F670L', 'HG8145V5', 'EG8145V5', 'F6600', 'F680', 'F673', 'XC-FIT-150', 'F670', 'F601', '120-W', '5655V2', '5655 V2'];
     for (const model of knownModels) {
       if (upperText.includes(model.toUpperCase())) {
-        modelo = model;
+        if (model.toUpperCase().includes('5655')) {
+          if (upperText.includes('ULTRAFIBRA')) {
+            modelo = 'F@ST 5655V2 TIM Ultrafibra';
+          } else {
+            modelo = 'F@ST 5655V2 Live TIM';
+          }
+        } else {
+          modelo = model;
+        }
         break;
       }
+    }
+  }
+
+  if (fabricante === 'SagemCOM' && !modelo) {
+    if (upperText.includes('ULTRAFIBRA')) {
+      modelo = 'F@ST 5655V2 TIM Ultrafibra';
+    } else {
+      modelo = 'F@ST 5655V2 Live TIM';
     }
   }
 
@@ -294,26 +346,66 @@ function parseOcrText(text: string): any {
 
   // 7. Identificar Senha do Wi-Fi (Wi-Fi Key / WPA Key)
   let wifi_key = '';
-  for (const line of lines) {
-    if (/KEY|WPA|SENHA\s*WIFI|WIFI\s*KEY|PASSWORD\s*WIFI/i.test(line) && !/USER|ADMIN|LOGIN|SSID|NAME/i.test(line)) {
-      const val = getValueAfterSeparator(line);
-      if (val && val.length >= 5 && val.length <= 20) {
-        wifi_key = val;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const upperLine = line.toUpperCase();
+    if (
+      (upperLine.includes('KEY') || upperLine.includes('WPA') || (upperLine.includes('SENHA') && !upperLine.includes('ADMIN') && !upperLine.includes('WEB'))) &&
+      !upperLine.includes('USER') && !upperLine.includes('PASSWORD')
+    ) {
+      const parts = line.split(/[:=;]/);
+      let val = parts[parts.length - 1].trim();
+      val = val.replace(/[^A-Za-z0-9]/g, '');
+      
+      if (val.length >= 8 && val.length <= 12) {
+        wifi_key = val.toLowerCase();
         break;
+      }
+      
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        let nextLineCleaned = nextLine.replace(/[^A-Za-z0-9\s]/g, '').trim();
+        const nextLineWords = nextLineCleaned.split(/\s+/);
+        const concatenated = nextLineWords.join('');
+        if (concatenated.length >= 8 && concatenated.length <= 12) {
+          wifi_key = concatenated.toLowerCase();
+          break;
+        }
+        
+        for (const word of nextLineWords) {
+          if (word.length >= 8 && word.length <= 12) {
+            wifi_key = word.toLowerCase();
+            break;
+          }
+        }
+        if (wifi_key) break;
       }
     }
   }
 
+  // Fallback para Wi-Fi Key com Blacklist inteligente
   if (!wifi_key) {
-    for (const line of lines) {
-      if (/WPA|KEY/i.test(line)) {
-        const parts = line.split(/[:=;]/);
-        if (parts.length > 1) {
-          const val = parts[1].trim();
-          if (/^[A-Za-z0-9]{8,12}$/.test(val)) {
-            wifi_key = val;
-            break;
-          }
+    const blacklist = [
+      'equipamento', 'squpamerto', 'autorizados', 'prejudicial', 'interferência', 'interferéncia',
+      'sistemas', 'produzido', 'brasileira', 'indústria', 'indistrla', 'regulamento', 'anatel',
+      'sagemcom', 'sagem', 'tim', 'live', 'ultrafibra', 'fast', 'modelo', 'senha', 'password',
+      'admin', 'user', 'usuario', 'username', 'direto', 'direito', 'prejudicia', 'anatel1'
+    ];
+
+    const words = text.match(/\b[A-Za-z0-9]{8,12}\b/g) || [];
+    for (const w of words) {
+      const lowerW = w.toLowerCase();
+      if (
+        lowerW !== gpon_sn.toLowerCase() &&
+        lowerW !== cpe_sn.toLowerCase() &&
+        lowerW !== mac.toLowerCase() &&
+        !lowerW.startsWith('smbs') &&
+        !blacklist.some(b => lowerW.includes(b))
+      ) {
+        if (/^[a-z0-9]{10}$/.test(lowerW)) {
+          wifi_key = lowerW;
+          break;
         }
       }
     }
@@ -323,22 +415,38 @@ function parseOcrText(text: string): any {
   let usuario = '';
   let senha = '';
   
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const upperLine = line.toUpperCase();
     if (/USER|USUARIO|USERNAME/i.test(line) && !/WIFI|SSID|KEY/i.test(line)) {
       const val = getValueAfterSeparator(line);
       if (val && val.length >= 3 && val.length <= 15) {
         usuario = val;
       }
     }
-    if (/PASSWORD|SENHA/i.test(line) && !/WIFI|SSID|KEY|WPA/i.test(line)) {
-      const val = getValueAfterSeparator(line);
-      if (val && val.length >= 4 && val.length <= 15) {
-        senha = val;
+    if (
+      (upperLine.includes('PASSWORD') || upperLine.includes('SENHA')) &&
+      !upperLine.includes('WIFI') && !upperLine.includes('KEY') && !upperLine.includes('WPA')
+    ) {
+      const parts = line.split(/[:=;]/);
+      let val = parts[parts.length - 1].trim();
+      val = val.replace(/[^a-zA-Z0-9]/g, '');
+      if (val && val.length >= 4 && val.length <= 8) {
+        senha = val.toLowerCase();
       }
     }
   }
 
-  if (!usuario && fabricante === 'Sagemcom') usuario = 'admin';
+  if (!senha) {
+    const words = text.match(/\b[a-z0-9]{5}\b/g) || [];
+    for (const w of words) {
+      if (w !== usuario && w !== wifi_key) {
+        senha = w;
+      }
+    }
+  }
+
+  if (!usuario && fabricante === 'SagemCOM') usuario = 'admin';
 
   return {
     fabricante,
@@ -365,6 +473,7 @@ function getValueAfterSeparator(line: string): string {
 
 app.post('/api/scan-label', async (req, res) => {
   let worker: any = null;
+  let text = '';
   try {
     const { image } = req.body;
 
@@ -388,7 +497,8 @@ app.post('/api/scan-label', async (req, res) => {
     const imageBuffer = Buffer.from(base64Data, 'base64');
     
     // Executa o reconhecimento óptico de caracteres
-    const { data: { text } } = await worker.recognize(imageBuffer);
+    const recognizeResult = await worker.recognize(imageBuffer);
+    text = recognizeResult.data.text;
     
     console.log('--- Texto bruto extraído pelo OCR ---');
     console.log(text);
@@ -427,6 +537,16 @@ app.post('/api/scan-label', async (req, res) => {
       }
     }
 
+    // Registrar o escaneamento bem-sucedido para auditoria e diagnóstico
+    lastScans.push({
+      timestamp: new Date().toISOString(),
+      success: true,
+      rawText: text,
+      parsed: scanResult,
+      existsInDb
+    });
+    if (lastScans.length > 20) lastScans.shift();
+
     return res.json({ 
       success: true, 
       data: scanResult,
@@ -436,11 +556,22 @@ app.post('/api/scan-label', async (req, res) => {
 
   } catch (ocrError: any) {
     console.error('Erro no processamento OCR Local:', ocrError);
+    
+    // Registrar a falha de escaneamento para auditoria e diagnóstico
     lastScanErrors.push({
       timestamp: new Date().toISOString(),
       ocrError: ocrError.message || String(ocrError)
     });
     if (lastScanErrors.length > 50) lastScanErrors.shift();
+
+    lastScans.push({
+      timestamp: new Date().toISOString(),
+      success: false,
+      rawText: typeof text !== 'undefined' ? text : 'Indefinido (erro antes do OCR)',
+      error: ocrError.message || String(ocrError)
+    });
+    if (lastScans.length > 20) lastScans.shift();
+
     return res.status(502).json({
       success: false,
       error: ocrError.message || 'Falha ao realizar a leitura da etiqueta com OCR Local.',

@@ -90,6 +90,7 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     // Check which format to use. We check if current scanned SSID has "LIVE" or if the 5G SSID has value
     const isLiveTim = (dataCopy.wifi_ssid || '').toUpperCase().includes('LIVE') || 
                       (dataCopy.wifi_ssid_5g || '').toUpperCase().includes('LIVE') ||
+                      (dataCopy.modelo || '').toUpperCase().includes('LIVE') ||
                       (dataCopy.wifi_ssid === '' && dataCopy.wifi_ssid_5g !== '');
     
     if (isLiveTim) {
