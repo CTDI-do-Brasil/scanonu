@@ -920,11 +920,13 @@ export default function App() {
         if (result.data.reimpressa) {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
-        setData(applyMacSsidRules(result.data));
-        if (result.existsInDb) {
+        if (result.existsInDb && result.existingData) {
+          setData(result.existingData);
           setEquipmentExistsInDb(true);
           setExistingEquipmentData(result.existingData);
           setShowDuplicateModal(true);
+        } else {
+          setData(applyMacSsidRules(result.data));
         }
         setScreen('result');
       } else {
@@ -2045,12 +2047,20 @@ export default function App() {
               <div>• Senha WIFI: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_key}</span></div>
             </div>
             
-            <button 
-              onClick={() => setShowDuplicateModal(false)}
-              className="w-full bg-[#003865] hover:bg-[#004e8c] text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm"
-            >
-              Fechar e Editar
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={resetAll}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 px-4 rounded-xl text-xs transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => setShowDuplicateModal(false)}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm shadow-amber-600/10"
+              >
+                Revisar e Ajustar
+              </button>
+            </div>
           </div>
         </div>
       )}
