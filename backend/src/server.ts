@@ -226,9 +226,11 @@ function parseOcrText(text: string): any {
             corrected = corrected.replace(/G/g, '6');
             corrected = corrected.replace(/O/g, '0');
             corrected = corrected.replace(/I/g, '1');
+            corrected = corrected.replace(/L/g, '1');
             corrected = corrected.replace(/l/g, '1');
             corrected = corrected.replace(/Z/g, '2');
             corrected = corrected.replace(/S/g, '5');
+            corrected = corrected.replace(/T/g, '7');
             if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
               mac = corrected;
               break;
@@ -240,19 +242,30 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // Fallback geral para MAC
+  // Fallback geral aprimorado para MAC
   if (!mac) {
-    const hexWords = text.match(/\b[0-9A-F]{12}\b/ig) || [];
-    for (const word of hexWords) {
-      const upperWord = word.toUpperCase();
-      if (upperWord !== gpon_sn && !upperWord.startsWith('SMBS')) {
-        mac = upperWord;
-        break;
+    const words = text.match(/\b[0-9A-Z]{10,14}\b/ig) || [];
+    for (const w of words) {
+      const cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+      if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS')) {
+        let corrected = cleanW;
+        corrected = corrected.replace(/G/g, '6');
+        corrected = corrected.replace(/O/g, '0');
+        corrected = corrected.replace(/I/g, '1');
+        corrected = corrected.replace(/L/g, '1');
+        corrected = corrected.replace(/l/g, '1');
+        corrected = corrected.replace(/Z/g, '2');
+        corrected = corrected.replace(/S/g, '5');
+        corrected = corrected.replace(/T/g, '7');
+        if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
+          mac = corrected;
+          break;
+        }
       }
     }
   }
 
-  // 4. Identificar CPE SN (N + 7 dígitos + 1 letra + 6 dígitos)
+  // 4. Identificar CPE SN
   let cpe_sn = '';
   const sagemcomCpePattern = /\b(N[7T]\d{6}[A-Z]\d{6})\b/i;
   const cpeMatch = text.match(sagemcomCpePattern);
@@ -329,17 +342,65 @@ function parseOcrText(text: string): any {
   }
 
   if (ssids.length > 0) {
-    const index5g = ssids.findIndex(s => /5G/i.test(s));
+    const cleanedSsids = ssids.map(s => {
+      let clean = s;
+      const liveIndex = s.toUpperCase().indexOf('LIVE');
+      if (liveIndex !== -1) {
+        clean = s.substring(liveIndex);
+      } else {
+        const timIndex = s.toUpperCase().indexOf('TIM');
+        if (timIndex !== -1) {
+          clean = s.substring(timIndex);
+        }
+      }
+      return clean.trim();
+    }).filter(s => s.length > 0);
+
+    const index5g = cleanedSsids.findIndex(s => /5G/i.test(s));
     if (index5g !== -1) {
-      wifi_ssid_5g = ssids[index5g];
+      wifi_ssid_5g = cleanedSsids[index5g];
       const otherIndex = index5g === 0 ? 1 : 0;
-      if (ssids[otherIndex]) {
-        wifi_ssid = ssids[otherIndex];
+      if (cleanedSsids[otherIndex]) {
+        wifi_ssid = cleanedSsids[otherIndex];
       }
     } else {
-      wifi_ssid = ssids[0];
-      if (ssids[1]) {
-        wifi_ssid_5g = ssids[1];
+      wifi_ssid = cleanedSsids[0];
+      if (cleanedSsids[1]) {
+        wifi_ssid_5g = cleanedSsids[1];
+      }
+    }
+  }
+
+  // Se o SSID foi lido de forma bagunçada, vamos tentar reconstruir
+  if (wifi_ssid && (wifi_ssid.toUpperCase().includes('LIVE') || wifi_ssid.toUpperCase().includes('TIM'))) {
+    const candidates: string[] = [];
+    const ssidWords = (wifi_ssid + ' ' + wifi_ssid_5g).split(/[^A-Za-z0-9]+/i);
+    for (const w of ssidWords) {
+      const upperW = w.toUpperCase();
+      if (upperW.length === 4 && upperW !== 'LIVE' && upperW !== 'WIFI' && upperW !== 'WLAN' && upperW !== 'SSID' && upperW !== 'MODE') {
+        candidates.push(upperW);
+      }
+    }
+    
+    if (candidates.length > 0) {
+      let hexCode = candidates[0];
+      hexCode = hexCode.replace(/G/g, '6');
+      hexCode = hexCode.replace(/O/g, '0');
+      hexCode = hexCode.replace(/I/g, '1');
+      hexCode = hexCode.replace(/L/g, '1');
+      hexCode = hexCode.replace(/l/g, '1');
+      hexCode = hexCode.replace(/Z/g, '2');
+      hexCode = hexCode.replace(/S/g, '5');
+      hexCode = hexCode.replace(/T/g, '7');
+      
+      if (/^[0-9A-F]{4}$/.test(hexCode)) {
+        if (modelo.includes('Ultrafibra')) {
+          wifi_ssid = `TIM_ULTRAFIBRA_${hexCode}`;
+          wifi_ssid_5g = '';
+        } else {
+          wifi_ssid = `LIVE TIM_${hexCode}_2G`;
+          wifi_ssid_5g = `LIVE TIM_${hexCode}_5G`;
+        }
       }
     }
   }
@@ -384,15 +445,9 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // Fallback para Wi-Fi Key com Blacklist inteligente
+  // Fallback para Wi-Fi Key com regex de exclusão inteligente
   if (!wifi_key) {
-    const blacklist = [
-      'equipamento', 'squpamerto', 'autorizados', 'prejudicial', 'interferência', 'interferéncia',
-      'sistemas', 'produzido', 'brasileira', 'indústria', 'indistrla', 'regulamento', 'anatel',
-      'sagemcom', 'sagem', 'tim', 'live', 'ultrafibra', 'fast', 'modelo', 'senha', 'password',
-      'admin', 'user', 'usuario', 'username', 'direto', 'direito', 'prejudicia', 'anatel1'
-    ];
-
+    const rejectRegex = /fast|fest|sagem|anatel|cpe|gpon|mac|user|pass|admin|web|tim|live|equip|squp|preju|interf|sist|prod|bras|indus|regul|reimp|oper|aces|conf|log/i;
     const words = text.match(/\b[A-Za-z0-9]{8,12}\b/g) || [];
     for (const w of words) {
       const lowerW = w.toLowerCase();
@@ -401,7 +456,7 @@ function parseOcrText(text: string): any {
         lowerW !== cpe_sn.toLowerCase() &&
         lowerW !== mac.toLowerCase() &&
         !lowerW.startsWith('smbs') &&
-        !blacklist.some(b => lowerW.includes(b))
+        !rejectRegex.test(lowerW)
       ) {
         if (/^[a-z0-9]{10}$/.test(lowerW)) {
           wifi_key = lowerW;
