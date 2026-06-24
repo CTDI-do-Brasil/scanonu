@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { createWorker } from 'tesseract.js';
 import { Pool } from 'pg';
 import { create } from 'xmlbuilder2';
 import * as XLSX from 'xlsx';
@@ -147,210 +147,302 @@ app.get('/api/debug-errors', (req, res) => {
   });
 });
 
-// Configuração do Schema do Gemini
-const scanResponseSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    fabricante: { type: Type.STRING, description: 'Fabricante do equipamento (ex: Huawei, ZTE, FiberHome, Intelbras)' },
-    modelo: { type: Type.STRING, description: 'Modelo exato do equipamento' },
-    cpe_sn: { type: Type.STRING, description: 'CPE Serial Number / S/N do equipamento se disponível' },
-    gpon_sn: { type: Type.STRING, description: 'GPON Serial Number (S/N) ou ALCL/ZTEG... Serial Number' },
-    mac: { type: Type.STRING, description: 'Endereço MAC da ONU' },
-    wifi_ssid: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão de 2.4GHz ou rede única' },
-    wifi_ssid_5g: { type: Type.STRING, description: 'SSID / Nome da rede Wi-Fi padrão de 5GHz (se houver duas redes SSIDs na etiqueta, caso contrário deixe em branco)' },
-    wifi_key: { type: Type.STRING, description: 'Chave/Senha do Wi-Fi padrão impresso na etiqueta' },
-    usuario: { type: Type.STRING, description: 'Usuário padrão de login/administração se houver' },
-    senha: { type: Type.STRING, description: 'Senha padrão de login/administração (Pass/Password) se houver' },
-    reimpressa: { type: Type.STRING, description: 'Retorne "sim" se a etiqueta for detectada como reimpressa/térmica/laser manual, ou "nao" se for a original de fábrica.' }
-  },
-  required: ['gpon_sn', 'reimpressa']
-};
+// Função de parsing baseada em RegEx para extrair dados estruturados do OCR
+function parseOcrText(text: string): any {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const upperText = text.toUpperCase();
 
-const SYSTEM_INSTRUCTION = `Você é um sistema de leitura de etiquetas de equipamentos de rede (ONU).
-Extraia com alta precisão os seguintes dados da imagem da etiqueta fornecida: fabricante, modelo, CPE S/N (cpe_sn), GPON S/N (gpon_sn), MAC, SSID 2.4GHz/Único (wifi_ssid), SSID 5GHz se houver (wifi_ssid_5g), Wi-Fi Key (wifi_key), User name (usuario), Senha WEB (senha) e se a etiqueta é reimpressa (reimpressa).
-Regras: 
-1. Retorne apenas JSON válido conforme o esquema tipado.
-2. Não invente dados de placeholders. Preserve exatamente os caracteres como grafados.
-3. Se houver dois SSIDs na etiqueta, separe-os.
-4. Identifique se a etiqueta é uma etiqueta reimpressa (campo 'reimpressa' como "sim"): Etiquetas reimpressas (ou segundas vias) são impressas em impressora térmica/laser adesiva manual, apresentam fontes levemente borradas ou mais grossas, papel adesivo branco comum, por vezes coladas com rugas, dobras ou desalinhadas em relação ao rebaixo plástico original do equipamento. Etiquetas originais de fábrica (campo 'reimpressa' como "nao") são perfeitamente alinhadas, integradas, sem rugas de colagem e com impressão industrial nítida.`;
+  // 1. Identificar o Fabricante
+  let fabricante = 'Outro';
+  if (upperText.includes('HUAWEI')) fabricante = 'Huawei';
+  else if (upperText.includes('ZTE')) fabricante = 'ZTE';
+  else if (upperText.includes('FIBERHOME')) fabricante = 'FiberHome';
+  else if (upperText.includes('INTELBRAS')) fabricante = 'Intelbras';
+  else if (upperText.includes('NOKIA')) fabricante = 'Nokia';
+  else if (upperText.includes('ALCATEL')) fabricante = 'Alcatel';
 
-// Modelos do cascade em ordem de prioridade
-const MODEL_CASCADE = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
-];
+  // 2. Identificar GPON SN
+  let gpon_sn = '';
+  
+  const gponPatterns = [
+    /\b(ZTEG[0-9A-Z]{8})\b/i,
+    /\b(FHTT[0-9A-Z]{8})\b/i,
+    /\b(ALCL[0-9A-Z]{8})\b/i,
+    /\b(HWTC[0-9A-Z]{8})\b/i,
+    /\b(48575434[0-9A-Z]{8})\b/i, // Huawei hex para HWTC
+    /\b(ELFC[0-9A-Z]{8})\b/i,     // Intelbras
+    /\bGPON\s*(?:S\/N|SN)?\s*[:=;-]?\s*([A-Z0-9]{12,16})\b/i,
+    /\bS\/N\s*[:=;-]?\s*([A-Z0-9]{12,16})\b/i,
+    /\bSN\s*[:=;-]?\s*([A-Z0-9]{12,16})\b/i,
+  ];
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  for (const pattern of gponPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      gpon_sn = match[1].replace(/[^A-Z0-9]/ig, '').toUpperCase();
+      break;
+    }
+  }
 
-function isRateLimitError(err: any): boolean {
-  const errMsg = String(err.message || JSON.stringify(err) || '').toLowerCase();
-  return (
-    errMsg.includes('429') ||
-    errMsg.includes('quota') ||
-    errMsg.includes('limit') ||
-    errMsg.includes('resource_exhausted') ||
-    (err.status && err.status === 429) ||
-    (err.code && err.code === 429)
-  );
+  // Fallback para qualquer palavra de 12 caracteres com prefixo comum
+  if (!gpon_sn) {
+    const words = text.match(/\b[A-Z0-9]{12}\b/ig) || [];
+    for (const word of words) {
+      const upperWord = word.toUpperCase();
+      if (/^(ZTEG|FHTT|ALCL|HWTC|ELFC)/i.test(upperWord)) {
+        gpon_sn = upperWord;
+        break;
+      }
+    }
+  }
+
+  // 3. Identificar MAC
+  let mac = '';
+  const macPattern = /\b([0-9A-F]{2}[:;-]){5}([0-9A-F]{2})\b/i;
+  const macMatch = text.match(macPattern);
+  if (macMatch) {
+    mac = macMatch[0].replace(/;/g, ':').toUpperCase();
+  } else {
+    // Tenta encontrar uma palavra de 12 caracteres hexadecimais (excluindo o GPON)
+    const hexWords = text.match(/\b[0-9A-F]{12}\b/ig) || [];
+    for (const word of hexWords) {
+      const upperWord = word.toUpperCase();
+      if (upperWord !== gpon_sn) {
+        // Formatar como XX:XX:XX:XX:XX:XX
+        mac = upperWord.match(/.{1,2}/g)?.join(':') || upperWord;
+        break;
+      }
+    }
+  }
+
+  // 4. Identificar Modelo
+  let modelo = '';
+  const modelPattern = /\b(?:MODELO?|MOD)\s*[:=;-]?\s*([A-Z0-9_-]{4,20})\b/i;
+  const modelMatch = text.match(modelPattern);
+  if (modelMatch && modelMatch[1]) {
+    modelo = modelMatch[1].trim();
+  } else {
+    const knownModels = ['F670L', 'HG8145V5', 'EG8145V5', 'F6600', 'F680', 'F673', 'XC-FIT-150', 'F670', 'F601', '120-W'];
+    for (const model of knownModels) {
+      if (upperText.includes(model)) {
+        modelo = model;
+        break;
+      }
+    }
+  }
+
+  // 5. Identificar SSID Wi-Fi
+  let wifi_ssid = '';
+  let wifi_ssid_5g = '';
+  const matchedSSIDs: string[] = [];
+
+  for (const line of lines) {
+    if (/SSID/i.test(line) || /WLAN/i.test(line) || /WI-FI/i.test(line)) {
+      const parts = line.split(/[:=;-]/);
+      if (parts.length > 1) {
+        const val = parts.slice(1).join(':').trim();
+        if (val.length > 2 && !matchedSSIDs.includes(val)) {
+          matchedSSIDs.push(val);
+        }
+      }
+    }
+  }
+
+  if (matchedSSIDs.length > 0) {
+    const g5Index = matchedSSIDs.findIndex(s => /5G/i.test(s));
+    if (g5Index !== -1) {
+      wifi_ssid_5g = matchedSSIDs[g5Index];
+      const otherIndex = g5Index === 0 ? 1 : 0;
+      if (matchedSSIDs[otherIndex]) {
+        wifi_ssid = matchedSSIDs[otherIndex];
+      }
+    } else {
+      wifi_ssid = matchedSSIDs[0];
+      if (matchedSSIDs[1]) {
+        wifi_ssid_5g = matchedSSIDs[1];
+      }
+    }
+  }
+
+  // 6. Identificar Senha do Wi-Fi
+  let wifi_key = '';
+  const wifiKeyPatterns = [
+    /(?:WPA\s*KEY|WPA\s*PASSWORD|WPA\/WPA2\s*KEY|SECURITY\s*KEY|WPA\s*SENHA|SENHA\s*WIFI|WIFI\s*KEY)\s*[:=;-]?\s*([A-Z0-9]{8,16})\b/i,
+  ];
+
+  for (const pattern of wifiKeyPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      wifi_key = match[1].trim();
+      break;
+    }
+  }
+
+  if (!wifi_key) {
+    for (const line of lines) {
+      if (/(?:KEY|WPA|SENHA|PASS)/i.test(line)) {
+        const parts = line.split(/[:=;-]/);
+        if (parts.length > 1) {
+          const val = parts[1].trim();
+          if (/^[A-Z0-9]{8,10}$/i.test(val)) {
+            wifi_key = val;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 7. Identificar Usuário e Senha de Administração WEB
+  let usuario = '';
+  let senha = '';
+  const userPatterns = [
+    /(?:USER|USUARIO|USERNAME|USER\s*NAME)\s*[:=;-]?\s*([A-Z0-9_-]{3,15})\b/i
+  ];
+  const passPatterns = [
+    /(?:PASSWORD|PASS|SENHA\s*WEB|SENHA\s*DE\s*ACESSO|WEB\s*PASSWORD)\s*[:=;-]?\s*([A-Z0-9_-]{4,15})\b/i
+  ];
+
+  for (const pattern of userPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      usuario = match[1].trim();
+      break;
+    }
+  }
+
+  for (const pattern of passPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      senha = match[1].trim();
+      break;
+    }
+  }
+
+  if (!usuario) {
+    if (fabricante === 'Huawei' || fabricante === 'ZTE') usuario = 'admin';
+  }
+
+  // 8. Identificar CPE SN
+  let cpe_sn = '';
+  const cpePatterns = [
+    /\b(?:CPE\s*S\/N|CPE\s*SN|PROD\s*ID|PRODUCT\s*ID)\s*[:=;-]?\s*([A-Z0-9]{12,20})\b/i
+  ];
+  for (const pattern of cpePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      cpe_sn = match[1].trim();
+      break;
+    }
+  }
+
+  return {
+    fabricante,
+    modelo,
+    cpe_sn,
+    gpon_sn,
+    mac,
+    wifi_ssid,
+    wifi_ssid_5g,
+    wifi_key,
+    usuario,
+    senha,
+    reimpressa: 'nao'
+  };
 }
 
 app.post('/api/scan-label', async (req, res) => {
+  let worker: any = null;
   try {
-    const { image } = req.body; // Base64 image data: "data:image/jpeg;base64,..." ou apenas base64 string
+    const { image } = req.body;
 
     if (!image) {
       return res.status(400).json({ error: 'Nenhuma imagem foi fornecida no corpo da requisição.' });
     }
 
-    // Extrair apenas os dados base64 brutos e o mimeType
     let base64Data = image;
-    let mimeType = 'image/jpeg';
-
     if (image.startsWith('data:')) {
       const match = image.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
-        mimeType = match[1];
         base64Data = match[2];
       }
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(400).json({
-        success: false,
-        error: 'A variável de ambiente GEMINI_API_KEY não está configurada no servidor. Por favor, adicione-a nas variáveis de ambiente do seu aplicativo no painel do CapRover.'
-      });
+    console.log('Iniciando processamento OCR local com Tesseract.js...');
+    
+    // Inicializa o Tesseract Worker localmente com idioma inglês
+    worker = await createWorker('eng');
+    
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+    
+    // Executa o reconhecimento óptico de caracteres
+    const { data: { text } } = await worker.recognize(imageBuffer);
+    
+    console.log('--- Texto bruto extraído pelo OCR ---');
+    console.log(text);
+    console.log('-------------------------------------');
+
+    // Executa o parser baseado em expressões regulares nos dados reconhecidos
+    const scanResult = parseOcrText(text);
+    
+    console.log('Dados extraídos com sucesso:', scanResult);
+
+    // Validação mínima: O GPON SN é obrigatório no fluxo da aplicação
+    if (!scanResult.gpon_sn) {
+      throw new Error('Não foi possível identificar o GPON Serial Number (S/N) na imagem da etiqueta. Certifique-se de que a foto está nítida e alinhada.');
     }
 
-    const ai = new GoogleGenAI({
-      apiKey: apiKey
+    // Converter a resposta da reimpressão ("sim"/"nao") para boolean
+    const isReimpressa = String(scanResult.reimpressa).toLowerCase().trim() === 'sim';
+    scanResult.reimpressa = isReimpressa;
+
+    // VERIFICAÇÃO DE DUPLICIDADE: verifica se o GPON_SN já existe no banco de dados
+    let existsInDb = false;
+    let existingData = null;
+
+    if (dbConnected && dbPool && scanResult.gpon_sn) {
+      try {
+        const checkRes = await dbPool.query(
+          'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
+          [scanResult.gpon_sn]
+        );
+        if (checkRes.rowCount && checkRes.rowCount > 0) {
+          existsInDb = true;
+          existingData = checkRes.rows[0];
+        }
+      } catch (dbErr) {
+        console.error('Erro ao verificar duplicidade no scan-label:', dbErr);
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      data: scanResult,
+      existsInDb,
+      existingData
     });
 
-    let success = false;
-    let scanResult: any = null;
-    let errors: string[] = [];
-
-    // Tentar processar a imagem utilizando cascata de modelos com retentativas para 429
-    for (const modelName of MODEL_CASCADE) {
-      let attempts = 0;
-      const maxAttempts = 3;
-      
-      while (attempts < maxAttempts) {
-        attempts++;
-        try {
-          console.log(`Tentando processar a imagem com o modelo: ${modelName} (Tentativa ${attempts}/${maxAttempts})`);
-          
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    text: SYSTEM_INSTRUCTION
-                  },
-                  {
-                    inlineData: {
-                      mimeType: mimeType,
-                      data: base64Data
-                    }
-                  }
-                ]
-              }
-            ],
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: scanResponseSchema,
-              temperature: 0.1
-            }
-          });
-
-          const responseText = response.text;
-          if (responseText) {
-            scanResult = JSON.parse(responseText);
-            success = true;
-            console.log(`Sucesso com o modelo ${modelName}!`);
-            break;
-          } else {
-            throw new Error('Resposta vazia retornada pelo modelo.');
-          }
-        } catch (err: any) {
-          console.error(`Falha no modelo ${modelName} (Tentativa ${attempts}/${maxAttempts}):`, err.message || err);
-          
-          if (isRateLimitError(err) && attempts < maxAttempts) {
-            console.log(`Erro de limite de cota (429) detectado. Aguardando 3 segundos antes de tentar novamente...`);
-            await sleep(3000);
-            continue;
-          }
-          
-          errors.push(`${modelName} (Tentativa ${attempts}): ${err.message || JSON.stringify(err)}`);
-          break; // Passa para o próximo modelo na cascata
-        }
-      }
-      
-      if (success) {
-        break;
-      }
-    }
-
-    if (success && scanResult) {
-      // Converter a resposta da reimpressão ("sim"/"nao") para boolean seguro
-      const isReimpressa = String(scanResult.reimpressa).toLowerCase().trim() === 'sim';
-      scanResult.reimpressa = isReimpressa;
-
-      // VERIFICAÇÃO DE DUPLICIDADE: antes de retornar, verificamos se o GPON_SN já existe no banco de dados
-      let existsInDb = false;
-      let existingData = null;
-
-      if (dbConnected && dbPool && scanResult.gpon_sn) {
-        try {
-          const checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
-            [scanResult.gpon_sn]
-          );
-          if (checkRes.rowCount && checkRes.rowCount > 0) {
-            existsInDb = true;
-            existingData = checkRes.rows[0];
-          }
-        } catch (dbErr) {
-          console.error('Erro ao verificar duplicidade no scan-label:', dbErr);
-        }
-      }
-
-      return res.json({ 
-        success: true, 
-        data: scanResult,
-        existsInDb,
-        existingData
-      });
-    } else {
-      console.error("Todos os modelos na cascata falharam:", errors);
-      lastScanErrors.push({
-        timestamp: new Date().toISOString(),
-        errors: errors
-      });
-      if (lastScanErrors.length > 50) lastScanErrors.shift();
-      return res.status(502).json({
-        success: false,
-        error: 'Não foi possível extrair os dados da etiqueta. Todos os modelos de visão falharam.',
-        details: errors
-      });
-    }
-
-  } catch (globalError: any) {
-    console.error('Erro interno do servidor:', globalError);
+  } catch (ocrError: any) {
+    console.error('Erro no processamento OCR Local:', ocrError);
     lastScanErrors.push({
       timestamp: new Date().toISOString(),
-      globalError: globalError.message || String(globalError)
+      ocrError: ocrError.message || String(ocrError)
     });
     if (lastScanErrors.length > 50) lastScanErrors.shift();
-    return res.status(500).json({
+    return res.status(502).json({
       success: false,
-      error: 'Erro interno no servidor ao processar a imagem.',
-      details: globalError.message || String(globalError)
+      error: ocrError.message || 'Falha ao realizar a leitura da etiqueta com OCR Local.',
+      details: [ocrError.message || String(ocrError)]
     });
+  } finally {
+    if (worker) {
+      try {
+        await worker.terminate();
+        console.log('Tesseract Worker terminado com sucesso.');
+      } catch (termErr) {
+        console.error('Erro ao finalizar o Tesseract Worker:', termErr);
+      }
+    }
   }
 });
 
