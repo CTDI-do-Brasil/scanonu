@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { create } from 'xmlbuilder2';
 import * as XLSX from 'xlsx';
 import { GoogleGenAI, Type } from '@google/genai';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -24,6 +25,45 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
+
+// Middleware para autenticar sessões usando o token no cabeçalho Authorization
+const authenticateSession = async (req: any, res: any, next: any) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Acesso negado. Token de sessão ausente.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      // Fallback local em ambiente sem banco de dados (desenvolvimento)
+      if (token === 'fallback-admin-token') {
+        req.user = { email: 'admin@scanonu.com', role: 'admin' };
+        return next();
+      }
+      return res.status(503).json({ success: false, error: 'Banco de dados offline.' });
+    }
+
+    const sessionRes = await dbPool.query(
+      'SELECT email, role FROM sessoes_scan_onu WHERE token = $1 AND data_expiracao > NOW()',
+      [token]
+    );
+
+    if (sessionRes.rowCount && sessionRes.rowCount > 0) {
+      req.user = {
+        email: sessionRes.rows[0].email,
+        role: sessionRes.rows[0].role
+      };
+      return next();
+    } else {
+      return res.status(401).json({ success: false, error: 'Sessão inválida ou expirada. Faça login novamente.' });
+    }
+  } catch (err) {
+    console.error('Erro na autenticação de sessão:', err);
+    return res.status(500).json({ success: false, error: 'Erro interno ao validar autenticação.' });
+  }
+};
 
 // Servir arquivos estáticos do frontend em ambiente de produção (CapRover)
 // O Dockerfile irá compilar o frontend dentro do diretório public/dist
@@ -87,6 +127,18 @@ async function connectToDatabase() {
         );
       `;
       await dbPool.query(createUsersTableQuery);
+
+      // Criar a tabela de sessões
+      const createSessionsTableQuery = `
+        CREATE TABLE IF NOT EXISTS sessoes_scan_onu (
+          token VARCHAR(100) PRIMARY KEY,
+          email VARCHAR(150) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          data_expiracao TIMESTAMP NOT NULL
+        );
+      `;
+      await dbPool.query(createSessionsTableQuery);
       console.log('Tabelas de banco validadas/criadas com sucesso.');
 
       // Migração para remover a coluna ID caso ela já exista no banco
@@ -209,7 +261,7 @@ function correctMacPrefix(mac: string): string {
   return cleanMac;
 }
 
-app.post('/api/scan-label', async (req, res) => {
+app.post('/api/scan-label', authenticateSession, async (req, res) => {
   let scanResult: any = null;
   let scanSource = 'gemini-vision';
 
@@ -446,7 +498,7 @@ Siga atentamente as instruções abaixo para cada campo:
 });
 
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
-app.post('/api/save-label', async (req, res) => {
+app.post('/api/save-label', authenticateSession, async (req, res) => {
   try {
     const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador, overwrite } = req.body;
 
@@ -544,7 +596,7 @@ app.post('/api/save-label', async (req, res) => {
 });
 
 // Rota para obter uma etiqueta existente pelo GPON SN (sem custo de token)
-app.get('/api/label/:gpon_sn', async (req, res) => {
+app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
   try {
     const { gpon_sn } = req.params;
 
@@ -582,7 +634,11 @@ app.post('/api/login', async (req, res) => {
     if (!dbConnected || !dbPool) {
       // Fallback local se o banco não estiver configurado para testes
       if (email === 'admin@scanonu.com' && senha === 'admin123') {
-        return res.json({ success: true, user: { email, role: 'admin' } });
+        return res.json({ 
+          success: true, 
+          token: 'fallback-admin-token',
+          user: { email, role: 'admin' } 
+        });
       }
       return res.status(401).json({ error: 'Banco desconectado. Credenciais inválidas.' });
     }
@@ -593,9 +649,21 @@ app.post('/api/login', async (req, res) => {
     );
 
     if (userRes.rowCount && userRes.rowCount > 0) {
+      const user = userRes.rows[0];
+      
+      // Gerar token de sessão criptograficamente seguro
+      const token = crypto.randomBytes(32).toString('hex');
+      
+      // Salvar a sessão no banco com validade de 1 dia
+      await dbPool.query(
+        "INSERT INTO sessoes_scan_onu (token, email, role, data_expiracao) VALUES ($1, $2, $3, NOW() + INTERVAL '1 day')",
+        [token, user.email, user.role]
+      );
+
       return res.json({ 
         success: true, 
-        user: userRes.rows[0] 
+        token,
+        user
       });
     } else {
       return res.status(401).json({ error: 'Credenciais inválidas. Verifique seu e-mail e senha.' });
@@ -608,17 +676,16 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Rota para cadastrar novos usuários (somente Admin)
-app.post('/api/admin/users', async (req, res) => {
+app.post('/api/admin/users', authenticateSession, async (req, res) => {
   try {
-    const { email, senha, role, adminEmail } = req.body;
+    const { email, senha, role } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
     // Verificar se quem está requisitando é admin de verdade
-    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
-    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem cadastrar usuários.' });
     }
 
@@ -639,17 +706,16 @@ app.post('/api/admin/users', async (req, res) => {
 });
 
 // Rota para editar e resetar senhas de usuários (somente Admin)
-app.put('/api/admin/users', async (req, res) => {
+app.put('/api/admin/users', authenticateSession, async (req, res) => {
   try {
-    const { id, email, senha, role, adminEmail } = req.body;
+    const { id, email, senha, role } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
     // Verificar se quem está requisitando é admin de verdade
-    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
-    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem gerenciar usuários.' });
     }
 
@@ -677,16 +743,13 @@ app.put('/api/admin/users', async (req, res) => {
 });
 
 // Rota para listar usuários (somente Admin)
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', authenticateSession, async (req, res) => {
   try {
-    const { adminEmail } = req.query;
-
     if (!dbConnected || !dbPool) {
       return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'admin' }] });
     }
 
-    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
-    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
@@ -700,10 +763,8 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // Rota para obter estatísticas do painel Admin
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats', authenticateSession, async (req, res) => {
   try {
-    const { adminEmail } = req.query;
-
     if (!dbConnected || !dbPool) {
       return res.json({
         success: true,
@@ -717,8 +778,7 @@ app.get('/api/admin/stats', async (req, res) => {
       });
     }
 
-    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
-    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
@@ -752,16 +812,15 @@ app.get('/api/admin/stats', async (req, res) => {
 });
 
 // Rota para exportar todas as etiquetas em XML (somente Admin)
-app.get('/api/admin/export-xml', async (req, res) => {
+app.get('/api/admin/export-xml', authenticateSession, async (req, res) => {
   try {
-    const { adminEmail, serialNumber, mac, startDate, endDate, modelo } = req.query;
+    const { serialNumber, mac, startDate, endDate, modelo } = req.query;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
-    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
-    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem exportar o banco.' });
     }
 
@@ -839,16 +898,15 @@ app.get('/api/admin/export-xml', async (req, res) => {
 });
 
 // Rota para exportar todas as etiquetas em Excel (somente Admin)
-app.get('/api/admin/export-excel', async (req, res) => {
+app.get('/api/admin/export-excel', authenticateSession, async (req, res) => {
   try {
-    const { adminEmail, search, startDate, endDate, modelo } = req.query;
+    const { search, startDate, endDate, modelo } = req.query;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
-    const checkAdmin = await dbPool.query('SELECT role FROM usuarios_scan_onu WHERE email = $1', [adminEmail]);
-    if (!checkAdmin.rowCount || checkAdmin.rows[0].role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem exportar o banco.' });
     }
 
@@ -923,11 +981,20 @@ app.get('/api/external/units', async (req, res) => {
   try {
     const { gpon_sn, mac, search } = req.query;
 
-    // Proteção por chave de API (opcional, pode ser definida no .env como EXTERNAL_API_KEY)
+    // Proteção OBRIGATÓRIA por chave de API
     const apiKeyHeader = req.headers['x-api-key'];
     const expectedApiKey = process.env.EXTERNAL_API_KEY;
-    if (expectedApiKey && apiKeyHeader !== expectedApiKey) {
-      return res.status(401).json({ success: false, error: 'Chave de API inválida ou ausente no cabeçalho X-API-Key.' });
+
+    if (!expectedApiKey || expectedApiKey.trim() === '') {
+      console.error('Aviso de Segurança: EXTERNAL_API_KEY não está configurada no servidor. Bloqueando consultas externas.');
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Serviço de consulta externa desativado por motivos de segurança. Configure a variável EXTERNAL_API_KEY no servidor.' 
+      });
+    }
+
+    if (apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ success: false, error: 'Acesso negado. Chave de API inválida ou ausente no cabeçalho X-API-Key.' });
     }
 
     if (!dbConnected || !dbPool) {

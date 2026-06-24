@@ -232,7 +232,11 @@ export default function App() {
     if (!user || user.role !== 'admin') return;
     setIsLoadingUsers(true);
     try {
-      const response = await fetch(`/api/admin/users?adminEmail=${encodeURIComponent(user.email)}`);
+      const response = await fetch('/api/admin/users', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
       const result = await response.json();
       if (response.ok && result.success) {
         setUsersList(result.users);
@@ -249,7 +253,11 @@ export default function App() {
     if (!user || user.role !== 'admin') return;
     setIsLoadingStats(true);
     try {
-      const response = await fetch(`/api/admin/stats?adminEmail=${encodeURIComponent(user.email)}`);
+      const response = await fetch('/api/admin/stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
       const result = await response.json();
       if (response.ok && result.success) {
         setStats(result.stats);
@@ -285,6 +293,7 @@ export default function App() {
       if (response.ok && result.success) {
         setUser(result.user);
         localStorage.setItem('scanonu_user', JSON.stringify(result.user));
+        localStorage.setItem('scanonu_token', result.token);
       } else {
         setLoginError(result.error || 'Credenciais inválidas. Verifique seu e-mail e senha.');
       }
@@ -298,6 +307,7 @@ export default function App() {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('scanonu_user');
+    localStorage.removeItem('scanonu_token');
     setEmailInput('');
     setPasswordInput('');
     setAdminTab('scan');
@@ -314,13 +324,13 @@ export default function App() {
       const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
         },
         body: JSON.stringify({
           email: newEmail,
           senha: newPassword,
-          role: newRole,
-          adminEmail: user.email
+          role: newRole
         })
       });
       const result = await response.json();
@@ -350,14 +360,14 @@ export default function App() {
       const response = await fetch('/api/admin/users', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
         },
         body: JSON.stringify({
           id: editingUser.id,
           email: editEmail,
           senha: editPassword,
-          role: editRole,
-          adminEmail: user.email
+          role: editRole
         })
       });
       const result = await response.json();
@@ -381,11 +391,15 @@ export default function App() {
     if (!user || user.role !== 'admin') return;
     try {
       const response = await fetch(
-        `/api/admin/export-excel?adminEmail=${encodeURIComponent(user.email)}` +
-        `&search=${encodeURIComponent(filterSearch)}` +
+        `/api/admin/export-excel?search=${encodeURIComponent(filterSearch)}` +
         `&startDate=${encodeURIComponent(filterStartDate)}` +
         `&endDate=${encodeURIComponent(filterEndDate)}` +
-        `&modelo=${encodeURIComponent(filterModel)}`
+        `&modelo=${encodeURIComponent(filterModel)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+          }
+        }
       );
       if (!response.ok) {
         throw new Error('Erro ao exportar planilha Excel.');
@@ -549,10 +563,16 @@ export default function App() {
           let result: any = null;
           let skipGemini = false;
 
+          const token = localStorage.getItem('scanonu_token');
+
           if (localDetection) {
             const lookupValue = localDetection.gpon_sn || localDetection.mac;
             if (lookupValue) {
-              const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`);
+              const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              });
               if (dbResponse.ok) {
                 const dbResult = await dbResponse.json();
                 if (dbResult.success && dbResult.data) {
@@ -572,7 +592,8 @@ export default function App() {
             const response = await fetch('/api/scan-label', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({ image: base64 })
             });
@@ -609,7 +630,8 @@ export default function App() {
                 const saveResponse = await fetch('/api/save-label', {
                   method: 'POST',
                   headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                   },
                   body: JSON.stringify({
                     ...processedData,
@@ -674,10 +696,16 @@ export default function App() {
       let result: any = null;
       let skipGemini = false;
 
+      const token = localStorage.getItem('scanonu_token');
+
       if (localDetection) {
         const lookupValue = localDetection.gpon_sn || localDetection.mac;
         if (lookupValue) {
-          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`);
+          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
           if (dbResponse.ok) {
             const dbResult = await dbResponse.json();
             if (dbResult.success && dbResult.data) {
@@ -697,7 +725,8 @@ export default function App() {
         const response = await fetch('/api/scan-label', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({ image: item.image })
         });
@@ -734,7 +763,8 @@ export default function App() {
             const saveResponse = await fetch('/api/save-label', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({
                 ...processedData,
@@ -861,7 +891,12 @@ export default function App() {
     setDbMessage(null);
     
     try {
-      const response = await fetch(`/api/label/${encodeURIComponent(searchGponInput.toUpperCase().trim())}`);
+      const token = localStorage.getItem('scanonu_token');
+      const response = await fetch(`/api/label/${encodeURIComponent(searchGponInput.toUpperCase().trim())}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const result = await response.json();
       
       if (response.ok && result.success && result.data) {
@@ -888,6 +923,7 @@ export default function App() {
     setExistingEquipmentData(null);
     setShowDuplicateModal(false);
     try {
+      const token = localStorage.getItem('scanonu_token');
       // 1. Tenta detectar código de barras localmente para evitar gastar token se o equipamento já existir no banco
       console.log('Tentando detectar código de barras localmente...');
       const localDetection = await detectBarcodeLocally(base64Image);
@@ -896,7 +932,11 @@ export default function App() {
         const lookupValue = localDetection.gpon_sn || localDetection.mac;
         if (lookupValue) {
           console.log(`Buscando no banco por GPON/MAC: ${lookupValue}...`);
-          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`);
+          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
           if (dbResponse.ok) {
             const dbResult = await dbResponse.json();
             if (dbResult.success && dbResult.data) {
@@ -917,7 +957,8 @@ export default function App() {
       const response = await fetch('/api/scan-label', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ image: base64Image })
       });
@@ -1922,7 +1963,8 @@ export default function App() {
                           const response = await fetch('/api/save-label', {
                             method: 'POST',
                             headers: {
-                              'Content-Type': 'application/json'
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
                             },
                             body: JSON.stringify({
                               ...data,
