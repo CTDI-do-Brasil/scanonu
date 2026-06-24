@@ -832,7 +832,6 @@ export default function App() {
             {/* Logo CTDI */}
             <div className="mb-4 flex flex-col items-center">
               <img src={logoCtdi} alt="Logo CTDI" className="w-48 h-auto object-contain mb-1" />
-              <h1 className="font-black text-2xl tracking-widest text-[#002f56] uppercase mt-1">Mídias</h1>
             </div>
 
             {/* Logo ScanONU */}
@@ -843,7 +842,6 @@ export default function App() {
                 </div>
                 <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
               </div>
-              <p className="text-slate-400 text-[10px] mt-0.5">Portal do Operador de Campo</p>
             </div>
 
             {loginError && (
@@ -909,11 +907,6 @@ export default function App() {
                 )}
               </button>
             </form>
-
-            {/* Dica de credenciais para testes rápidos */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 text-center w-full mt-6">
-              Use <strong className="text-slate-600">admin@scanonu.com</strong> e senha <strong className="text-slate-600">admin123</strong>
-            </div>
           </div>
         </div>
 
