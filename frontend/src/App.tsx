@@ -207,6 +207,7 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const processingFilesRef = useRef(false);
 
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
@@ -498,187 +499,199 @@ export default function App() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (files.length > 16) {
-      setError('Erro: É permitido enviar no máximo 16 unidades por lote.');
-      if (e.target) {
-        e.target.value = '';
-      }
-      return;
-    }
+    if (processingFilesRef.current) return;
+    processingFilesRef.current = true;
 
-    if (files.length === 1) {
-      // Fluxo de arquivo único existente
-      const file = files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setCapturedImage(base64);
-        processImage(base64);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      // Fluxo de processamento em Lote (Batch)
-      setScreen('idle');
-      setIsBatchMode(true);
-      setIsBatchProcessing(true);
-      setBatchResults([]);
-      
-      const items: BatchItem[] = [];
-      for (let i = 0; i < files.length; i++) {
-        items.push({
-          id: `batch_${Date.now()}_${i}`,
-          fileName: files[i].name,
-          image: '',
-          data: { ...DEFAULT_SCAN_DATA },
-          status: 'pending',
-          existsInDb: false,
-          existingData: null,
-          errorMsg: null,
-          dbMessage: null,
-          isSaving: false
-        });
-      }
-      setBatchResults(items);
-      setBatchStartTime(Date.now());
-
-      // Processar cada imagem em lote sequencialmente
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        if (i > 0) {
-          // Atraso de 4.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini (Free Tier)
-          await new Promise(resolve => setTimeout(resolve, 4500));
+    try {
+      if (files.length > 16) {
+        setError('Erro: É permitido enviar no máximo 16 unidades por lote.');
+        if (e.target) {
+          e.target.value = '';
         }
-        
-        const base64 = await new Promise<string>((resolve) => {
+        return;
+      }
+
+      if (files.length === 1) {
+        // Fluxo de arquivo único existente
+        const file = files[0];
+        const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
           reader.readAsDataURL(file);
         });
+        setCapturedImage(base64);
+        await processImage(base64);
+      } else {
+        // Fluxo de processamento em Lote (Batch)
+        setScreen('idle');
+        setIsBatchMode(true);
+        setIsBatchProcessing(true);
+        setBatchResults([]);
+        
+        const items: BatchItem[] = [];
+        for (let i = 0; i < files.length; i++) {
+          items.push({
+            id: `batch_${Date.now()}_${i}`,
+            fileName: files[i].name,
+            image: '',
+            data: { ...DEFAULT_SCAN_DATA },
+            status: 'pending',
+            existsInDb: false,
+            existingData: null,
+            errorMsg: null,
+            dbMessage: null,
+            isSaving: false
+          });
+        }
+        setBatchResults(items);
+        setBatchStartTime(Date.now());
 
-        setBatchResults(prev => prev.map((item, idx) => idx === i ? { ...item, image: base64, status: 'processing' } : item));
+        // Processar cada imagem em lote sequencialmente
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          
+          if (i > 0) {
+            // Atraso de 4.5 segundos para evitar estourar o limite de requisições por minuto (RPM) da cota do Gemini (Free Tier)
+            await new Promise(resolve => setTimeout(resolve, 4500));
+          }
+          
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
 
-        try {
-          const localDetection = await detectBarcodeLocally(base64);
-          let result: any = null;
-          let skipGemini = false;
+          setBatchResults(prev => prev.map((item, idx) => idx === i ? { ...item, image: base64, status: 'processing' } : item));
 
-          const token = localStorage.getItem('scanonu_token');
+          try {
+            const localDetection = await detectBarcodeLocally(base64);
+            let result: any = null;
+            let skipGemini = false;
 
-          if (localDetection) {
-            const lookupValue = localDetection.gpon_sn || localDetection.mac;
-            if (lookupValue) {
-              const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`
-                }
-              });
-              if (dbResponse.ok) {
-                const dbResult = await dbResponse.json();
-                if (dbResult.success && dbResult.data) {
-                  result = {
-                    success: true,
-                    existsInDb: true,
-                    data: dbResult.data,
-                    existingData: dbResult.data
-                  };
-                  skipGemini = true;
+            const token = localStorage.getItem('scanonu_token');
+
+            if (localDetection) {
+              const lookupValue = localDetection.gpon_sn || localDetection.mac;
+              if (lookupValue) {
+                const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`
+                  }
+                });
+                if (dbResponse.ok) {
+                  const dbResult = await dbResponse.json();
+                  if (dbResult.success && dbResult.data) {
+                    result = {
+                      success: true,
+                      existsInDb: true,
+                      data: dbResult.data,
+                      existingData: dbResult.data
+                    };
+                    skipGemini = true;
+                  }
                 }
               }
             }
-          }
 
-          if (!skipGemini) {
-            const response = await fetch('/api/scan-label', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({ image: base64 })
-            });
-            result = await response.json();
-          }
+            if (!skipGemini) {
+              const response = await fetch('/api/scan-label', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ image: base64 })
+              });
+              result = await response.json();
+            }
 
-          if (result.success && result.data) {
-            let processedData = applyMacSsidRules(result.data);
-            
-            if (result.data.reimpressa) {
-              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
-                ...item, 
-                data: processedData, 
-                status: 'error',
-                errorMsg: 'Etiqueta Reimpressa Bloqueada'
-              } : item));
-            } else if (result.existsInDb) {
-              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
-                ...item, 
-                data: processedData, 
-                status: 'duplicate',
-                existsInDb: true,
-                existingData: result.existingData
-              } : item));
-            } else {
-              // Gravar automaticamente no banco de dados
-              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
-                ...item, 
-                data: processedData,
-                isSaving: true
-              } : item));
-
-              try {
-                const saveResponse = await fetch('/api/save-label', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                  },
-                  body: JSON.stringify({
-                    ...processedData,
-                    operador: user?.email || 'admin@scanonu.com',
-                    overwrite: false
-                  })
-                });
-                const saveResult = await saveResponse.json();
-                if (saveResult.success) {
-                  setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
-                    ...item, 
-                    status: 'saved',
-                    isSaving: false,
-                    dbMessage: { type: 'success', text: 'Salvo no banco!' }
-                  } : item));
-                } else {
-                  throw new Error(saveResult.error || 'Erro ao salvar no banco.');
-                }
-              } catch (saveErr: any) {
+            if (result.success && result.data) {
+              let processedData = applyMacSsidRules(result.data);
+              
+              if (result.data.reimpressa) {
                 setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
                   ...item, 
+                  data: processedData, 
                   status: 'error',
-                  isSaving: false,
-                  errorMsg: saveErr.message || 'Falha ao salvar no banco.' 
+                  errorMsg: 'Etiqueta Reimpressa Bloqueada'
                 } : item));
+              } else if (result.existsInDb) {
+                setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                  ...item, 
+                  data: processedData, 
+                  status: 'duplicate',
+                  existsInDb: true,
+                  existingData: result.existingData
+                } : item));
+              } else {
+                // Gravar automaticamente no banco de dados
+                setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                  ...item, 
+                  data: processedData,
+                  isSaving: true
+                } : item));
+
+                try {
+                  const saveResponse = await fetch('/api/save-label', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                      ...processedData,
+                      operador: user?.email || 'admin@scanonu.com',
+                      overwrite: false
+                    })
+                  });
+                  const saveResult = await saveResponse.json();
+                  if (saveResult.success) {
+                    setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                      ...item, 
+                      status: 'saved',
+                      isSaving: false,
+                      dbMessage: { type: 'success', text: 'Salvo no banco!' }
+                    } : item));
+                  } else {
+                    throw new Error(saveResult.error || 'Erro ao salvar no banco.');
+                  }
+                } catch (saveErr: any) {
+                  setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                    ...item, 
+                    status: 'error',
+                    isSaving: false,
+                    errorMsg: saveErr.message || 'Falha ao salvar no banco.' 
+                  } : item));
+                }
               }
+            } else {
+              const errorMsg = result.error || 'Erro ao ler a etiqueta.';
+              const detailsMsg = result.details ? ` Detalhes: ${JSON.stringify(result.details)}` : '';
+              setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                ...item, 
+                status: 'error', 
+                errorMsg: errorMsg + detailsMsg 
+              } : item));
             }
-          } else {
-            const errorMsg = result.error || 'Erro ao ler a etiqueta.';
-            const detailsMsg = result.details ? ` Detalhes: ${JSON.stringify(result.details)}` : '';
+          } catch (err: any) {
             setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
               ...item, 
               status: 'error', 
-              errorMsg: errorMsg + detailsMsg 
+              errorMsg: err.message || 'Erro de conexão.' 
             } : item));
           }
-        } catch (err: any) {
-          setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
-            ...item, 
-            status: 'error', 
-            errorMsg: err.message || 'Erro de conexão.' 
-          } : item));
         }
+        setIsBatchProcessing(false);
       }
-      setIsBatchProcessing(false);
+    } finally {
+      processingFilesRef.current = false;
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
+
 
   const retryBatchItem = async (itemId: string) => {
     const item = batchResults.find(it => it.id === itemId);
