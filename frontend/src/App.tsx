@@ -14,13 +14,12 @@ import {
   Info, 
   AlertTriangle,
   X,
-  Lock,
-  Mail,
   LogOut,
-  UserCheck,
   Users,
   UserPlus,
-  Download
+  Download,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface ScanData {
@@ -118,6 +117,7 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Administração
   const [adminTab, setAdminTab] = useState<'scan' | 'admin'>('scan');
@@ -826,74 +826,94 @@ export default function App() {
       <div className="min-h-screen flex flex-col justify-between bg-[#002f56] text-slate-800 font-sans p-6">
         <div className="flex-1 flex flex-col justify-center items-center w-full">
           {/* Card de Login */}
-          <div className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-sm space-y-6">
-            {/* Logo */}
-            <div className="flex flex-col items-center">
-              <div className="bg-[#003865] text-white p-3.5 rounded-2xl shadow-lg shadow-blue-900/20 mb-3 animate-pulse-slow">
-                <Cpu className="w-8 h-8" />
-              </div>
-              <h1 className="font-extrabold text-2xl tracking-tight text-slate-800">Scan<span className="text-[#003865]">ONU</span></h1>
-              <p className="text-slate-400 text-xs mt-1">Portal do Operador de Campo</p>
+          <div className="bg-white rounded-[2.5rem] px-8 py-10 shadow-2xl w-full max-w-sm flex flex-col items-center">
+            {/* Logo CTDI */}
+            <div className="mb-6 flex flex-col items-center">
+              <svg viewBox="0 0 200 50" className="w-52 h-14 mb-2" xmlns="http://www.w3.org/2000/svg">
+                {/* Diamond 1 */}
+                <polygon points="5,25 28,5 51,25 28,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
+                {/* Diamond 2 */}
+                <polygon points="51,25 74,5 97,25 74,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
+                {/* Diamond 3 */}
+                <polygon points="97,25 120,5 143,25 120,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
+                {/* Diamond 4 */}
+                <polygon points="143,25 166,5 189,25 166,45" fill="none" stroke="#002f56" strokeWidth="2.5" />
+                
+                {/* Letters */}
+                <text x="28" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">C</text>
+                <text x="74" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">T</text>
+                <text x="120" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">D</text>
+                <text x="166" y="32.5" fontFamily="system-ui, -apple-system, sans-serif" fontSize="21" fontWeight="900" fontStyle="italic" fill="#002f56" textAnchor="middle">I</text>
+              </svg>
+              <h1 className="font-black text-3xl tracking-widest text-[#002f56] uppercase mt-2">Mídias</h1>
             </div>
 
-            <h2 className="text-sm font-bold text-slate-700 text-center">Faça login para continuar</h2>
-            
             {loginError && (
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800">
+              <div className="w-full bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800 mb-4">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
                 <span>{loginError}</span>
               </div>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Usuário</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="ex: admin@scanonu.com ou lucas.albino"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
-                  />
-                </div>
+            <form onSubmit={handleLogin} className="w-full space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-[#002f56] block">E-mail ou Usuário</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="ex: seu.email@ctdibrasil.com.br"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className="w-full bg-white border border-slate-300 focus:border-[#002f56] focus:ring-1 focus:ring-[#002f56] rounded-2xl px-4 py-3.5 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400"
+                />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Senha</label>
+              <div className="space-y-1.5 relative">
+                <label className="text-sm font-bold text-[#002f56] block">Senha</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input 
-                    type="password" 
+                    type={showPassword ? "text" : "password"} 
                     required
                     placeholder="••••••••"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none transition-all"
+                    className="w-full bg-white border border-slate-300 focus:border-[#002f56] focus:ring-1 focus:ring-[#002f56] rounded-2xl pl-4 pr-12 py-3.5 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
+              </div>
+
+              <div className="text-left w-full">
+                <button
+                  type="button"
+                  onClick={() => alert("Por favor, entre em contato com o suporte ou administrador do sistema para recuperar sua senha.")}
+                  className="text-xs font-bold text-[#002f56] hover:underline"
+                >
+                  Esqueceu a senha?
+                </button>
               </div>
 
               <button 
                 type="submit"
                 disabled={isLoggingIn}
-                className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] disabled:bg-[#003865]/60 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all text-sm mt-2"
+                className="w-full bg-[#002f56] hover:bg-[#004075] active:bg-[#001d36] disabled:bg-[#002f56]/60 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all text-base mt-2"
               >
                 {isLoggingIn ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
-                  <>
-                    <UserCheck className="w-4 h-4" />
-                    <span>Entrar no Sistema</span>
-                  </>
+                  <span>Entrar no Sistema</span>
                 )}
               </button>
             </form>
 
             {/* Dica de credenciais para testes rápidos */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 text-center">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 text-center w-full mt-6">
               Use <strong className="text-slate-600">admin@scanonu.com</strong> e senha <strong className="text-slate-600">admin123</strong>
             </div>
           </div>
