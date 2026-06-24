@@ -1756,7 +1756,7 @@ export default function App() {
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
                     <div className="flex items-center gap-2 text-slate-700">
                       <Edit3 className="w-4 h-4 text-[#003865]" />
-                      <span className="font-semibold text-xs text-slate-800">Ajustar ONU Existente (Sem gastar Token)</span>
+                      <span className="font-semibold text-xs text-slate-800">Ajustar ONU Existente</span>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       Insira o GPON Serial Number da ONU para buscar os dados cadastrados e fazer edições diretamente no banco.
@@ -2083,7 +2083,7 @@ export default function App() {
             </h3>
             
             <p className="text-slate-600 text-xs text-center leading-relaxed">
-              O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já está cadastrado. Deseja fazer algum ajuste? Você pode editar as informações na tela e salvá-las diretamente sem custos de API (sem gastar token).
+              O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já está cadastrado. Deseja fazer algum ajuste? Você pode editar as informações na tela e salvá-las diretamente.
             </p>
             
             <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">

@@ -261,6 +261,56 @@ function correctMacPrefix(mac: string): string {
   return cleanMac;
 }
 
+function normalizeModel(modelo: string, fabricante: string): string {
+  let modelNorm = (modelo || '').trim();
+  const mfgUpper = (fabricante || '').toUpperCase();
+  const modelClean = modelNorm.toUpperCase().replace(/[^A-Z0-9@]/g, '');
+
+  // Sagemcom F@ST 5655V2
+  if (
+    modelClean.includes('FAST5655V2') || 
+    modelClean.includes('F@ST5655V2') || 
+    (modelClean.includes('5655V2') && (modelClean.includes('FAST') || modelClean.includes('F@ST'))) ||
+    (mfgUpper.includes('SAGEM') && modelClean.includes('5655'))
+  ) {
+    return 'F@ST 5655V2';
+  }
+
+  // ZTE F670L
+  if (
+    mfgUpper.includes('ZTE') &&
+    (modelClean.includes('F670L') || modelClean.includes('F670'))
+  ) {
+    return 'F670L';
+  }
+
+  // ZTE F6600
+  if (
+    mfgUpper.includes('ZTE') &&
+    (modelClean.includes('F6600') || modelClean.includes('F660'))
+  ) {
+    return 'F6600';
+  }
+
+  // Huawei HG8145V5
+  if (
+    mfgUpper.includes('HUAWEI') &&
+    (modelClean.includes('HG8145V5') || modelClean.includes('8145V5') || modelClean.includes('HG8145'))
+  ) {
+    return 'HG8145V5';
+  }
+
+  // Huawei EG8145V5
+  if (
+    mfgUpper.includes('HUAWEI') &&
+    (modelClean.includes('EG8145V5') || modelClean.includes('EG8145'))
+  ) {
+    return 'EG8145V5';
+  }
+
+  return modelNorm;
+}
+
 app.post('/api/scan-label', authenticateSession, async (req, res) => {
   let scanResult: any = null;
   let scanSource = 'gemini-vision';
@@ -308,8 +358,8 @@ Siga atentamente as instruções abaixo para cada campo:
     const maxAttempts = 2;
     let lastError: any = null;
 
-    // Tentamos gemini-2.5-flash primeiro (até maxAttempts vezes) e depois gemini-1.5-flash
-    for (const modelName of ['gemini-2.5-flash', 'gemini-1.5-flash']) {
+    // Tentamos gemini-2.5-flash primeiro (até maxAttempts vezes) e depois gemini-2.0-flash
+    for (const modelName of ['gemini-2.5-flash', 'gemini-2.0-flash']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
@@ -412,7 +462,7 @@ Siga atentamente as instruções abaixo para cada campo:
 
     scanResult = {
       fabricante: fabricanteNorm,
-      modelo: geminiData.modelo || '',
+      modelo: normalizeModel(geminiData.modelo || '', fabricanteNorm),
       cpe_sn: cpeNorm,
       gpon_sn: gponNorm,
       mac: macNorm,
@@ -501,13 +551,14 @@ Siga atentamente as instruções abaixo para cada campo:
 app.post('/api/save-label', authenticateSession, async (req, res) => {
   try {
     const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador, overwrite } = req.body;
+    const normalizedModelo = normalizeModel(modelo, fabricante);
 
     if (!dbConnected || !dbPool) {
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
       return res.json({ 
         success: true, 
         message: 'Dados simulados com sucesso (PostgreSQL desativado no momento).',
-        savedData: req.body
+        savedData: { ...req.body, modelo: normalizedModelo }
       });
     }
 
@@ -542,7 +593,7 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
       `;
       const updateValues = [
         fabricante || '',
-        modelo || '',
+        normalizedModelo || '',
         cpe_sn || '',
         mac || '',
         wifi_ssid || '',
@@ -563,7 +614,7 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
       `;
       const insertValues = [
         fabricante || '',
-        modelo || '',
+        normalizedModelo || '',
         cpe_sn || '',
         gpon_sn || '',
         mac || '',
