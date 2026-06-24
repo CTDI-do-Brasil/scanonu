@@ -184,6 +184,33 @@ async function connectToDatabase() {
         console.log('Senha e perfil do usuário admin@scanonu.com resetados com sucesso.');
       }
 
+      // Executar migração para normalizar dados históricos existentes no banco
+      try {
+        console.log('Iniciando normalização de fabricantes e modelos antigos no banco...');
+        // Normalizar fabricantes
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Huawei' WHERE fabricante ILIKE '%Huawei%' AND fabricante != 'Huawei'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'ZTE' WHERE fabricante ILIKE '%ZTE%' AND fabricante != 'ZTE'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'FiberHome' WHERE fabricante ILIKE '%FiberHome%' AND fabricante != 'FiberHome'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Intelbras' WHERE fabricante ILIKE '%Intelbras%' AND fabricante != 'Intelbras'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Nokia' WHERE fabricante ILIKE '%Nokia%' AND fabricante != 'Nokia'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Alcatel' WHERE fabricante ILIKE '%Alcatel%' AND fabricante != 'Alcatel'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'SagemCOM' WHERE (fabricante ILIKE '%Sagem%' OR fabricante ILIKE '%SMBS%' OR fabricante ILIKE '%SMB8%') AND fabricante != 'SagemCOM'");
+
+        // Normalizar modelos Sagemcom
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F@ST 5655V2' WHERE (fabricante = 'SagemCOM' OR fabricante ILIKE '%Sagem%') AND (modelo ILIKE '%5655%' OR modelo ILIKE '%FAST5655%') AND modelo != 'F@ST 5655V2'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F@ST 5670V2' WHERE (fabricante = 'SagemCOM' OR fabricante ILIKE '%Sagem%') AND (modelo ILIKE '%5670%V2%' OR modelo ILIKE '%5670V2%') AND modelo != 'F@ST 5670V2'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F@ST 5670' WHERE (fabricante = 'SagemCOM' OR fabricante ILIKE '%Sagem%') AND modelo ILIKE '%5670%' AND modelo NOT ILIKE '%V2%' AND modelo != 'F@ST 5670'");
+
+        // Normalizar modelos ZTE e Huawei
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F670L' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F670L%' OR modelo ILIKE '%F670%') AND modelo != 'F670L'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F6600' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F6600%' OR modelo ILIKE '%F660%') AND modelo != 'F6600'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145V5%' OR modelo ILIKE '%8145V5%' OR modelo ILIKE '%HG8145%') AND modelo != 'HG8145V5'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
+        console.log('Normalização de dados históricos concluída com sucesso!');
+      } catch (err: any) {
+        console.error('Erro ao normalizar dados históricos existentes no banco:', err.message || err);
+      }
+
     } catch (err: any) {
       console.error('Falha ao conectar ou inicializar o PostgreSQL:', err.message || err);
       dbConnected = false;
@@ -274,6 +301,26 @@ function normalizeModel(modelo: string, fabricante: string): string {
     (mfgUpper.includes('SAGEM') && modelClean.includes('5655'))
   ) {
     return 'F@ST 5655V2';
+  }
+
+  // Sagemcom F@ST 5670V2
+  if (
+    modelClean.includes('FAST5670V2') || 
+    modelClean.includes('F@ST5670V2') || 
+    (modelClean.includes('5670V2') && (modelClean.includes('FAST') || modelClean.includes('F@ST'))) ||
+    (mfgUpper.includes('SAGEM') && modelClean.includes('5670V2'))
+  ) {
+    return 'F@ST 5670V2';
+  }
+
+  // Sagemcom F@ST 5670
+  if (
+    modelClean.includes('FAST5670') || 
+    modelClean.includes('F@ST5670') || 
+    (modelClean.includes('5670') && (modelClean.includes('FAST') || modelClean.includes('F@ST'))) ||
+    (mfgUpper.includes('SAGEM') && modelClean.includes('5670'))
+  ) {
+    return 'F@ST 5670';
   }
 
   // ZTE F670L
