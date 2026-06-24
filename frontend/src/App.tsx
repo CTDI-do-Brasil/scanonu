@@ -192,6 +192,11 @@ export default function App() {
   const [existingEquipmentData, setExistingEquipmentData] = useState<ScanData | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
+  // Estados de Busca Manual/Ajuste sem Token
+  const [searchGponInput, setSearchGponInput] = useState('');
+  const [isSearchingGpon, setIsSearchingGpon] = useState(false);
+  const [searchGponError, setSearchGponError] = useState<string | null>(null);
+
   // Estados de Processamento em Lote (Batch)
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
@@ -532,15 +537,39 @@ export default function App() {
         setBatchResults(prev => prev.map((item, idx) => idx === i ? { ...item, image: base64, status: 'processing' } : item));
 
         try {
-          const response = await fetch('/api/scan-label', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ image: base64 })
-          });
+          const localDetection = await detectBarcodeLocally(base64);
+          let result: any = null;
+          let skipGemini = false;
 
-          const result = await response.json();
+          if (localDetection) {
+            const lookupValue = localDetection.gpon_sn || localDetection.mac;
+            if (lookupValue) {
+              const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`);
+              if (dbResponse.ok) {
+                const dbResult = await dbResponse.json();
+                if (dbResult.success && dbResult.data) {
+                  result = {
+                    success: true,
+                    existsInDb: true,
+                    data: dbResult.data,
+                    existingData: dbResult.data
+                  };
+                  skipGemini = true;
+                }
+              }
+            }
+          }
+
+          if (!skipGemini) {
+            const response = await fetch('/api/scan-label', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ image: base64 })
+            });
+            result = await response.json();
+          }
 
           if (result.success && result.data) {
             let processedData = applyMacSsidRules(result.data);
@@ -633,15 +662,39 @@ export default function App() {
     } : it));
 
     try {
-      const response = await fetch('/api/scan-label', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ image: item.image })
-      });
+      const localDetection = await detectBarcodeLocally(item.image);
+      let result: any = null;
+      let skipGemini = false;
 
-      const result = await response.json();
+      if (localDetection) {
+        const lookupValue = localDetection.gpon_sn || localDetection.mac;
+        if (lookupValue) {
+          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`);
+          if (dbResponse.ok) {
+            const dbResult = await dbResponse.json();
+            if (dbResult.success && dbResult.data) {
+              result = {
+                success: true,
+                existsInDb: true,
+                data: dbResult.data,
+                existingData: dbResult.data
+              };
+              skipGemini = true;
+            }
+          }
+        }
+      }
+
+      if (!skipGemini) {
+        const response = await fetch('/api/scan-label', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ image: item.image })
+        });
+        result = await response.json();
+      }
 
       if (result.success && result.data) {
         let processedData = applyMacSsidRules(result.data);
@@ -738,6 +791,88 @@ export default function App() {
     setIsBatchProcessing(false);
   };
 
+  // Helper para detectar GPON SN ou MAC a partir de códigos de barras locais em uma imagem base64
+  const detectBarcodeLocally = async (base64Image: string): Promise<{ gpon_sn?: string; mac?: string } | null> => {
+    if (!('BarcodeDetector' in window)) {
+      console.log('BarcodeDetector API não é suportada neste navegador.');
+      return null;
+    }
+
+    try {
+      const img = new Image();
+      img.src = base64Image;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const barcodeDetector = new (window as any).BarcodeDetector({
+        formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'qr_code']
+      });
+
+      const detected = await barcodeDetector.detect(img);
+      console.log('Códigos de barras detectados localmente:', detected);
+
+      if (!detected || detected.length === 0) {
+        return null;
+      }
+
+      for (const item of detected) {
+        const rawValue = (item.rawValue || '').trim().toUpperCase();
+        
+        // Padrão GPON SN: 12 caracteres alfanuméricos começando com 4 letras
+        const gponPattern = /^[A-Z]{4}[A-Z0-9]{8}$/;
+        if (gponPattern.test(rawValue)) {
+          console.log('GPON SN detectado localmente:', rawValue);
+          return { gpon_sn: rawValue };
+        }
+
+        // Padrão MAC Address: 12 hexadecimais (limpando separadores)
+        const cleanMac = rawValue.replace(/[:\s-]/g, '');
+        const macPattern = /^[0-9A-F]{12}$/;
+        if (macPattern.test(cleanMac)) {
+          console.log('MAC Address detectado localmente:', cleanMac);
+          return { mac: cleanMac };
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao detectar código de barras localmente:', err);
+    }
+
+    return null;
+  };
+
+  const handleSearchGponForEdit = async () => {
+    if (!searchGponInput) {
+      setSearchGponError('Insira um GPON Serial Number válido.');
+      return;
+    }
+    setIsSearchingGpon(true);
+    setSearchGponError(null);
+    setError(null);
+    setDbMessage(null);
+    
+    try {
+      const response = await fetch(`/api/label/${encodeURIComponent(searchGponInput.toUpperCase().trim())}`);
+      const result = await response.json();
+      
+      if (response.ok && result.success && result.data) {
+        setData(result.data);
+        setEquipmentExistsInDb(true);
+        setExistingEquipmentData(result.data);
+        setCapturedImage(null); // Sem foto associada a esta consulta direta
+        setScreen('result');
+        setSearchGponInput('');
+      } else {
+        setSearchGponError(result.error || 'Equipamento não encontrado.');
+      }
+    } catch (err: any) {
+      setSearchGponError('Erro de conexão ao buscar equipamento.');
+    } finally {
+      setIsSearchingGpon(false);
+    }
+  };
+
   const processImage = async (base64Image: string) => {
     setScreen('processing');
     setError(null);
@@ -745,6 +880,32 @@ export default function App() {
     setExistingEquipmentData(null);
     setShowDuplicateModal(false);
     try {
+      // 1. Tenta detectar código de barras localmente para evitar gastar token se o equipamento já existir no banco
+      console.log('Tentando detectar código de barras localmente...');
+      const localDetection = await detectBarcodeLocally(base64Image);
+      
+      if (localDetection) {
+        const lookupValue = localDetection.gpon_sn || localDetection.mac;
+        if (lookupValue) {
+          console.log(`Buscando no banco por GPON/MAC: ${lookupValue}...`);
+          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`);
+          if (dbResponse.ok) {
+            const dbResult = await dbResponse.json();
+            if (dbResult.success && dbResult.data) {
+              console.log('Equipamento encontrado no banco localmente (0 tokens gastos!).');
+              setData(dbResult.data);
+              setEquipmentExistsInDb(true);
+              setExistingEquipmentData(dbResult.data);
+              setShowDuplicateModal(true);
+              setScreen('result');
+              return; // Sai do fluxo economizando o token!
+            }
+          }
+        }
+      }
+
+      // 2. Se não encontrou no banco, prossegue com Gemini (gastando 1 token)
+      console.log('Código de barras não detectado localmente ou não cadastrado no banco. Chamando Gemini Vision...');
       const response = await fetch('/api/scan-label', {
         method: 'POST',
         headers: {
@@ -801,6 +962,8 @@ export default function App() {
     setIsBatchMode(false);
     setIsBatchProcessing(false);
     setBatchResults([]);
+    setSearchGponInput('');
+    setSearchGponError(null);
     setScreen('idle');
   };
 
@@ -1536,6 +1699,42 @@ export default function App() {
                     multiple
                   />
                 </div>
+
+                {/* Busca Manual para ajuste sem gastar Token */}
+                <div className="mt-4 pt-4 border-t border-slate-200/80">
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <Edit3 className="w-4 h-4 text-[#003865]" />
+                      <span className="font-semibold text-xs text-slate-800">Ajustar ONU Existente (Sem gastar Token)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Insira o GPON Serial Number da ONU para buscar os dados cadastrados e fazer edições diretamente no banco.
+                    </p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        placeholder="Ex: SMBS12345678"
+                        value={searchGponInput}
+                        onChange={(e) => setSearchGponInput(e.target.value.toUpperCase().trim())}
+                        className="flex-1 bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all font-mono"
+                      />
+                      <button
+                        onClick={handleSearchGponForEdit}
+                        disabled={isSearchingGpon}
+                        className="bg-[#003865] hover:bg-[#004e8c] disabled:bg-slate-300 text-white px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0"
+                      >
+                        {isSearchingGpon ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                          <span>Buscar</span>
+                        )}
+                      </button>
+                    </div>
+                    {searchGponError && (
+                      <p className="text-[10px] text-red-500 font-semibold">{searchGponError}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1828,11 +2027,11 @@ export default function App() {
             </div>
             
             <h3 className="font-bold text-base text-amber-800 text-center leading-snug">
-              Atenção: Este equipamento já está cadastrado no banco!
+              Aviso: Equipamento já cadastrado no banco!
             </h3>
             
             <p className="text-slate-600 text-xs text-center leading-relaxed">
-              O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já existe no sistema. Você pode ajustar as informações na tela e clicar no botão abaixo para <strong className="text-amber-700">Sobrescrever/Atualizar</strong> os dados existentes.
+              O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já está cadastrado. Deseja fazer algum ajuste? Você pode editar as informações na tela e salvá-las diretamente sem custos de API (sem gastar token).
             </p>
             
             <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">

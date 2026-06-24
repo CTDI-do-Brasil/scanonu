@@ -1,4 +1,4 @@
-# Build date: 2026-06-24T17:35:00Z - Force CapRover rebuild without cache
+# Build date: 2026-06-24T17:55:00Z - Force CapRover rebuild without cache
 FROM node:20-alpine AS build-frontend
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
@@ -10,7 +10,7 @@ FROM node:20-alpine AS build-backend
 WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm install
-# Build date: 2026-06-24T17:35:00Z - Force backend rebuild
+# Build date: 2026-06-24T17:55:00Z - Force backend rebuild
 COPY backend/ ./
 RUN npm run build
 

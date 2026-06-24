@@ -543,6 +543,37 @@ app.post('/api/save-label', async (req, res) => {
   }
 });
 
+// Rota para obter uma etiqueta existente pelo GPON SN (sem custo de token)
+app.get('/api/label/:gpon_sn', async (req, res) => {
+  try {
+    const { gpon_sn } = req.params;
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    const checkRes = await dbPool.query(
+      'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
+      [gpon_sn.toUpperCase().trim()]
+    );
+
+    if (checkRes.rowCount && checkRes.rowCount > 0) {
+      return res.json({
+        success: true,
+        data: checkRes.rows[0]
+      });
+    } else {
+      return res.status(404).json({
+        success: false,
+        error: 'Equipamento não encontrado no banco de dados.'
+      });
+    }
+  } catch (err: any) {
+    console.error('Erro ao consultar GPON SN:', err);
+    return res.status(500).json({ success: false, error: 'Erro interno ao consultar equipamento.' });
+  }
+});
+
 // Rota de login real usando o PostgreSQL
 app.post('/api/login', async (req, res) => {
   try {
