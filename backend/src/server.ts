@@ -250,6 +250,20 @@ app.get('/api/debug-scans', (req, res) => {
   });
 });
 
+// Endpoint para listar os modelos do Gemini disponíveis no ambiente
+app.get('/api/debug-models', async (req, res) => {
+  try {
+    if (!ai) {
+      return res.status(500).json({ error: 'Cliente Gemini não inicializado.' });
+    }
+    const response = await ai.models.list();
+    return res.json({ success: true, models: response });
+  } catch (err: any) {
+    console.error('Erro ao listar modelos do Gemini:', err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 // Função de parsing baseada em RegEx para extrair dados estruturados do OCR
 const KNOWN_SAGEMCOM_OUIS = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6', '34DB1C', '34DB9C', 'D8D7F7'];
 
@@ -405,8 +419,8 @@ Siga atentamente as instruções abaixo para cada campo:
     const maxAttempts = 2;
     let lastError: any = null;
 
-    // Tentamos gemini-2.5-flash primeiro (até maxAttempts vezes) e depois gemini-2.0-flash
-    for (const modelName of ['gemini-2.5-flash', 'gemini-2.0-flash']) {
+    // Tentamos os modelos mais recentes e estáveis em sequência: gemini-2.5-flash, gemini-3.5-flash e depois gemini-3.1-flash-lite
+    for (const modelName of ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
