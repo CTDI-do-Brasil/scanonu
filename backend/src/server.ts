@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createWorker } from 'tesseract.js';
 import { Pool } from 'pg';
 import { create } from 'xmlbuilder2';
 import * as XLSX from 'xlsx';
@@ -173,7 +172,7 @@ app.get('/api/debug-scans', (req, res) => {
 });
 
 // Função de parsing baseada em RegEx para extrair dados estruturados do OCR
-const KNOWN_SAGEMCOM_OUIS = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6', '34DB1C', 'D8D7F7'];
+const KNOWN_SAGEMCOM_OUIS = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6', '34DB1C', '34DB9C', 'D8D7F7'];
 
 function correctMacPrefix(mac: string): string {
   const cleanMac = mac.replace(/[^0-9A-F]/ig, '').toUpperCase();
@@ -210,540 +209,22 @@ function correctMacPrefix(mac: string): string {
   return cleanMac;
 }
 
-function parseOcrText(rawText: string): any {
-  // Normalize accents/diacritics
-  const text = rawText.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  const upperText = text.toUpperCase();
-
-  // 1. Identificar o Fabricante
-  let fabricante = 'Outro';
-  if (upperText.includes('HUAWEI')) fabricante = 'Huawei';
-  else if (upperText.includes('ZTE')) fabricante = 'ZTE';
-  else if (upperText.includes('FIBERHOME')) fabricante = 'FiberHome';
-  else if (upperText.includes('INTELBRAS')) fabricante = 'Intelbras';
-  else if (upperText.includes('NOKIA')) fabricante = 'Nokia';
-  else if (upperText.includes('ALCATEL')) fabricante = 'Alcatel';
-  else if (upperText.includes('SAGEMCOM') || upperText.includes('SAGEM') || upperText.includes('SMBS') || upperText.includes('SMB8')) fabricante = 'SagemCOM';
-
-  // 2. Identificar GPON SN
-  let gpon_sn = '';
-  const gponPatterns = [
-    /\b(SMBS[0-9A-Z]{8})\b/i,     // Sagemcom
-    /\b(SMB8[0-9A-Z]{8})\b/i,     // Sagemcom typo SMB8
-    /\b(ZTEG[0-9A-Z]{8})\b/i,     // ZTE
-    /\b(FHTT[0-9A-Z]{8})\b/i,     // FiberHome
-    /\b(ALCL[0-9A-Z]{8})\b/i,     // Nokia/Alcatel
-    /\b(HWTC[0-9A-Z]{8})\b/i,     // Huawei
-    /\b(48575434[0-9A-Z]{8})\b/i, // Huawei hex
-    /\b(ELFC[0-9A-Z]{8})\b/i,     // Intelbras
-  ];
-
-  for (const pattern of gponPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      gpon_sn = match[1].replace(/[^A-Z0-9]/ig, '').toUpperCase();
-      break;
-    }
-  }
-
-  // Fallback for GPON SN
-  if (!gpon_sn) {
-    const laxMatch = text.match(/\b(SMBS|SMB8|ZTEG|FHTT|ALCL|HWTC|ELFC)[0-9A-Z]{7,9}\b/i);
-    if (laxMatch) {
-      gpon_sn = laxMatch[0].toUpperCase();
-    }
-  }
-
-  // Correção de erros comuns de OCR nos GPON SNs e identificação de fabricante
-  const gponPrefixes = ['SMBS', 'SMB8', 'ZTEG', 'FHTT', 'ALCL', 'HWTC', 'ELFC', '48575434'];
-  let matchedPrefix = '';
-  for (const p of gponPrefixes) {
-    if (gpon_sn.toUpperCase().startsWith(p)) {
-      matchedPrefix = p;
-      break;
-    }
-  }
-
-  if (matchedPrefix) {
-    let actualPrefix = matchedPrefix;
-    if (matchedPrefix === 'SMB8') {
-      actualPrefix = 'SMBS';
-    }
-    
-    fabricante = actualPrefix === 'SMBS' ? 'SagemCOM' : 
-                 matchedPrefix === 'ZTEG' ? 'ZTE' :
-                 matchedPrefix === 'FHTT' ? 'FiberHome' :
-                 matchedPrefix === 'ALCL' ? 'Nokia' :
-                 matchedPrefix === 'HWTC' || matchedPrefix === '48575434' ? 'Huawei' : 'Intelbras';
-                 
-    let rest = gpon_sn.substring(matchedPrefix.length).toUpperCase();
-    rest = rest.replace(/O/g, '0');
-    rest = rest.replace(/S/g, '5');
-    rest = rest.replace(/G/g, '6');
-    rest = rest.replace(/I/g, '1');
-    rest = rest.replace(/L/g, '1');
-    rest = rest.replace(/l/g, '1');
-    rest = rest.replace(/Z/g, '2');
-    rest = rest.replace(/T/g, '7');
-    
-    if (rest.length === 9 && rest.startsWith('0000')) {
-      rest = rest.substring(1);
-    }
-    
-    gpon_sn = actualPrefix + rest;
-  }
-
-  // 3. Identificar MAC (clean 12-char hex string)
-  let mac = '';
-  const macPattern = /\b([0-9A-Z]{2}[ :.;-]){5}([0-9A-Z]{2})\b/i;
-  const macMatch = text.match(macPattern);
-  if (macMatch) {
-    const cleanW = macMatch[0].replace(/[^0-9A-Z]/ig, '').toUpperCase();
-    let corrected = cleanW;
-    corrected = corrected.replace(/G/g, '6');
-    corrected = corrected.replace(/O/g, '0');
-    corrected = corrected.replace(/I/g, '1');
-    corrected = corrected.replace(/L/g, '1');
-    corrected = corrected.replace(/l/g, '1');
-    corrected = corrected.replace(/Z/g, '2');
-    corrected = corrected.replace(/S/g, '5');
-    corrected = corrected.replace(/T/g, '7');
-    if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
-      mac = corrected;
-    }
-  }
-
-  if (!mac) {
-    for (const line of lines) {
-      if (/MAC/i.test(line)) {
-        const words = line.match(/\b[0-9A-Z]{10,16}\b/ig) || [];
-        for (const w of words) {
-          let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
-          if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
-          else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
-          
-          if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS') && !cleanW.startsWith('SMB8')) {
-            let corrected = cleanW;
-            corrected = corrected.replace(/G/g, '6');
-            corrected = corrected.replace(/O/g, '0');
-            corrected = corrected.replace(/I/g, '1');
-            corrected = corrected.replace(/L/g, '1');
-            corrected = corrected.replace(/l/g, '1');
-            corrected = corrected.replace(/Z/g, '2');
-            corrected = corrected.replace(/S/g, '5');
-            corrected = corrected.replace(/T/g, '7');
-            if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
-              mac = corrected;
-              break;
-            }
-          }
-        }
-        if (mac) break;
-      }
-    }
-  }
-
-  if (!mac) {
-    const words = text.match(/\b[0-9A-Z]{10,16}\b/ig) || [];
-    for (const w of words) {
-      let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
-      if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
-      else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
-
-      if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS') && !cleanW.startsWith('SMB8')) {
-        let corrected = cleanW;
-        corrected = corrected.replace(/G/g, '6');
-        corrected = corrected.replace(/O/g, '0');
-        corrected = corrected.replace(/I/g, '1');
-        corrected = corrected.replace(/L/g, '1');
-        corrected = corrected.replace(/l/g, '1');
-        corrected = corrected.replace(/Z/g, '2');
-        corrected = corrected.replace(/S/g, '5');
-        corrected = corrected.replace(/T/g, '7');
-        if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
-          mac = corrected;
-          break;
-        }
-      }
-    }
-  }
-
-  // Apply MAC prefix OUI correction
-  if (mac) {
-    mac = correctMacPrefix(mac);
-  }
-
-  // 4. Identificar CPE SN
-  let cpe_sn = '';
-  const sagemcomCpePattern = /\b([A-Z1-9][7T1IS0O]\d{6}[A-Z]\d{6})\b/i;
-  const cpeMatch = text.match(sagemcomCpePattern);
-  if (cpeMatch) {
-    cpe_sn = 'N7' + cpeMatch[1].substring(2).toUpperCase();
-  } else {
-    for (const line of lines) {
-      if (/CPE/i.test(line)) {
-        const val = getValueAfterSeparator(line);
-        if (val && val.length >= 8) {
-          cpe_sn = val.replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
-          if (cpe_sn.length >= 14) {
-            cpe_sn = 'N7' + cpe_sn.substring(2);
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  // 5. Identificar Modelo
-  let modelo = '';
-  for (const line of lines) {
-    if (/MODELO?|MOD\b/i.test(line) && !/SSID|WIFI|KEY|SENHA/i.test(line)) {
-      const val = getValueAfterSeparator(line);
-      if (val && val.length >= 3) {
-        modelo = val;
-        break;
-      }
-    }
-  }
-
-  if (!modelo) {
-    const knownModels = ['F@st 3895', 'F@ST3895', 'F670L', 'HG8145V5', 'EG8145V5', 'F6600', 'F680', 'F673', 'XC-FIT-150', 'F670', 'F601', '120-W', '5655V2', '5655 V2'];
-    for (const model of knownModels) {
-      if (upperText.includes(model.toUpperCase())) {
-        if (model.toUpperCase().includes('5655')) {
-          if (upperText.includes('ULTRAFIBRA')) {
-            modelo = 'F@ST 5655V2 TIM Ultrafibra';
-          } else {
-            modelo = 'F@ST 5655V2 Live TIM';
-          }
-        } else {
-          modelo = model;
-        }
-        break;
-      }
-    }
-  }
-
-  if (fabricante === 'SagemCOM' && !modelo) {
-    if (upperText.includes('ULTRAFIBRA')) {
-      modelo = 'F@ST 5655V2 TIM Ultrafibra';
-    } else {
-      modelo = 'F@ST 5655V2 Live TIM';
-    }
-  }
-
-  // 6. Identificar SSIDs (Wi-Fi Name)
-  let wifi_ssid = '';
-  let wifi_ssid_5g = '';
-  const ssids: string[] = [];
-
-  for (const line of lines) {
-    if (
-      (/SSID/i.test(line) || /WI-FI/i.test(line) || /WLAN/i.test(line) || /WIFI/i.test(line)) &&
-      !/KEY|SENHA|PASSWORD|PASS|PIN|ADMIN|WEP|WPA/i.test(line)
-    ) {
-      const val = getValueAfterSeparator(line);
-      if (val && val.length > 2 && val !== gpon_sn && val !== cpe_sn && !val.includes('Key')) {
-        ssids.push(val);
-      }
-    }
-  }
-
-  if (ssids.length > 0) {
-    const cleanedSsids = ssids.map(s => {
-      let clean = s;
-      const liveIndex = s.toUpperCase().indexOf('LIVE');
-      if (liveIndex !== -1) {
-        clean = s.substring(liveIndex);
-      } else {
-        const timIndex = s.toUpperCase().indexOf('TIM');
-        if (timIndex !== -1) {
-          clean = s.substring(timIndex);
-        }
-      }
-      return clean.trim();
-    }).filter(s => s.length > 0);
-
-    const index5g = cleanedSsids.findIndex(s => /5G/i.test(s));
-    if (index5g !== -1) {
-      wifi_ssid_5g = cleanedSsids[index5g];
-      const otherIndex = index5g === 0 ? 1 : 0;
-      if (cleanedSsids[otherIndex]) {
-        wifi_ssid = cleanedSsids[otherIndex];
-      }
-    } else {
-      wifi_ssid = cleanedSsids[0];
-      if (cleanedSsids[1]) {
-        wifi_ssid_5g = cleanedSsids[1];
-      }
-    }
-  }
-
-  // Se o SSID foi lido de forma bagunçada, vamos tentar reconstruir
-  if (wifi_ssid && (wifi_ssid.toUpperCase().includes('LIVE') || wifi_ssid.toUpperCase().includes('TIM'))) {
-    const candidates: string[] = [];
-    const ssidWords = (wifi_ssid + ' ' + wifi_ssid_5g).split(/[^A-Za-z0-9]+/i);
-    for (const w of ssidWords) {
-      const upperW = w.toUpperCase();
-      if (upperW.length === 4 && upperW !== 'LIVE' && upperW !== 'WIFI' && upperW !== 'WLAN' && upperW !== 'SSID' && upperW !== 'MODE') {
-        candidates.push(upperW);
-      }
-    }
-    
-    if (candidates.length > 0) {
-      let hexCode = candidates[0];
-      hexCode = hexCode.replace(/G/g, '6');
-      hexCode = hexCode.replace(/O/g, '0');
-      hexCode = hexCode.replace(/I/g, '1');
-      hexCode = hexCode.replace(/L/g, '1');
-      hexCode = hexCode.replace(/l/g, '1');
-      hexCode = hexCode.replace(/Z/g, '2');
-      hexCode = hexCode.replace(/S/g, '5');
-      hexCode = hexCode.replace(/T/g, '7');
-      
-      if (/^[0-9A-F]{4}$/.test(hexCode)) {
-        if (modelo.includes('Ultrafibra')) {
-          wifi_ssid = `TIM_ULTRAFIBRA_${hexCode}`;
-          wifi_ssid_5g = '';
-        } else {
-          wifi_ssid = `LIVE TIM_${hexCode}_2G`;
-          wifi_ssid_5g = `LIVE TIM_${hexCode}_5G`;
-        }
-      }
-    }
-  }
-
-  // Tentar reconstruir o MAC se ele estiver ausente ou incompleto usando os dados do SSID
-  if (!mac || mac.length < 12) {
-    let ssidHex = '';
-    const ssidToUse = wifi_ssid || wifi_ssid_5g;
-    if (ssidToUse) {
-      const match = ssidToUse.toUpperCase().match(/(?:LIVE TIM_|TIM_ULTRAFIBRA_|TIM_ULTRAFIBRA)([0-9A-F]{4})/i);
-      if (match && match[1]) {
-        ssidHex = match[1];
-      }
-    }
-    
-    if (ssidHex) {
-      let expectedLast4 = '';
-      const isLiveTim = ssidToUse.toUpperCase().includes('LIVE');
-      const isUltrafibra = ssidToUse.toUpperCase().includes('ULTRAFIBRA');
-      const last4Int = parseInt(ssidHex, 16);
-      
-      if (!isNaN(last4Int)) {
-        if (isLiveTim) {
-          const macInt = (last4Int + 3) % 0x10000;
-          expectedLast4 = macInt.toString(16).toUpperCase().padStart(4, '0');
-        } else if (isUltrafibra) {
-          const macInt = (last4Int + 7) % 0x10000;
-          expectedLast4 = macInt.toString(16).toUpperCase().padStart(4, '0');
-        } else {
-          expectedLast4 = ssidHex;
-        }
-      }
-      
-      if (expectedLast4) {
-        const macPrefixes = KNOWN_SAGEMCOM_OUIS;
-        const allWords = text.match(/\b[0-9A-Z]{6,16}\b/ig) || [];
-        for (const w of allWords) {
-          let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
-          if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
-          else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
-          
-          for (const prefix of macPrefixes) {
-            if (cleanW.startsWith(prefix)) {
-              if (cleanW.length === 8) {
-                mac = cleanW + expectedLast4;
-                break;
-              }
-              if (cleanW.length === 10) {
-                if (cleanW.endsWith(expectedLast4.substring(0, 2))) {
-                  mac = cleanW.substring(0, 8) + expectedLast4;
-                } else {
-                  mac = cleanW.substring(0, 8) + expectedLast4;
-                }
-                break;
-              }
-            }
-          }
-          if (mac && mac.length === 12) break;
-        }
-      }
-    }
-  }
-
-  // Apply MAC SSID Rules if MAC is present
-  if (mac && (!wifi_ssid || !wifi_ssid_5g)) {
-    const cleanMac = mac.replace(/[^0-9A-F]/ig, '').toUpperCase();
-    if (cleanMac.length === 12) {
-      const last4Hex = cleanMac.slice(-4);
-      const last4Int = parseInt(last4Hex, 16);
-      if (!isNaN(last4Int)) {
-        const modelUpper = (modelo || '').toUpperCase();
-        
-        if (modelUpper.includes('KAON')) {
-          wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
-          wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
-        } else if (modelUpper.includes('5655V2') || modelUpper.includes('5655 V2')) {
-          if (modelUpper.includes('ULTRAFIBRA')) {
-            const sub7Int = (last4Int - 7 + 0x10000) % 0x10000;
-            const sub7Hex = sub7Int.toString(16).toUpperCase().padStart(4, '0');
-            wifi_ssid = `TIM_ULTRAFIBRA_${sub7Hex}`;
-            wifi_ssid_5g = '';
-          } else {
-            const sub3Int = (last4Int - 3 + 0x10000) % 0x10000;
-            const sub3Hex = sub3Int.toString(16).toUpperCase().padStart(4, '0');
-            wifi_ssid = `LIVE TIM_${sub3Hex}_2G`;
-            wifi_ssid_5g = `LIVE TIM_${sub3Hex}_5G`;
-          }
-        }
-      }
-    }
-  }
-
-  // 7. Identificar Senha do Wi-Fi (Wi-Fi Key / WPA Key)
-  let wifi_key = '';
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const upperLine = line.toUpperCase();
-    if (
-      (upperLine.includes('KEY') || upperLine.includes('WPA') || (upperLine.includes('SENHA') && !upperLine.includes('ADMIN') && !upperLine.includes('WEB'))) &&
-      !upperLine.includes('USER') && !upperLine.includes('PASSWORD')
-    ) {
-      const parts = line.split(/[:=;]/);
-      let val = parts[parts.length - 1].trim();
-      val = val.replace(/[^A-Za-z0-9]/g, '');
-      
-      if (val.length >= 8 && val.length <= 12) {
-        wifi_key = val.toLowerCase();
-        break;
-      }
-      
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1];
-        let nextLineCleaned = nextLine.replace(/[^A-Za-z0-9\s]/g, '').trim();
-        const nextLineWords = nextLineCleaned.split(/\s+/);
-        
-        let foundWord = '';
-        for (const word of nextLineWords) {
-          if (word.length >= 8 && word.length <= 12) {
-            foundWord = word.toLowerCase();
-            break;
-          }
-        }
-        
-        if (foundWord) {
-          wifi_key = foundWord;
-          break;
-        }
-        
-        const concatenated = nextLineWords.join('');
-        if (concatenated.length >= 8 && concatenated.length <= 12) {
-          wifi_key = concatenated.toLowerCase();
-          break;
-        }
-      }
-    }
-  }
-
-  // Fallback para Wi-Fi Key com regex de exclusão inteligente
-  if (!wifi_key) {
-    const rejectRegex = /f[a@e]st|s[ag][eg]m|s[ac][eg]m|sacem|anatel|analel|cpe|gpon|mac|user|pass|admin|web|tim|live|equip|squp|preju|interf|sist|prod|bras|indus|regul|reimp|oper|aces|conf|log/i;
-    const words = text.match(/\b[A-Za-z0-9]{8,12}\b/g) || [];
-    for (const w of words) {
-      const lowerW = w.toLowerCase();
-      const isMacPrefix = ['8020da', 'd87d7f', '700b01', '786559', '346ba6', '34db1c', 'd8d7f7'].some(p => lowerW.startsWith(p));
-      
-      if (
-        lowerW !== gpon_sn.toLowerCase() &&
-        lowerW !== cpe_sn.toLowerCase() &&
-        lowerW !== mac.toLowerCase() &&
-        !lowerW.startsWith('smbs') &&
-        !lowerW.startsWith('smb8') &&
-        !isMacPrefix &&
-        !rejectRegex.test(lowerW)
-      ) {
-        if (/^[a-z0-9]{10}$/.test(lowerW)) {
-          wifi_key = lowerW;
-          break;
-        }
-      }
-    }
-  }
-
-  // 8. Identificar Usuário e Senha de Administração WEB
-  let usuario = '';
-  let senha = '';
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const upperLine = line.toUpperCase();
-    if (/USER|USUARIO|USERNAME/i.test(line) && !/WIFI|SSID|KEY/i.test(line)) {
-      const val = getValueAfterSeparator(line);
-      if (val && val.length >= 3 && val.length <= 15) {
-        usuario = val;
-      }
-    }
-    if (
-      (upperLine.includes('PASSWORD') || upperLine.includes('SENHA')) &&
-      !upperLine.includes('WIFI') && !upperLine.includes('KEY') && !upperLine.includes('WPA')
-    ) {
-      const parts = line.split(/[:=;]/);
-      let val = parts[parts.length - 1].trim();
-      val = val.replace(/[^a-zA-Z0-9]/g, '');
-      if (val && val.length >= 4 && val.length <= 8) {
-        senha = val.toLowerCase();
-      }
-    }
-  }
-
-  if (!senha) {
-    const words = text.match(/\b[a-z0-9]{5}\b/g) || [];
-    for (const w of words) {
-      if (w !== usuario && w !== wifi_key) {
-        senha = w;
-      }
-    }
-  }
-
-  if (!usuario && fabricante === 'SagemCOM') usuario = 'admin';
-
-  return {
-    fabricante,
-    modelo,
-    cpe_sn,
-    gpon_sn,
-    mac,
-    wifi_ssid,
-    wifi_ssid_5g,
-    wifi_key,
-    usuario,
-    senha,
-    reimpressa: 'nao'
-  };
-}
-
-function getValueAfterSeparator(line: string): string {
-  const index = line.search(/[:=;]/);
-  if (index !== -1) {
-    return line.substring(index + 1).trim();
-  }
-  return '';
-}
-
 app.post('/api/scan-label', async (req, res) => {
-  let worker: any = null;
-  let text = '';
   let scanResult: any = null;
-  let scanSource = 'local-ocr';
+  const scanSource = 'gemini-vision';
 
   try {
     const { image } = req.body;
 
     if (!image) {
       return res.status(400).json({ error: 'Nenhuma imagem foi fornecida no corpo da requisição.' });
+    }
+
+    if (!ai) {
+      return res.status(503).json({
+        success: false,
+        error: 'Serviço temporariamente indisponível. A chave de API do Gemini (GEMINI_API_KEY) não está configurada no servidor. O OCR local foi desativado.'
+      });
     }
 
     let mimeType = 'image/jpeg';
@@ -756,11 +237,8 @@ app.post('/api/scan-label', async (req, res) => {
       }
     }
 
-    // 1. Tentar reconhecimento com Gemini Vision se o cliente estiver ativo
-    if (ai) {
-      try {
-        console.log('Iniciando processamento com Gemini Vision API...');
-        const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
+    console.log('Iniciando processamento com Gemini Vision API...');
+    const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM).
 2. modelo: Modelo exato da ONU (ex: F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.).
@@ -774,128 +252,92 @@ Siga atentamente as instruções abaixo para cada campo:
 10. senha: Senha padrão de acesso web (geralmente curta, minúsculas/números).
 11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data
-              }
-            },
-            prompt
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                fabricante: { type: Type.STRING },
-                modelo: { type: Type.STRING },
-                cpe_sn: { type: Type.STRING },
-                gpon_sn: { type: Type.STRING },
-                mac: { type: Type.STRING },
-                wifi_ssid: { type: Type.STRING },
-                wifi_ssid_5g: { type: Type.STRING },
-                wifi_key: { type: Type.STRING },
-                usuario: { type: Type.STRING },
-                senha: { type: Type.STRING },
-                reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
-              },
-              required: ['gpon_sn']
-            }
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data
           }
-        });
-
-        const responseText = response.text;
-        console.log('--- Resposta bruta do Gemini ---');
-        console.log(responseText);
-        console.log('--------------------------------');
-
-        if (responseText) {
-          const geminiData = JSON.parse(responseText);
-          
-          // Normalização dos dados extraídos pelo Gemini
-          let fabricanteNorm = geminiData.fabricante || 'Outro';
-          const upperMfg = fabricanteNorm.toUpperCase();
-          if (upperMfg.includes('HUAWEI')) fabricanteNorm = 'Huawei';
-          else if (upperMfg.includes('ZTE')) fabricanteNorm = 'ZTE';
-          else if (upperMfg.includes('FIBERHOME')) fabricanteNorm = 'FiberHome';
-          else if (upperMfg.includes('INTELBRAS')) fabricanteNorm = 'Intelbras';
-          else if (upperMfg.includes('NOKIA')) fabricanteNorm = 'Nokia';
-          else if (upperMfg.includes('ALCATEL')) fabricanteNorm = 'Alcatel';
-          else if (upperMfg.includes('SAGEMCOM') || upperMfg.includes('SAGEM') || upperMfg.includes('SMBS') || upperMfg.includes('SMB8')) fabricanteNorm = 'SagemCOM';
-
-          let gponNorm = (geminiData.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-          if (gponNorm.startsWith('SMB8')) {
-            gponNorm = 'SMBS' + gponNorm.substring(4);
-          }
-
-          let macNorm = (geminiData.mac || '').replace(/[^0-9A-F]/ig, '').toUpperCase();
-          if (macNorm) {
-            macNorm = correctMacPrefix(macNorm);
-          }
-
-          let cpeNorm = (geminiData.cpe_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
-          if (cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
-            cpeNorm = 'N7' + cpeNorm.substring(2);
-          }
-
-          scanResult = {
-            fabricante: fabricanteNorm,
-            modelo: geminiData.modelo || '',
-            cpe_sn: cpeNorm,
-            gpon_sn: gponNorm,
-            mac: macNorm,
-            wifi_ssid: geminiData.wifi_ssid || '',
-            wifi_ssid_5g: geminiData.wifi_ssid_5g || '',
-            wifi_key: (geminiData.wifi_key || '').toLowerCase(),
-            usuario: geminiData.usuario || '',
-            senha: geminiData.senha || '',
-            reimpressa: geminiData.reimpressa || 'nao'
-          };
-
-          if (scanResult.gpon_sn) {
-            scanSource = 'gemini-vision';
-            console.log('Dados extraídos com sucesso via Gemini Vision:', scanResult);
-          }
+        },
+        prompt
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            fabricante: { type: Type.STRING },
+            modelo: { type: Type.STRING },
+            cpe_sn: { type: Type.STRING },
+            gpon_sn: { type: Type.STRING },
+            mac: { type: Type.STRING },
+            wifi_ssid: { type: Type.STRING },
+            wifi_ssid_5g: { type: Type.STRING },
+            wifi_key: { type: Type.STRING },
+            usuario: { type: Type.STRING },
+            senha: { type: Type.STRING },
+            reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
+          },
+          required: ['gpon_sn']
         }
-      } catch (geminiError: any) {
-        console.error('Falha no processamento com Gemini Vision API, executando fallback local...', geminiError);
-        lastScanErrors.push({
-          timestamp: new Date().toISOString(),
-          ocrError: `Falha Gemini Vision: ${geminiError.message || String(geminiError)}`
-        });
       }
+    });
+
+    const responseText = response.text;
+    console.log('--- Resposta bruta do Gemini ---');
+    console.log(responseText);
+    console.log('--------------------------------');
+
+    if (!responseText) {
+      throw new Error('A API do Gemini retornou uma resposta vazia.');
     }
 
-    // 2. Fallback para Tesseract OCR Local se o Gemini falhou ou não está configurado
-    if (!scanResult || !scanResult.gpon_sn) {
-      console.log('Iniciando processamento OCR local com Tesseract.js (fallback)...');
-      
-      // Inicializa o Tesseract Worker localmente com idioma inglês
-      worker = await createWorker('eng');
-      
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-      
-      // Executa o reconhecimento óptico de caracteres
-      const recognizeResult = await worker.recognize(imageBuffer);
-      text = recognizeResult.data.text;
-      
-      console.log('--- Texto bruto extraído pelo OCR Local ---');
-      console.log(text);
-      console.log('-------------------------------------------');
+    const geminiData = JSON.parse(responseText);
+    
+    // Normalização dos dados extraídos pelo Gemini
+    let fabricanteNorm = geminiData.fabricante || 'Outro';
+    const upperMfg = fabricanteNorm.toUpperCase();
+    if (upperMfg.includes('HUAWEI')) fabricanteNorm = 'Huawei';
+    else if (upperMfg.includes('ZTE')) fabricanteNorm = 'ZTE';
+    else if (upperMfg.includes('FIBERHOME')) fabricanteNorm = 'FiberHome';
+    else if (upperMfg.includes('INTELBRAS')) fabricanteNorm = 'Intelbras';
+    else if (upperMfg.includes('NOKIA')) fabricanteNorm = 'Nokia';
+    else if (upperMfg.includes('ALCATEL')) fabricanteNorm = 'Alcatel';
+    else if (upperMfg.includes('SAGEMCOM') || upperMfg.includes('SAGEM') || upperMfg.includes('SMBS') || upperMfg.includes('SMB8')) fabricanteNorm = 'SagemCOM';
 
-      // Executa o parser baseado em expressões regulares nos dados reconhecidos
-      scanResult = parseOcrText(text);
-      scanSource = 'local-ocr';
-      
-      console.log('Dados extraídos com sucesso via OCR Local:', scanResult);
+    let gponNorm = (geminiData.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    if (gponNorm.startsWith('SMB8')) {
+      gponNorm = 'SMBS' + gponNorm.substring(4);
     }
 
-    // Validação mínima: O GPON SN é obrigatório no fluxo da aplicação
+    let macNorm = (geminiData.mac || '').replace(/[^0-9A-F]/ig, '').toUpperCase();
+    if (macNorm) {
+      macNorm = correctMacPrefix(macNorm);
+    }
+
+    let cpeNorm = (geminiData.cpe_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
+    if (cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
+      cpeNorm = 'N7' + cpeNorm.substring(2);
+    }
+
+    scanResult = {
+      fabricante: fabricanteNorm,
+      modelo: geminiData.modelo || '',
+      cpe_sn: cpeNorm,
+      gpon_sn: gponNorm,
+      mac: macNorm,
+      wifi_ssid: geminiData.wifi_ssid || '',
+      wifi_ssid_5g: geminiData.wifi_ssid_5g || '',
+      wifi_key: (geminiData.wifi_key || '').toLowerCase(),
+      usuario: geminiData.usuario || '',
+      senha: geminiData.senha || '',
+      reimpressa: geminiData.reimpressa || 'nao'
+    };
+
     if (!scanResult.gpon_sn) {
-      throw new Error('Não foi possível identificar o GPON Serial Number (S/N) na imagem da etiqueta. Certifique-se de que a foto está nítida e alinhada.');
+      throw new Error('Não foi possível identificar o GPON Serial Number (S/N) na imagem da etiqueta.');
     }
 
     // Converter a resposta da reimpressão ("sim"/"nao") para boolean
@@ -925,7 +367,7 @@ Siga atentamente as instruções abaixo para cada campo:
     lastScans.push({
       timestamp: new Date().toISOString(),
       success: true,
-      rawText: text || `Processado por ${scanSource}`,
+      rawText: responseText,
       parsed: scanResult,
       existsInDb,
       scanSource
@@ -953,7 +395,7 @@ Siga atentamente as instruções abaixo para cada campo:
     lastScans.push({
       timestamp: new Date().toISOString(),
       success: false,
-      rawText: typeof text !== 'undefined' && text ? text : 'Indefinido (erro antes/durante OCR)',
+      rawText: 'Erro de processamento (Gemini)',
       error: ocrError.message || String(ocrError),
       scanSource
     });
@@ -961,18 +403,9 @@ Siga atentamente as instruções abaixo para cada campo:
 
     return res.status(502).json({
       success: false,
-      error: ocrError.message || 'Falha ao realizar a leitura da etiqueta.',
+      error: ocrError.message || 'Falha ao realizar a leitura da etiqueta com Gemini Vision.',
       details: [ocrError.message || String(ocrError)]
     });
-  } finally {
-    if (worker) {
-      try {
-        await worker.terminate();
-        console.log('Tesseract Worker terminado com sucesso.');
-      } catch (termErr) {
-        console.error('Erro ao finalizar o Tesseract Worker:', termErr);
-      }
-    }
   }
 });
 
