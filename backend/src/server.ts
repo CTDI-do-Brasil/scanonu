@@ -160,20 +160,19 @@ function parseOcrText(text: string): any {
   else if (upperText.includes('INTELBRAS')) fabricante = 'Intelbras';
   else if (upperText.includes('NOKIA')) fabricante = 'Nokia';
   else if (upperText.includes('ALCATEL')) fabricante = 'Alcatel';
+  else if (upperText.includes('SAGEMCOM') || upperText.includes('SAGEM')) fabricante = 'Sagemcom';
 
   // 2. Identificar GPON SN
   let gpon_sn = '';
   
   const gponPatterns = [
-    /\b(ZTEG[0-9A-Z]{8})\b/i,
-    /\b(FHTT[0-9A-Z]{8})\b/i,
-    /\b(ALCL[0-9A-Z]{8})\b/i,
-    /\b(HWTC[0-9A-Z]{8})\b/i,
-    /\b(48575434[0-9A-Z]{8})\b/i, // Huawei hex para HWTC
+    /\b(SMBS[0-9A-Z]{8})\b/i,     // Sagemcom
+    /\b(ZTEG[0-9A-Z]{8})\b/i,     // ZTE
+    /\b(FHTT[0-9A-Z]{8})\b/i,     // FiberHome
+    /\b(ALCL[0-9A-Z]{8})\b/i,     // Nokia/Alcatel
+    /\b(HWTC[0-9A-Z]{8})\b/i,     // Huawei
+    /\b(48575434[0-9A-Z]{8})\b/i, // Huawei hex
     /\b(ELFC[0-9A-Z]{8})\b/i,     // Intelbras
-    /\bGPON\s*(?:S\/N|SN)?\s*[:=;-]?\s*([A-Z0-9]{12,16})\b/i,
-    /\bS\/N\s*[:=;-]?\s*([A-Z0-9]{12,16})\b/i,
-    /\bSN\s*[:=;-]?\s*([A-Z0-9]{12,16})\b/i,
   ];
 
   for (const pattern of gponPatterns) {
@@ -189,25 +188,30 @@ function parseOcrText(text: string): any {
     const words = text.match(/\b[A-Z0-9]{12}\b/ig) || [];
     for (const word of words) {
       const upperWord = word.toUpperCase();
-      if (/^(ZTEG|FHTT|ALCL|HWTC|ELFC)/i.test(upperWord)) {
+      if (/^(SMBS|ZTEG|FHTT|ALCL|HWTC|ELFC)/i.test(upperWord)) {
         gpon_sn = upperWord;
         break;
       }
     }
   }
 
+  // Se o GPON SN começa com SMBS, o fabricante é Sagemcom
+  if (gpon_sn.startsWith('SMBS')) {
+    fabricante = 'Sagemcom';
+  }
+
   // 3. Identificar MAC
   let mac = '';
-  const macPattern = /\b([0-9A-F]{2}[:;-]){5}([0-9A-F]{2})\b/i;
+  const macPattern = /\b([0-9A-F]{2}[:.-]){5}([0-9A-F]{2})\b/i;
   const macMatch = text.match(macPattern);
   if (macMatch) {
-    mac = macMatch[0].replace(/;/g, ':').toUpperCase();
+    mac = macMatch[0].replace(/[-.]/g, ':').toUpperCase();
   } else {
     // Tenta encontrar uma palavra de 12 caracteres hexadecimais (excluindo o GPON)
     const hexWords = text.match(/\b[0-9A-F]{12}\b/ig) || [];
     for (const word of hexWords) {
       const upperWord = word.toUpperCase();
-      if (upperWord !== gpon_sn) {
+      if (upperWord !== gpon_sn && !upperWord.startsWith('SMBS') && !upperWord.startsWith('ZTEG') && !upperWord.startsWith('FHTT')) {
         // Formatar como XX:XX:XX:XX:XX:XX
         mac = upperWord.match(/.{1,2}/g)?.join(':') || upperWord;
         break;
@@ -215,76 +219,98 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // 4. Identificar Modelo
-  let modelo = '';
-  const modelPattern = /\b(?:MODELO?|MOD)\s*[:=;-]?\s*([A-Z0-9_-]{4,20})\b/i;
-  const modelMatch = text.match(modelPattern);
-  if (modelMatch && modelMatch[1]) {
-    modelo = modelMatch[1].trim();
+  // 4. Identificar CPE SN (geralmente começa com N e tem 12-14 caracteres, ex: N7191434Y002263)
+  let cpe_sn = '';
+  const sagemcomCpePattern = /\b(N\d{7}[A-Z]\d{6})\b/i;
+  const cpeMatch = text.match(sagemcomCpePattern);
+  if (cpeMatch) {
+    cpe_sn = cpeMatch[1].toUpperCase();
   } else {
-    const knownModels = ['F670L', 'HG8145V5', 'EG8145V5', 'F6600', 'F680', 'F673', 'XC-FIT-150', 'F670', 'F601', '120-W'];
+    for (const line of lines) {
+      if (/CPE\s*S\/?N|CPE\s*SN|PRODUCT\s*ID|PROD\s*ID/i.test(line)) {
+        const val = getValueAfterSeparator(line);
+        if (val && val.length >= 8) {
+          cpe_sn = val.replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
+          break;
+        }
+      }
+    }
+  }
+
+  // 5. Identificar Modelo
+  let modelo = '';
+  for (const line of lines) {
+    if (/MODELO?|MOD\b/i.test(line) && !/SSID|WIFI|KEY|SENHA/i.test(line)) {
+      const val = getValueAfterSeparator(line);
+      if (val && val.length >= 3) {
+        modelo = val;
+        break;
+      }
+    }
+  }
+
+  if (!modelo) {
+    const knownModels = ['F@st 3895', 'F@ST3895', 'F670L', 'HG8145V5', 'EG8145V5', 'F6600', 'F680', 'F673', 'XC-FIT-150', 'F670', 'F601', '120-W'];
     for (const model of knownModels) {
-      if (upperText.includes(model)) {
+      if (upperText.includes(model.toUpperCase())) {
         modelo = model;
         break;
       }
     }
   }
 
-  // 5. Identificar SSID Wi-Fi
+  // 6. Identificar SSIDs (Wi-Fi Name)
   let wifi_ssid = '';
   let wifi_ssid_5g = '';
-  const matchedSSIDs: string[] = [];
+  const ssids: string[] = [];
 
   for (const line of lines) {
-    if (/SSID/i.test(line) || /WLAN/i.test(line) || /WI-FI/i.test(line)) {
-      const parts = line.split(/[:=;-]/);
-      if (parts.length > 1) {
-        const val = parts.slice(1).join(':').trim();
-        if (val.length > 2 && !matchedSSIDs.includes(val)) {
-          matchedSSIDs.push(val);
-        }
+    if (
+      (/SSID/i.test(line) || /WI-FI/i.test(line) || /WLAN/i.test(line) || /WIFI/i.test(line)) &&
+      !/KEY|SENHA|PASSWORD|PASS|PIN|ADMIN|WEP|WPA/i.test(line)
+    ) {
+      const val = getValueAfterSeparator(line);
+      if (val && val.length > 2 && val !== gpon_sn && val !== cpe_sn && !val.includes('Key')) {
+        ssids.push(val);
       }
     }
   }
 
-  if (matchedSSIDs.length > 0) {
-    const g5Index = matchedSSIDs.findIndex(s => /5G/i.test(s));
-    if (g5Index !== -1) {
-      wifi_ssid_5g = matchedSSIDs[g5Index];
-      const otherIndex = g5Index === 0 ? 1 : 0;
-      if (matchedSSIDs[otherIndex]) {
-        wifi_ssid = matchedSSIDs[otherIndex];
+  if (ssids.length > 0) {
+    const index5g = ssids.findIndex(s => /5G/i.test(s));
+    if (index5g !== -1) {
+      wifi_ssid_5g = ssids[index5g];
+      const otherIndex = index5g === 0 ? 1 : 0;
+      if (ssids[otherIndex]) {
+        wifi_ssid = ssids[otherIndex];
       }
     } else {
-      wifi_ssid = matchedSSIDs[0];
-      if (matchedSSIDs[1]) {
-        wifi_ssid_5g = matchedSSIDs[1];
+      wifi_ssid = ssids[0];
+      if (ssids[1]) {
+        wifi_ssid_5g = ssids[1];
       }
     }
   }
 
-  // 6. Identificar Senha do Wi-Fi
+  // 7. Identificar Senha do Wi-Fi (Wi-Fi Key / WPA Key)
   let wifi_key = '';
-  const wifiKeyPatterns = [
-    /(?:WPA\s*KEY|WPA\s*PASSWORD|WPA\/WPA2\s*KEY|SECURITY\s*KEY|WPA\s*SENHA|SENHA\s*WIFI|WIFI\s*KEY)\s*[:=;-]?\s*([A-Z0-9]{8,16})\b/i,
-  ];
-
-  for (const pattern of wifiKeyPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      wifi_key = match[1].trim();
-      break;
+  for (const line of lines) {
+    if (/KEY|WPA|SENHA\s*WIFI|WIFI\s*KEY|PASSWORD\s*WIFI/i.test(line) && !/USER|ADMIN|LOGIN|SSID|NAME/i.test(line)) {
+      const val = getValueAfterSeparator(line);
+      if (val && val.length >= 5 && val.length <= 20) {
+        wifi_key = val;
+        break;
+      }
     }
   }
 
   if (!wifi_key) {
     for (const line of lines) {
-      if (/(?:KEY|WPA|SENHA|PASS)/i.test(line)) {
-        const parts = line.split(/[:=;-]/);
+      if (/WPA|KEY/i.test(line)) {
+        const parts = line.split(/[:=;]/);
         if (parts.length > 1) {
           const val = parts[1].trim();
-          if (/^[A-Z0-9]{8,10}$/i.test(val)) {
+          if (/^[A-Za-z0-9]{8,12}$/.test(val)) {
             wifi_key = val;
             break;
           }
@@ -293,48 +319,26 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // 7. Identificar Usuário e Senha de Administração WEB
+  // 8. Identificar Usuário e Senha de Administração WEB
   let usuario = '';
   let senha = '';
-  const userPatterns = [
-    /(?:USER|USUARIO|USERNAME|USER\s*NAME)\s*[:=;-]?\s*([A-Z0-9_-]{3,15})\b/i
-  ];
-  const passPatterns = [
-    /(?:PASSWORD|PASS|SENHA\s*WEB|SENHA\s*DE\s*ACESSO|WEB\s*PASSWORD)\s*[:=;-]?\s*([A-Z0-9_-]{4,15})\b/i
-  ];
-
-  for (const pattern of userPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      usuario = match[1].trim();
-      break;
+  
+  for (const line of lines) {
+    if (/USER|USUARIO|USERNAME/i.test(line) && !/WIFI|SSID|KEY/i.test(line)) {
+      const val = getValueAfterSeparator(line);
+      if (val && val.length >= 3 && val.length <= 15) {
+        usuario = val;
+      }
+    }
+    if (/PASSWORD|SENHA/i.test(line) && !/WIFI|SSID|KEY|WPA/i.test(line)) {
+      const val = getValueAfterSeparator(line);
+      if (val && val.length >= 4 && val.length <= 15) {
+        senha = val;
+      }
     }
   }
 
-  for (const pattern of passPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      senha = match[1].trim();
-      break;
-    }
-  }
-
-  if (!usuario) {
-    if (fabricante === 'Huawei' || fabricante === 'ZTE') usuario = 'admin';
-  }
-
-  // 8. Identificar CPE SN
-  let cpe_sn = '';
-  const cpePatterns = [
-    /\b(?:CPE\s*S\/N|CPE\s*SN|PROD\s*ID|PRODUCT\s*ID)\s*[:=;-]?\s*([A-Z0-9]{12,20})\b/i
-  ];
-  for (const pattern of cpePatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      cpe_sn = match[1].trim();
-      break;
-    }
-  }
+  if (!usuario && fabricante === 'Sagemcom') usuario = 'admin';
 
   return {
     fabricante,
@@ -349,6 +353,14 @@ function parseOcrText(text: string): any {
     senha,
     reimpressa: 'nao'
   };
+}
+
+function getValueAfterSeparator(line: string): string {
+  const index = line.search(/[:=;]/);
+  if (index !== -1) {
+    return line.substring(index + 1).trim();
+  }
+  return '';
 }
 
 app.post('/api/scan-label', async (req, res) => {
