@@ -9,4 +9,11 @@ public/dist
 .vscode/
 .idea/
 .DS_Store
-Thumbs.db
+
+# Pacotes de deploy e scripts locais
+scanonu.zip
+scanonu.tar
+criar_pacote.ps1
+*.traineddata
+temp_deploy/
+backend/public/assets/

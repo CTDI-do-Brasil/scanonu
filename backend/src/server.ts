@@ -158,7 +158,46 @@ app.get('/api/debug-scans', (req, res) => {
 });
 
 // Função de parsing baseada em RegEx para extrair dados estruturados do OCR
-function parseOcrText(text: string): any {
+const KNOWN_SAGEMCOM_OUIS = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6', '34DB1C', 'D8D7F7'];
+
+function correctMacPrefix(mac: string): string {
+  const cleanMac = mac.replace(/[^0-9A-F]/ig, '').toUpperCase();
+  if (cleanMac.length !== 12) return mac;
+  
+  const prefix = cleanMac.substring(0, 6);
+  const rest = cleanMac.substring(6);
+  
+  if (KNOWN_SAGEMCOM_OUIS.includes(prefix)) {
+    return cleanMac;
+  }
+  
+  let bestOui = prefix;
+  let minDistance = 999;
+  
+  for (const oui of KNOWN_SAGEMCOM_OUIS) {
+    let dist = 0;
+    for (let i = 0; i < 6; i++) {
+      if (prefix[i] !== oui[i]) {
+        dist++;
+      }
+    }
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestOui = oui;
+    }
+  }
+  
+  if (minDistance <= 1) {
+    console.log(`[MAC OUI Correction] Corrected prefix ${prefix} to ${bestOui}`);
+    return bestOui + rest;
+  }
+  
+  return cleanMac;
+}
+
+function parseOcrText(rawText: string): any {
+  // Normalize accents/diacritics
+  const text = rawText.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const upperText = text.toUpperCase();
 
@@ -170,12 +209,13 @@ function parseOcrText(text: string): any {
   else if (upperText.includes('INTELBRAS')) fabricante = 'Intelbras';
   else if (upperText.includes('NOKIA')) fabricante = 'Nokia';
   else if (upperText.includes('ALCATEL')) fabricante = 'Alcatel';
-  else if (upperText.includes('SAGEMCOM') || upperText.includes('SAGEM') || upperText.includes('SMBS')) fabricante = 'SagemCOM';
+  else if (upperText.includes('SAGEMCOM') || upperText.includes('SAGEM') || upperText.includes('SMBS') || upperText.includes('SMB8')) fabricante = 'SagemCOM';
 
   // 2. Identificar GPON SN
   let gpon_sn = '';
   const gponPatterns = [
     /\b(SMBS[0-9A-Z]{8})\b/i,     // Sagemcom
+    /\b(SMB8[0-9A-Z]{8})\b/i,     // Sagemcom typo SMB8
     /\b(ZTEG[0-9A-Z]{8})\b/i,     // ZTE
     /\b(FHTT[0-9A-Z]{8})\b/i,     // FiberHome
     /\b(ALCL[0-9A-Z]{8})\b/i,     // Nokia/Alcatel
@@ -194,14 +234,14 @@ function parseOcrText(text: string): any {
 
   // Fallback for GPON SN
   if (!gpon_sn) {
-    const laxMatch = text.match(/\b(SMBS|ZTEG|FHTT|ALCL|HWTC|ELFC)[0-9A-Z]{7,9}\b/i);
+    const laxMatch = text.match(/\b(SMBS|SMB8|ZTEG|FHTT|ALCL|HWTC|ELFC)[0-9A-Z]{7,9}\b/i);
     if (laxMatch) {
       gpon_sn = laxMatch[0].toUpperCase();
     }
   }
 
   // Correção de erros comuns de OCR nos GPON SNs e identificação de fabricante
-  const gponPrefixes = ['SMBS', 'ZTEG', 'FHTT', 'ALCL', 'HWTC', 'ELFC', '48575434'];
+  const gponPrefixes = ['SMBS', 'SMB8', 'ZTEG', 'FHTT', 'ALCL', 'HWTC', 'ELFC', '48575434'];
   let matchedPrefix = '';
   for (const p of gponPrefixes) {
     if (gpon_sn.toUpperCase().startsWith(p)) {
@@ -211,7 +251,12 @@ function parseOcrText(text: string): any {
   }
 
   if (matchedPrefix) {
-    fabricante = matchedPrefix === 'SMBS' ? 'SagemCOM' : 
+    let actualPrefix = matchedPrefix;
+    if (matchedPrefix === 'SMB8') {
+      actualPrefix = 'SMBS';
+    }
+    
+    fabricante = actualPrefix === 'SMBS' ? 'SagemCOM' : 
                  matchedPrefix === 'ZTEG' ? 'ZTE' :
                  matchedPrefix === 'FHTT' ? 'FiberHome' :
                  matchedPrefix === 'ALCL' ? 'Nokia' :
@@ -227,17 +272,15 @@ function parseOcrText(text: string): any {
     rest = rest.replace(/Z/g, '2');
     rest = rest.replace(/T/g, '7');
     
-    // Se o tamanho total for 13 e começar com zero extra
     if (rest.length === 9 && rest.startsWith('0000')) {
       rest = rest.substring(1);
     }
     
-    gpon_sn = matchedPrefix + rest;
+    gpon_sn = actualPrefix + rest;
   }
 
   // 3. Identificar MAC (clean 12-char hex string)
   let mac = '';
-  // Padrão que permite letras A-Z (para aceitar erros de OCR como G/S/T/Z) e separadores como espaço, ponto, dois pontos, ponto e vírgula e hífen
   const macPattern = /\b([0-9A-Z]{2}[ :.;-]){5}([0-9A-Z]{2})\b/i;
   const macMatch = text.match(macPattern);
   if (macMatch) {
@@ -259,14 +302,13 @@ function parseOcrText(text: string): any {
   if (!mac) {
     for (const line of lines) {
       if (/MAC/i.test(line)) {
-        // Permitir palavras de 10 a 16 caracteres para capturar MACs com prefixos ou sufixos
         const words = line.match(/\b[0-9A-Z]{10,16}\b/ig) || [];
         for (const w of words) {
           let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
           if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
           else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
           
-          if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS')) {
+          if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS') && !cleanW.startsWith('SMB8')) {
             let corrected = cleanW;
             corrected = corrected.replace(/G/g, '6');
             corrected = corrected.replace(/O/g, '0');
@@ -287,7 +329,6 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // Fallback geral aprimorado para MAC (palavras de 10 a 16 caracteres)
   if (!mac) {
     const words = text.match(/\b[0-9A-Z]{10,16}\b/ig) || [];
     for (const w of words) {
@@ -295,7 +336,7 @@ function parseOcrText(text: string): any {
       if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
       else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
 
-      if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS')) {
+      if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS') && !cleanW.startsWith('SMB8')) {
         let corrected = cleanW;
         corrected = corrected.replace(/G/g, '6');
         corrected = corrected.replace(/O/g, '0');
@@ -313,19 +354,24 @@ function parseOcrText(text: string): any {
     }
   }
 
+  // Apply MAC prefix OUI correction
+  if (mac) {
+    mac = correctMacPrefix(mac);
+  }
+
   // 4. Identificar CPE SN
   let cpe_sn = '';
-  const sagemcomCpePattern = /\b(N[7T]\d{6}[A-Z]\d{6})\b/i;
+  const sagemcomCpePattern = /\b([A-Z1-9][7T1IS0O]\d{6}[A-Z]\d{6})\b/i;
   const cpeMatch = text.match(sagemcomCpePattern);
   if (cpeMatch) {
-    cpe_sn = cpeMatch[1].toUpperCase().replace(/^NT/, 'N7');
+    cpe_sn = 'N7' + cpeMatch[1].substring(2).toUpperCase();
   } else {
     for (const line of lines) {
       if (/CPE/i.test(line)) {
         const val = getValueAfterSeparator(line);
         if (val && val.length >= 8) {
           cpe_sn = val.replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
-          if (cpe_sn.startsWith('NT')) {
+          if (cpe_sn.length >= 14) {
             cpe_sn = 'N7' + cpe_sn.substring(2);
           }
           break;
@@ -483,7 +529,7 @@ function parseOcrText(text: string): any {
       }
       
       if (expectedLast4) {
-        const macPrefixes = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6'];
+        const macPrefixes = KNOWN_SAGEMCOM_OUIS;
         const allWords = text.match(/\b[0-9A-Z]{6,16}\b/ig) || [];
         for (const w of allWords) {
           let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
@@ -512,6 +558,35 @@ function parseOcrText(text: string): any {
     }
   }
 
+  // Apply MAC SSID Rules if MAC is present
+  if (mac && (!wifi_ssid || !wifi_ssid_5g)) {
+    const cleanMac = mac.replace(/[^0-9A-F]/ig, '').toUpperCase();
+    if (cleanMac.length === 12) {
+      const last4Hex = cleanMac.slice(-4);
+      const last4Int = parseInt(last4Hex, 16);
+      if (!isNaN(last4Int)) {
+        const modelUpper = (modelo || '').toUpperCase();
+        
+        if (modelUpper.includes('KAON')) {
+          wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
+          wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
+        } else if (modelUpper.includes('5655V2') || modelUpper.includes('5655 V2')) {
+          if (modelUpper.includes('ULTRAFIBRA')) {
+            const sub7Int = (last4Int - 7 + 0x10000) % 0x10000;
+            const sub7Hex = sub7Int.toString(16).toUpperCase().padStart(4, '0');
+            wifi_ssid = `TIM_ULTRAFIBRA_${sub7Hex}`;
+            wifi_ssid_5g = '';
+          } else {
+            const sub3Int = (last4Int - 3 + 0x10000) % 0x10000;
+            const sub3Hex = sub3Int.toString(16).toUpperCase().padStart(4, '0');
+            wifi_ssid = `LIVE TIM_${sub3Hex}_2G`;
+            wifi_ssid_5g = `LIVE TIM_${sub3Hex}_5G`;
+          }
+        }
+      }
+    }
+  }
+
   // 7. Identificar Senha do Wi-Fi (Wi-Fi Key / WPA Key)
   let wifi_key = '';
   
@@ -535,36 +610,43 @@ function parseOcrText(text: string): any {
         const nextLine = lines[i + 1];
         let nextLineCleaned = nextLine.replace(/[^A-Za-z0-9\s]/g, '').trim();
         const nextLineWords = nextLineCleaned.split(/\s+/);
+        
+        let foundWord = '';
+        for (const word of nextLineWords) {
+          if (word.length >= 8 && word.length <= 12) {
+            foundWord = word.toLowerCase();
+            break;
+          }
+        }
+        
+        if (foundWord) {
+          wifi_key = foundWord;
+          break;
+        }
+        
         const concatenated = nextLineWords.join('');
         if (concatenated.length >= 8 && concatenated.length <= 12) {
           wifi_key = concatenated.toLowerCase();
           break;
         }
-        
-        for (const word of nextLineWords) {
-          if (word.length >= 8 && word.length <= 12) {
-            wifi_key = word.toLowerCase();
-            break;
-          }
-        }
-        if (wifi_key) break;
       }
     }
   }
 
   // Fallback para Wi-Fi Key com regex de exclusão inteligente
   if (!wifi_key) {
-    const rejectRegex = /fast|fest|sagem|anatel|cpe|gpon|mac|user|pass|admin|web|tim|live|equip|squp|preju|interf|sist|prod|bras|indus|regul|reimp|oper|aces|conf|log/i;
+    const rejectRegex = /f[a@e]st|s[ag][eg]m|s[ac][eg]m|sacem|anatel|analel|cpe|gpon|mac|user|pass|admin|web|tim|live|equip|squp|preju|interf|sist|prod|bras|indus|regul|reimp|oper|aces|conf|log/i;
     const words = text.match(/\b[A-Za-z0-9]{8,12}\b/g) || [];
     for (const w of words) {
       const lowerW = w.toLowerCase();
-      const isMacPrefix = ['8020da', 'd87d7f', '700b01', '786559', '346ba6'].some(p => lowerW.startsWith(p));
+      const isMacPrefix = ['8020da', 'd87d7f', '700b01', '786559', '346ba6', '34db1c', 'd8d7f7'].some(p => lowerW.startsWith(p));
       
       if (
         lowerW !== gpon_sn.toLowerCase() &&
         lowerW !== cpe_sn.toLowerCase() &&
         lowerW !== mac.toLowerCase() &&
         !lowerW.startsWith('smbs') &&
+        !lowerW.startsWith('smb8') &&
         !isMacPrefix &&
         !rejectRegex.test(lowerW)
       ) {
