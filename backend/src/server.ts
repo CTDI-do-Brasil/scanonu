@@ -200,27 +200,72 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // Correção de erros comuns de OCR no GPON SN do Sagemcom
-  if (gpon_sn.startsWith('SMBS')) {
-    fabricante = 'SagemCOM';
-    const prefix = 'SMBS';
-    let rest = gpon_sn.substring(4);
+  // Correção de erros comuns de OCR nos GPON SNs e identificação de fabricante
+  const gponPrefixes = ['SMBS', 'ZTEG', 'FHTT', 'ALCL', 'HWTC', 'ELFC', '48575434'];
+  let matchedPrefix = '';
+  for (const p of gponPrefixes) {
+    if (gpon_sn.toUpperCase().startsWith(p)) {
+      matchedPrefix = p;
+      break;
+    }
+  }
+
+  if (matchedPrefix) {
+    fabricante = matchedPrefix === 'SMBS' ? 'SagemCOM' : 
+                 matchedPrefix === 'ZTEG' ? 'ZTE' :
+                 matchedPrefix === 'FHTT' ? 'FiberHome' :
+                 matchedPrefix === 'ALCL' ? 'Nokia' :
+                 matchedPrefix === 'HWTC' || matchedPrefix === '48575434' ? 'Huawei' : 'Intelbras';
+                 
+    let rest = gpon_sn.substring(matchedPrefix.length).toUpperCase();
     rest = rest.replace(/O/g, '0');
-    gpon_sn = prefix + rest;
+    rest = rest.replace(/S/g, '5');
+    rest = rest.replace(/G/g, '6');
+    rest = rest.replace(/I/g, '1');
+    rest = rest.replace(/L/g, '1');
+    rest = rest.replace(/l/g, '1');
+    rest = rest.replace(/Z/g, '2');
+    rest = rest.replace(/T/g, '7');
+    
+    // Se o tamanho total for 13 e começar com zero extra
+    if (rest.length === 9 && rest.startsWith('0000')) {
+      rest = rest.substring(1);
+    }
+    
+    gpon_sn = matchedPrefix + rest;
   }
 
   // 3. Identificar MAC (clean 12-char hex string)
   let mac = '';
-  const macPattern = /\b([0-9A-F]{2}[:.-]){5}([0-9A-F]{2})\b/i;
+  // Padrão que permite letras A-Z (para aceitar erros de OCR como G/S/T/Z) e separadores como espaço, ponto, dois pontos, ponto e vírgula e hífen
+  const macPattern = /\b([0-9A-Z]{2}[ :.;-]){5}([0-9A-Z]{2})\b/i;
   const macMatch = text.match(macPattern);
   if (macMatch) {
-    mac = macMatch[0].replace(/[^0-9A-F]/ig, '').toUpperCase();
-  } else {
+    const cleanW = macMatch[0].replace(/[^0-9A-Z]/ig, '').toUpperCase();
+    let corrected = cleanW;
+    corrected = corrected.replace(/G/g, '6');
+    corrected = corrected.replace(/O/g, '0');
+    corrected = corrected.replace(/I/g, '1');
+    corrected = corrected.replace(/L/g, '1');
+    corrected = corrected.replace(/l/g, '1');
+    corrected = corrected.replace(/Z/g, '2');
+    corrected = corrected.replace(/S/g, '5');
+    corrected = corrected.replace(/T/g, '7');
+    if (corrected.length === 12 && /^[0-9A-F]{12}$/.test(corrected)) {
+      mac = corrected;
+    }
+  }
+
+  if (!mac) {
     for (const line of lines) {
       if (/MAC/i.test(line)) {
-        const words = line.match(/\b[0-9A-Z]{10,14}\b/ig) || [];
+        // Permitir palavras de 10 a 16 caracteres para capturar MACs com prefixos ou sufixos
+        const words = line.match(/\b[0-9A-Z]{10,16}\b/ig) || [];
         for (const w of words) {
-          const cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+          let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+          if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
+          else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
+          
           if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS')) {
             let corrected = cleanW;
             corrected = corrected.replace(/G/g, '6');
@@ -242,11 +287,14 @@ function parseOcrText(text: string): any {
     }
   }
 
-  // Fallback geral aprimorado para MAC
+  // Fallback geral aprimorado para MAC (palavras de 10 a 16 caracteres)
   if (!mac) {
-    const words = text.match(/\b[0-9A-Z]{10,14}\b/ig) || [];
+    const words = text.match(/\b[0-9A-Z]{10,16}\b/ig) || [];
     for (const w of words) {
-      const cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+      let cleanW = w.replace(/[^0-9A-Z]/ig, '').toUpperCase();
+      if (cleanW.startsWith('MAC')) cleanW = cleanW.substring(3);
+      else if (cleanW.startsWith('MC')) cleanW = cleanW.substring(2);
+
       if (cleanW !== gpon_sn && !cleanW.startsWith('SMBS')) {
         let corrected = cleanW;
         corrected = corrected.replace(/G/g, '6');
