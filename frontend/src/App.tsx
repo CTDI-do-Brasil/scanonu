@@ -484,6 +484,14 @@ export default function App() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    if (files.length > 16) {
+      setError('Erro: É permitido enviar no máximo 16 unidades por lote.');
+      if (e.target) {
+        e.target.value = '';
+      }
+      return;
+    }
+
     if (files.length === 1) {
       // Fluxo de arquivo único existente
       const file = files[0];
