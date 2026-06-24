@@ -119,13 +119,18 @@ async function connectToDatabase() {
         console.log('Constraint UNIQUE (gpon_sn) adicionada.');
       } catch (e) {}
 
-      // Cadastrar o admin padrão se não houver usuários cadastrados no banco
-      const userCountRes = await dbPool.query('SELECT COUNT(*) FROM usuarios_scan_onu');
-      if (parseInt(userCountRes.rows[0].count) === 0) {
+      // Garantir o cadastro/reset do administrador padrão para evitar lockout
+      const adminCheck = await dbPool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
+      if (!adminCheck.rowCount || adminCheck.rowCount === 0) {
         await dbPool.query(
           "INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ('admin@scanonu.com', 'admin123', 'admin')"
         );
         console.log('Usuário admin padrão (admin@scanonu.com / admin123) cadastrado com sucesso.');
+      } else {
+        await dbPool.query(
+          "UPDATE usuarios_scan_onu SET senha = 'admin123', role = 'admin' WHERE email = 'admin@scanonu.com'"
+        );
+        console.log('Senha e perfil do usuário admin@scanonu.com resetados com sucesso.');
       }
 
     } catch (err: any) {
