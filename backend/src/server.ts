@@ -5,8 +5,18 @@ import { createWorker } from 'tesseract.js';
 import { Pool } from 'pg';
 import { create } from 'xmlbuilder2';
 import * as XLSX from 'xlsx';
+import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
+
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+if (ai) {
+  console.log('Cliente Gemini Vision API inicializado com sucesso.');
+} else {
+  console.warn('Variável de ambiente GEMINI_API_KEY não configurada. Usando OCR local (Tesseract.js) como padrão.');
+}
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -721,6 +731,9 @@ function getValueAfterSeparator(line: string): string {
 app.post('/api/scan-label', async (req, res) => {
   let worker: any = null;
   let text = '';
+  let scanResult: any = null;
+  let scanSource = 'local-ocr';
+
   try {
     const { image } = req.body;
 
@@ -728,33 +741,152 @@ app.post('/api/scan-label', async (req, res) => {
       return res.status(400).json({ error: 'Nenhuma imagem foi fornecida no corpo da requisição.' });
     }
 
+    let mimeType = 'image/jpeg';
     let base64Data = image;
     if (image.startsWith('data:')) {
       const match = image.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
+        mimeType = match[1];
         base64Data = match[2];
       }
     }
 
-    console.log('Iniciando processamento OCR local com Tesseract.js...');
-    
-    // Inicializa o Tesseract Worker localmente com idioma inglês
-    worker = await createWorker('eng');
-    
-    const imageBuffer = Buffer.from(base64Data, 'base64');
-    
-    // Executa o reconhecimento óptico de caracteres
-    const recognizeResult = await worker.recognize(imageBuffer);
-    text = recognizeResult.data.text;
-    
-    console.log('--- Texto bruto extraído pelo OCR ---');
-    console.log(text);
-    console.log('-------------------------------------');
+    // 1. Tentar reconhecimento com Gemini Vision se o cliente estiver ativo
+    if (ai) {
+      try {
+        console.log('Iniciando processamento com Gemini Vision API...');
+        const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
+Siga atentamente as instruções abaixo para cada campo:
+1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM).
+2. modelo: Modelo exato da ONU (ex: F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.).
+3. cpe_sn: Serial CPE/Equipamento (geralmente começa com N7 ou similar). Se for igual ao GPON SN, deixe vazio ou extraia o correto se houver.
+4. gpon_sn: Serial GPON (ex: SMBS12345678, ZTEG12345678, FHTT12345678, ALCL12345678, HWTC12345678). Certifique-se de que tenha 12 caracteres. Se começar com SMB8, corrija para SMBS.
+5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Remova separadores como ':' ou '-'. Certifique-se de que o prefixo/OUI seja válido para o fabricante.
+6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única.
+7. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz, se existir separadamente.
+8. wifi_key: Senha padrão do Wi-Fi (geralmente de 8 a 10 caracteres, minúsculas/maiúsculas/números).
+9. usuario: Usuário padrão de acesso web (geralmente admin, user, etc.).
+10. senha: Senha padrão de acesso web (geralmente curta, minúsculas/números).
+11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
 
-    // Executa o parser baseado em expressões regulares nos dados reconhecidos
-    const scanResult = parseOcrText(text);
-    
-    console.log('Dados extraídos com sucesso:', scanResult);
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+              }
+            },
+            prompt
+          ],
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                fabricante: { type: Type.STRING },
+                modelo: { type: Type.STRING },
+                cpe_sn: { type: Type.STRING },
+                gpon_sn: { type: Type.STRING },
+                mac: { type: Type.STRING },
+                wifi_ssid: { type: Type.STRING },
+                wifi_ssid_5g: { type: Type.STRING },
+                wifi_key: { type: Type.STRING },
+                usuario: { type: Type.STRING },
+                senha: { type: Type.STRING },
+                reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
+              },
+              required: ['gpon_sn']
+            }
+          }
+        });
+
+        const responseText = response.text;
+        console.log('--- Resposta bruta do Gemini ---');
+        console.log(responseText);
+        console.log('--------------------------------');
+
+        if (responseText) {
+          const geminiData = JSON.parse(responseText);
+          
+          // Normalização dos dados extraídos pelo Gemini
+          let fabricanteNorm = geminiData.fabricante || 'Outro';
+          const upperMfg = fabricanteNorm.toUpperCase();
+          if (upperMfg.includes('HUAWEI')) fabricanteNorm = 'Huawei';
+          else if (upperMfg.includes('ZTE')) fabricanteNorm = 'ZTE';
+          else if (upperMfg.includes('FIBERHOME')) fabricanteNorm = 'FiberHome';
+          else if (upperMfg.includes('INTELBRAS')) fabricanteNorm = 'Intelbras';
+          else if (upperMfg.includes('NOKIA')) fabricanteNorm = 'Nokia';
+          else if (upperMfg.includes('ALCATEL')) fabricanteNorm = 'Alcatel';
+          else if (upperMfg.includes('SAGEMCOM') || upperMfg.includes('SAGEM') || upperMfg.includes('SMBS') || upperMfg.includes('SMB8')) fabricanteNorm = 'SagemCOM';
+
+          let gponNorm = (geminiData.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+          if (gponNorm.startsWith('SMB8')) {
+            gponNorm = 'SMBS' + gponNorm.substring(4);
+          }
+
+          let macNorm = (geminiData.mac || '').replace(/[^0-9A-F]/ig, '').toUpperCase();
+          if (macNorm) {
+            macNorm = correctMacPrefix(macNorm);
+          }
+
+          let cpeNorm = (geminiData.cpe_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
+          if (cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
+            cpeNorm = 'N7' + cpeNorm.substring(2);
+          }
+
+          scanResult = {
+            fabricante: fabricanteNorm,
+            modelo: geminiData.modelo || '',
+            cpe_sn: cpeNorm,
+            gpon_sn: gponNorm,
+            mac: macNorm,
+            wifi_ssid: geminiData.wifi_ssid || '',
+            wifi_ssid_5g: geminiData.wifi_ssid_5g || '',
+            wifi_key: (geminiData.wifi_key || '').toLowerCase(),
+            usuario: geminiData.usuario || '',
+            senha: geminiData.senha || '',
+            reimpressa: geminiData.reimpressa || 'nao'
+          };
+
+          if (scanResult.gpon_sn) {
+            scanSource = 'gemini-vision';
+            console.log('Dados extraídos com sucesso via Gemini Vision:', scanResult);
+          }
+        }
+      } catch (geminiError: any) {
+        console.error('Falha no processamento com Gemini Vision API, executando fallback local...', geminiError);
+        lastScanErrors.push({
+          timestamp: new Date().toISOString(),
+          ocrError: `Falha Gemini Vision: ${geminiError.message || String(geminiError)}`
+        });
+      }
+    }
+
+    // 2. Fallback para Tesseract OCR Local se o Gemini falhou ou não está configurado
+    if (!scanResult || !scanResult.gpon_sn) {
+      console.log('Iniciando processamento OCR local com Tesseract.js (fallback)...');
+      
+      // Inicializa o Tesseract Worker localmente com idioma inglês
+      worker = await createWorker('eng');
+      
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      
+      // Executa o reconhecimento óptico de caracteres
+      const recognizeResult = await worker.recognize(imageBuffer);
+      text = recognizeResult.data.text;
+      
+      console.log('--- Texto bruto extraído pelo OCR Local ---');
+      console.log(text);
+      console.log('-------------------------------------------');
+
+      // Executa o parser baseado em expressões regulares nos dados reconhecidos
+      scanResult = parseOcrText(text);
+      scanSource = 'local-ocr';
+      
+      console.log('Dados extraídos com sucesso via OCR Local:', scanResult);
+    }
 
     // Validação mínima: O GPON SN é obrigatório no fluxo da aplicação
     if (!scanResult.gpon_sn) {
@@ -788,9 +920,10 @@ app.post('/api/scan-label', async (req, res) => {
     lastScans.push({
       timestamp: new Date().toISOString(),
       success: true,
-      rawText: text,
+      rawText: text || `Processado por ${scanSource}`,
       parsed: scanResult,
-      existsInDb
+      existsInDb,
+      scanSource
     });
     if (lastScans.length > 20) lastScans.shift();
 
@@ -798,11 +931,12 @@ app.post('/api/scan-label', async (req, res) => {
       success: true, 
       data: scanResult,
       existsInDb,
-      existingData
+      existingData,
+      scanSource
     });
 
   } catch (ocrError: any) {
-    console.error('Erro no processamento OCR Local:', ocrError);
+    console.error('Erro no processamento da leitura da etiqueta:', ocrError);
     
     // Registrar a falha de escaneamento para auditoria e diagnóstico
     lastScanErrors.push({
@@ -814,14 +948,15 @@ app.post('/api/scan-label', async (req, res) => {
     lastScans.push({
       timestamp: new Date().toISOString(),
       success: false,
-      rawText: typeof text !== 'undefined' ? text : 'Indefinido (erro antes do OCR)',
-      error: ocrError.message || String(ocrError)
+      rawText: typeof text !== 'undefined' && text ? text : 'Indefinido (erro antes/durante OCR)',
+      error: ocrError.message || String(ocrError),
+      scanSource
     });
     if (lastScans.length > 20) lastScans.shift();
 
     return res.status(502).json({
       success: false,
-      error: ocrError.message || 'Falha ao realizar a leitura da etiqueta com OCR Local.',
+      error: ocrError.message || 'Falha ao realizar a leitura da etiqueta.',
       details: [ocrError.message || String(ocrError)]
     });
   } finally {
