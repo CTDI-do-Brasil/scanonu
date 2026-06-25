@@ -546,7 +546,7 @@ Siga atentamente as instruções abaixo para cada campo:
       mac: macNorm,
       wifi_ssid: geminiData.wifi_ssid || '',
       wifi_ssid_5g: geminiData.wifi_ssid_5g || '',
-      wifi_key: (geminiData.wifi_key || '').toLowerCase(),
+      wifi_key: geminiData.wifi_key || '',
       usuario: geminiData.usuario || '',
       senha: geminiData.web_key || geminiData.senha || '',
       web_key: geminiData.web_key || geminiData.senha || '',
