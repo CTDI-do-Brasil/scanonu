@@ -1267,7 +1267,7 @@ app.get('/api/external/units', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
-    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
+    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, senha AS wifi_key, usuario, wifi_key AS senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
