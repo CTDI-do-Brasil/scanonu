@@ -1342,7 +1342,7 @@ export default function App() {
                 className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all text-sm border border-slate-200 shadow-sm"
               >
                 <Search className="w-4 h-4 text-slate-500" />
-                <span>Consulta Rápida (Técnico)</span>
+                <span>Consulta Rápida</span>
               </button>
             </div>
           </div>
