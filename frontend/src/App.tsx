@@ -230,6 +230,7 @@ export default function App() {
   const [isImportingExcel, setIsImportingExcel] = useState(false);
   const [importExcelMessage, setImportExcelMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [targetDatabase, setTargetDatabase] = useState<'db-scanonu' | 'ScanONU_Claro'>('db-scanonu');
 
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
@@ -499,7 +500,7 @@ export default function App() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
         },
-        body: JSON.stringify({ fileBase64: base64 })
+        body: JSON.stringify({ fileBase64: base64, targetDb: targetDatabase })
       });
 
       const result = await response.json();
@@ -1707,7 +1708,19 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center">
+                <div className="space-y-1.5 w-full pt-2 border-t border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Banco de Dados de Destino</label>
+                  <select
+                    value={targetDatabase}
+                    onChange={(e) => setTargetDatabase(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none transition-all font-semibold"
+                  >
+                    <option value="db-scanonu">db-scanonu (Padrão)</option>
+                    <option value="ScanONU_Claro">ScanONU_Claro</option>
+                  </select>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center w-full">
                   <input 
                     type="file"
                     accept=".xlsx, .xls"

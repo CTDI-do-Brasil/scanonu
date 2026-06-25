@@ -69,6 +69,157 @@ const authenticateSession = async (req: any, res: any, next: any) => {
 // O Dockerfile irá compilar o frontend dentro do diretório public/dist
 app.use(express.static('public'));
 
+const pools: { [dbName: string]: Pool } = {};
+const initializedDatabases = new Set<string>();
+
+function getDefaultDatabaseName(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) return 'db-scanonu';
+  try {
+    const parsed = new URL(url);
+    const name = parsed.pathname.substring(1);
+    return name || 'db-scanonu';
+  } catch (e) {
+    const match = url ? url.match(/\/([^\/?]+)(?:\?|$)/) : null;
+    return match ? match[1] : 'db-scanonu';
+  }
+}
+
+function getPoolForDatabase(dbName: string): Pool {
+  const baseConnectionString = process.env.DATABASE_URL;
+  if (!baseConnectionString) {
+    throw new Error('DATABASE_URL não configurada no servidor.');
+  }
+
+  const cacheKey = dbName.trim();
+  if (pools[cacheKey]) {
+    return pools[cacheKey];
+  }
+
+  let connectionString = baseConnectionString;
+  try {
+    const parsedUrl = new URL(baseConnectionString);
+    parsedUrl.pathname = '/' + cacheKey;
+    connectionString = parsedUrl.toString();
+  } catch (err) {
+    const lastSlashIndex = baseConnectionString.lastIndexOf('/');
+    const questionMarkIndex = baseConnectionString.indexOf('?', lastSlashIndex);
+    if (lastSlashIndex !== -1) {
+      const prefix = baseConnectionString.substring(0, lastSlashIndex + 1);
+      const suffix = questionMarkIndex !== -1 ? baseConnectionString.substring(questionMarkIndex) : '';
+      connectionString = prefix + cacheKey + suffix;
+    }
+  }
+
+  console.log(`Criando novo pool de conexão para o banco de dados: ${cacheKey}`);
+  const useSSL = !connectionString.includes('localhost') && 
+                 !connectionString.includes('127.0.0.1') && 
+                 !connectionString.includes('srv-captain') && 
+                 !connectionString.includes('sslmode=disable') &&
+                 process.env.DB_SSL !== 'false';
+
+  const pool = new Pool({
+    connectionString: connectionString,
+    ssl: useSSL ? { rejectUnauthorized: false } : false
+  });
+
+  pools[cacheKey] = pool;
+  return pool;
+}
+
+async function ensureDatabaseSchema(pool: Pool, dbName: string) {
+  if (initializedDatabases.has(dbName)) return;
+
+  console.log(`Inicializando tabelas e migrações no banco: ${dbName}...`);
+  
+  // Criar tabela de etiquetas
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
+      gpon_sn VARCHAR(100) PRIMARY KEY,
+      fabricante VARCHAR(100) NOT NULL,
+      modelo VARCHAR(100) NOT NULL,
+      cpe_sn VARCHAR(100),
+      mac VARCHAR(100),
+      wifi_ssid VARCHAR(100),
+      wifi_ssid_5g VARCHAR(100),
+      wifi_key VARCHAR(100),
+      usuario VARCHAR(100),
+      web_key VARCHAR(100),
+      operador_email VARCHAR(150),
+      data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  await pool.query(createTableQuery);
+
+  // Criar tabela de usuários
+  const createUsersTableQuery = `
+    CREATE TABLE IF NOT EXISTS usuarios_scan_onu (
+      id SERIAL PRIMARY KEY,
+      email VARCHAR(150) UNIQUE NOT NULL,
+      senha VARCHAR(100) NOT NULL,
+      role VARCHAR(50) DEFAULT 'operador'
+    );
+  `;
+  await pool.query(createUsersTableQuery);
+
+  // Criar tabela de sessões
+  const createSessionsTableQuery = `
+    CREATE TABLE IF NOT EXISTS sessoes_scan_onu (
+      token VARCHAR(100) PRIMARY KEY,
+      email VARCHAR(150) NOT NULL,
+      role VARCHAR(50) NOT NULL,
+      data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      data_expiracao TIMESTAMP NOT NULL
+    );
+  `;
+  await pool.query(createSessionsTableQuery);
+
+  // Migração para remover a coluna ID caso ela já exista
+  try {
+    const checkColumn = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='id'"
+    );
+    if (checkColumn.rowCount && checkColumn.rowCount > 0) {
+      await pool.query('ALTER TABLE etiquetas_scan_onu DROP CONSTRAINT IF EXISTS etiquetas_scan_onu_pkey CASCADE');
+      await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS id CASCADE');
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD PRIMARY KEY (gpon_sn)');
+    }
+  } catch (e) {}
+
+  // Garantir SSID
+  try {
+    await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
+    await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
+  } catch (e) {}
+
+  // Garantir UNIQUE
+  try {
+    await pool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
+  } catch (e) {}
+
+  // Garantir coluna web_key (se for banco legado que tinha 'senha')
+  try {
+    const checkSenha = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='senha'"
+    );
+    if (checkSenha.rowCount && checkSenha.rowCount > 0) {
+      await pool.query('UPDATE etiquetas_scan_onu SET wifi_key = senha, senha = wifi_key');
+      await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN senha TO web_key');
+    }
+  } catch (e) {}
+
+  // Garantir admin
+  const adminCheck = await pool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
+  if (!adminCheck.rowCount || adminCheck.rowCount === 0) {
+    await pool.query(
+      "INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ('admin@scanonu.com', 'admin123', 'admin')"
+    );
+  }
+
+  initializedDatabases.add(dbName);
+  console.log(`Banco ${dbName} inicializado com sucesso.`);
+}
+
 let dbConnected = false;
 let dbPool: Pool | null = null;
 
@@ -97,6 +248,10 @@ async function connectToDatabase() {
       await dbPool.query('SELECT NOW()');
       dbConnected = true;
       console.log('Conexão estabelecida com sucesso com o PostgreSQL.');
+
+      const defaultDb = getDefaultDatabaseName();
+      pools[defaultDb] = dbPool;
+      initializedDatabases.add(defaultDb);
 
       // Criar a tabela de etiquetas
       const createTableQuery = `
@@ -1151,9 +1306,19 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
       return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem importar planilhas.' });
     }
 
-    const { fileBase64 } = req.body;
+    const { fileBase64, targetDb } = req.body;
     if (!fileBase64) {
       return res.status(400).json({ success: false, error: 'Nenhuma planilha foi fornecida.' });
+    }
+
+    const targetDbName = targetDb || getDefaultDatabaseName();
+    let pool: Pool;
+    try {
+      pool = getPoolForDatabase(targetDbName);
+      await ensureDatabaseSchema(pool, targetDbName);
+    } catch (dbErr: any) {
+      console.error(`Erro ao conectar ao banco ${targetDbName}:`, dbErr);
+      return res.status(500).json({ success: false, error: `Não foi possível conectar ao banco de dados '${targetDbName}': ${dbErr.message || dbErr}` });
     }
 
     const buffer = Buffer.from(fileBase64, 'base64');
@@ -1165,10 +1330,6 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
     const rows = XLSX.utils.sheet_to_json<any>(worksheet);
     if (!rows || rows.length === 0) {
       return res.status(400).json({ success: false, error: 'A planilha está vazia ou não pôde ser lida.' });
-    }
-
-    if (!dbConnected || !dbPool) {
-      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
     let successCount = 0;
@@ -1255,7 +1416,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           web_key,
           operador_email
         ];
-        await dbPool.query(query, values);
+        await pool.query(query, values);
         successCount++;
       } catch (dbErr) {
         console.error(`Erro ao importar linha com GPON SN ${gpon_sn}:`, dbErr);
