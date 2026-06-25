@@ -110,7 +110,7 @@ async function connectToDatabase() {
           wifi_ssid_5g VARCHAR(100), -- Novo campo
           wifi_key VARCHAR(100),
           usuario VARCHAR(100),
-          senha VARCHAR(100),
+          web_key VARCHAR(100),
           operador_email VARCHAR(150),
           data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -169,6 +169,23 @@ async function connectToDatabase() {
         await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
         console.log('Constraint UNIQUE (gpon_sn) adicionada.');
       } catch (e) {}
+
+      // Migração para inverter os dados trocados e renomear a coluna senha para web_key
+      try {
+        const checkSenhaColumn = await dbPool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='senha'"
+        );
+        if (checkSenhaColumn.rowCount && checkSenhaColumn.rowCount > 0) {
+          console.log('Migrando banco: corrigindo valores invertidos de wifi_key/senha e renomeando coluna para web_key...');
+          // 1. Inverte os dados no banco
+          await dbPool.query('UPDATE etiquetas_scan_onu SET wifi_key = senha, senha = wifi_key');
+          // 2. Renomeia a coluna senha para web_key
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN senha TO web_key');
+          console.log('Migração concluída com sucesso!');
+        }
+      } catch (migErr: any) {
+        console.error('Erro ao migrar coluna senha para web_key:', migErr.message || migErr);
+      }
 
       // Garantir o cadastro/reset do administrador padrão para evitar lockout
       const adminCheck = await dbPool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
@@ -400,8 +417,8 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
       }
     }
 
-    console.log('Iniciando processamento com Gemini Vision API...');
-    const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
+  // Analise a imagem da etiqueta...
+  const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM).
 2. modelo: Modelo exato da ONU (ex: F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.).
@@ -412,7 +429,7 @@ Siga atentamente as instruções abaixo para cada campo:
 7. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz, se existir separadamente.
 8. wifi_key: Senha padrão do Wi-Fi (geralmente de 8 a 10 caracteres, minúsculas/maiúsculas/números).
 9. usuario: Usuário padrão de acesso web (geralmente admin, user, etc.).
-10. senha: Senha padrão de acesso web (geralmente curta, minúsculas/números).
+10. web_key: Senha padrão de acesso web (geralmente curta, minúsculas/números).
 11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
 
     let response;
@@ -449,7 +466,7 @@ Siga atentamente as instruções abaixo para cada campo:
                   wifi_ssid_5g: { type: Type.STRING },
                   wifi_key: { type: Type.STRING },
                   usuario: { type: Type.STRING },
-                  senha: { type: Type.STRING },
+                  web_key: { type: Type.STRING },
                   reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
                 },
                 required: ['gpon_sn']
@@ -531,7 +548,8 @@ Siga atentamente as instruções abaixo para cada campo:
       wifi_ssid_5g: geminiData.wifi_ssid_5g || '',
       wifi_key: (geminiData.wifi_key || '').toLowerCase(),
       usuario: geminiData.usuario || '',
-      senha: geminiData.senha || '',
+      senha: geminiData.web_key || geminiData.senha || '',
+      web_key: geminiData.web_key || geminiData.senha || '',
       reimpressa: geminiData.reimpressa || 'nao'
     };
 
@@ -550,7 +568,7 @@ Siga atentamente as instruções abaixo para cada campo:
     if (dbConnected && dbPool && scanResult.gpon_sn) {
       try {
         const checkRes = await dbPool.query(
-          'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
+          'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
           [scanResult.gpon_sn]
         );
         if (checkRes.rowCount && checkRes.rowCount > 0) {
@@ -611,7 +629,8 @@ Siga atentamente as instruções abaixo para cada campo:
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', authenticateSession, async (req, res) => {
   try {
-    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador, overwrite } = req.body;
+    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite } = req.body;
+    const resolvedWebKey = web_key !== undefined ? web_key : senha;
     const normalizedModelo = normalizeModel(modelo, fabricante);
 
     if (!dbConnected || !dbPool) {
@@ -635,7 +654,7 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
         });
       }
 
-      // Se for para sobrescrever, usamos um UPDATE que NÃO consome a sequence SERIAL!
+      // Se for para sobrescrever, usamos um UPDATE
       const updateQuery = `
         UPDATE etiquetas_scan_onu 
         SET 
@@ -647,7 +666,7 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
           wifi_ssid_5g = $6,
           wifi_key = $7,
           usuario = $8,
-          senha = $9,
+          web_key = $9,
           operador_email = $10,
           data_leitura = CURRENT_TIMESTAMP
         WHERE gpon_sn = $11
@@ -661,16 +680,15 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
         wifi_ssid_5g || '',
         wifi_key || '',
         usuario || '',
-        senha || '',
+        resolvedWebKey || '',
         operador || 'sistema',
         gpon_sn
       ];
       await dbPool.query(updateQuery, updateValues);
       console.log(`Dados atualizados com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
     } else {
-      // Se não existe, fazemos um INSERT normal (que consome a sequence normalmente e cria o id consecutivo correto)
       const insertQuery = `
-        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email)
+        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `;
       const insertValues = [
@@ -683,7 +701,7 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
         wifi_ssid_5g || '',
         wifi_key || '',
         usuario || '',
-        senha || '',
+        resolvedWebKey || '',
         operador || 'sistema'
       ];
       await dbPool.query(insertQuery, insertValues);
@@ -717,7 +735,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
     }
 
     const checkRes = await dbPool.query(
-      'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
+      'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
       [gpon_sn.toUpperCase().trim()]
     );
 
@@ -749,7 +767,7 @@ app.get('/api/public/label/:query', async (req, res) => {
 
     const cleanQuery = query.toUpperCase().trim();
     const checkRes = await dbPool.query(
-      'SELECT fabricante, modelo, gpon_sn, mac, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
+      'SELECT fabricante, modelo, gpon_sn, mac, usuario, web_key FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
       [cleanQuery]
     );
 
@@ -762,7 +780,8 @@ app.get('/api/public/label/:query', async (req, res) => {
           gpon_sn: checkRes.rows[0].gpon_sn,
           mac: checkRes.rows[0].mac,
           usuario: checkRes.rows[0].usuario,
-          senha: checkRes.rows[0].senha
+          senha: checkRes.rows[0].web_key,
+          web_key: checkRes.rows[0].web_key
         }
       });
     } else {
@@ -1029,7 +1048,8 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
         .ele('wifi_ssid_5g').txt(row.wifi_ssid_5g || '').up()
         .ele('wifi_key').txt(row.wifi_key || '').up()
         .ele('usuario').txt(row.usuario || '').up()
-        .ele('senha').txt(row.senha || '').up()
+        .ele('senha').txt(row.web_key || '').up()
+        .ele('web_key').txt(row.web_key || '').up()
         .ele('operador_email').txt(row.operador_email || '').up()
         .ele('data_leitura').txt(String(row.data_leitura)).up()
       .up();
@@ -1103,7 +1123,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
       'SSID Wi-Fi 5G': row.wifi_ssid_5g || '',
       'Senha WIFI': row.wifi_key || '',
       'Usuário': row.usuario || '',
-      'Senha WEB': row.senha || '',
+      'Senha WEB': row.web_key || '',
       'Operador': row.operador_email || '',
       'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
     }));
@@ -1183,14 +1203,14 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
       const wifi_ssid_5g = getVal(row, ['SSID Wi-Fi 5G', 'SSID 5G', 'wifi_ssid_5g', 'SSID Wifi 5G']);
       const wifi_key = getVal(row, ['Senha WIFI', 'Senha Wi-Fi', 'wifi_key', 'Senha Wifi', 'Wifi Key', 'WIFI Key']);
       const usuario = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username']);
-      const senha = getVal(row, ['Senha WEB', 'Senha', 'senha', 'Senha Web', 'Password', 'Pass']);
+      const web_key = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key']);
       const operador_email = getVal(row, ['Operador', 'operador_email', 'Operator', 'Operador Email']) || req.user.email;
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
 
       try {
         const query = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
@@ -1201,7 +1221,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
             wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
             wifi_key = EXCLUDED.wifi_key,
             usuario = EXCLUDED.usuario,
-            senha = EXCLUDED.senha,
+            web_key = EXCLUDED.web_key,
             operador_email = EXCLUDED.operador_email,
             data_leitura = CURRENT_TIMESTAMP
         `;
@@ -1215,7 +1235,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           wifi_ssid_5g || '',
           wifi_key || '',
           usuario || '',
-          senha || '',
+          web_key || '',
           operador_email
         ];
         await dbPool.query(query, values);
@@ -1267,7 +1287,7 @@ app.get('/api/external/units', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
-    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, senha AS wifi_key, usuario, wifi_key AS senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
+    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
