@@ -21,7 +21,9 @@ import {
   UserPlus,
   Download,
   Eye,
-  EyeOff
+  EyeOff,
+  Search,
+  ArrowLeft
 } from 'lucide-react';
 
 interface ScanData {
@@ -209,6 +211,21 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const processingFilesRef = useRef(false);
 
+  // Consulta Pública (antes do login)
+  const [isPublicQueryMode, setIsPublicQueryMode] = useState(false);
+  const [publicQueryInput, setPublicQueryInput] = useState('');
+  const [publicQueryResult, setPublicQueryResult] = useState<{
+    fabricante: string;
+    modelo: string;
+    gpon_sn: string;
+    mac: string;
+    usuario: string;
+    senha: string;
+  } | null>(null);
+  const [publicQueryError, setPublicQueryError] = useState<string | null>(null);
+  const [isPublicQuerying, setIsPublicQuerying] = useState(false);
+  const [copiedPublicField, setCopiedPublicField] = useState<string | null>(null);
+
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
     const storedUser = localStorage.getItem('scanonu_user');
@@ -276,6 +293,38 @@ export default function App() {
       fetchStats();
     }
   }, [adminTab]);
+
+  const handlePublicQuery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!publicQueryInput.trim()) {
+      setPublicQueryError('Por favor, insira um GPON SN ou MAC válido.');
+      return;
+    }
+    setPublicQueryError(null);
+    setPublicQueryResult(null);
+    setIsPublicQuerying(true);
+
+    try {
+      const response = await fetch(`/api/public/label/${encodeURIComponent(publicQueryInput.trim())}`);
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setPublicQueryResult(result.data);
+      } else {
+        setPublicQueryError(result.error || 'Equipamento não encontrado.');
+      }
+    } catch (err) {
+      console.error('Erro ao consultar equipamento:', err);
+      setPublicQueryError('Erro de conexão ao servidor.');
+    } finally {
+      setIsPublicQuerying(false);
+    }
+  };
+
+  const copyPublicField = (fieldId: string, value: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedPublicField(fieldId);
+    setTimeout(() => setCopiedPublicField(null), 2000);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1049,8 +1098,154 @@ export default function App() {
     senha: 'Senha WEB'
   };
 
-  // RENDERIZAÇÃO DA ÁREA DE LOGIN
+  // RENDERIZAÇÃO DA ÁREA DE LOGIN OU CONSULTA PÚBLICA
   if (!user) {
+    if (isPublicQueryMode) {
+      return (
+        <div className="min-h-screen flex flex-col justify-between bg-[#002f56] text-slate-800 font-sans p-6">
+          <div className="flex-1 flex flex-col justify-center items-center w-full animate-scaleUp">
+            {/* Card de Consulta */}
+            <div className="bg-white rounded-[2.5rem] px-8 py-10 shadow-2xl w-full max-w-sm flex flex-col items-center">
+              {/* Logo CTDI */}
+              <div className="mb-4 flex flex-col items-center">
+                <img src={logoCtdi} alt="Logo CTDI" className="w-48 h-auto object-contain mb-1" />
+              </div>
+
+              {/* Título */}
+              <div className="mb-6 flex flex-col items-center border-t border-slate-100 w-full pt-4 text-center">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="bg-[#003865] text-white p-1.5 rounded-lg">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <span className="font-bold text-lg text-slate-800 tracking-tight">Consulta Rápida</span>
+                </div>
+                <p className="text-xs text-slate-500 max-w-xs mt-1">
+                  Consulte usuário e senha de acesso da ONU pelo GPON SN ou MAC.
+                </p>
+              </div>
+
+              {publicQueryError && (
+                <div className="w-full bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2 text-xs text-red-800 mb-4">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                  <span>{publicQueryError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handlePublicQuery} className="w-full space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-[#002f56] block">GPON SN ou MAC</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: SMBS12345678"
+                    value={publicQueryInput}
+                    onChange={(e) => setPublicQueryInput(e.target.value.toUpperCase().trim())}
+                    className="w-full bg-white border border-slate-300 focus:border-[#002f56] focus:ring-1 focus:ring-[#002f56] rounded-2xl px-4 py-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400 font-mono"
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={isPublicQuerying}
+                  className="w-full bg-[#002f56] hover:bg-[#004075] active:bg-[#001d36] disabled:bg-[#002f56]/60 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all text-sm"
+                >
+                  {isPublicQuerying ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <span>Consultar Equipamento</span>
+                  )}
+                </button>
+              </form>
+
+              {publicQueryResult && (
+                <div className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-inner mt-5 space-y-3.5 animate-fadeIn">
+                  <div className="text-center pb-2 border-b border-slate-200">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Equipamento Encontrado</span>
+                    <span className="text-xs font-bold text-[#003865] block mt-0.5">
+                      {publicQueryResult.fabricante} ({publicQueryResult.modelo})
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 text-xs text-left w-full">
+                    {/* GPON SN */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">GPON Serial (S/N)</span>
+                      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono">
+                        <span className="text-slate-700 font-bold">{publicQueryResult.gpon_sn}</span>
+                        <button
+                          onClick={() => copyPublicField('gpon', publicQueryResult.gpon_sn)}
+                          className="text-slate-400 hover:text-[#003865] transition-colors p-1"
+                        >
+                          {copiedPublicField === 'gpon' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* MAC */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Endereço MAC</span>
+                      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono">
+                        <span className="text-slate-700 font-bold">{publicQueryResult.mac}</span>
+                        <button
+                          onClick={() => copyPublicField('mac', publicQueryResult.mac)}
+                          className="text-slate-400 hover:text-[#003865] transition-colors p-1"
+                        >
+                          {copiedPublicField === 'mac' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Usuário */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Usuário de Acesso</span>
+                      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                        <span className="text-slate-800 font-bold">{publicQueryResult.usuario || 'Não informado'}</span>
+                        <button
+                          onClick={() => copyPublicField('user', publicQueryResult.usuario || '')}
+                          className="text-slate-400 hover:text-[#003865] transition-colors p-1"
+                          disabled={!publicQueryResult.usuario}
+                        >
+                          {copiedPublicField === 'user' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Senha */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Senha de Acesso</span>
+                      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                        <span className="text-slate-800 font-bold">{publicQueryResult.senha || 'Não informado'}</span>
+                        <button
+                          onClick={() => copyPublicField('pass', publicQueryResult.senha || '')}
+                          className="text-slate-400 hover:text-[#003865] transition-colors p-1"
+                          disabled={!publicQueryResult.senha}
+                        >
+                          {copiedPublicField === 'pass' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setIsPublicQueryMode(false)}
+                className="mt-6 flex items-center justify-center gap-1.5 text-xs font-bold text-[#002f56] hover:underline"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Voltar ao Login</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <footer className="py-2 text-center text-[10px] text-blue-200/50">
+            ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo
+          </footer>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex flex-col justify-between bg-[#002f56] text-slate-800 font-sans p-6">
         <div className="flex-1 flex flex-col justify-center items-center w-full">
@@ -1134,6 +1329,22 @@ export default function App() {
                 )}
               </button>
             </form>
+
+            <div className="border-t border-slate-100 my-4 pt-4 w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPublicQueryMode(true);
+                  setPublicQueryInput('');
+                  setPublicQueryResult(null);
+                  setPublicQueryError(null);
+                }}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all text-sm border border-slate-200 shadow-sm"
+              >
+                <Search className="w-4 h-4 text-slate-500" />
+                <span>Consulta Rápida (Técnico)</span>
+              </button>
+            </div>
           </div>
         </div>
 

@@ -738,6 +738,45 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
   }
 });
 
+// Rota pública para obter apenas as credenciais de acesso de uma ONU pelo GPON SN ou MAC (usado na tela de login)
+app.get('/api/public/label/:query', async (req, res) => {
+  try {
+    const { query } = req.params;
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    const cleanQuery = query.toUpperCase().trim();
+    const checkRes = await dbPool.query(
+      'SELECT fabricante, modelo, gpon_sn, mac, usuario, senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
+      [cleanQuery]
+    );
+
+    if (checkRes.rowCount && checkRes.rowCount > 0) {
+      return res.json({
+        success: true,
+        data: {
+          fabricante: checkRes.rows[0].fabricante,
+          modelo: checkRes.rows[0].modelo,
+          gpon_sn: checkRes.rows[0].gpon_sn,
+          mac: checkRes.rows[0].mac,
+          usuario: checkRes.rows[0].usuario,
+          senha: checkRes.rows[0].senha
+        }
+      });
+    } else {
+      return res.status(404).json({
+        success: false,
+        error: 'Equipamento não encontrado no banco de dados.'
+      });
+    }
+  } catch (err: any) {
+    console.error('Erro na consulta pública do equipamento:', err);
+    return res.status(500).json({ success: false, error: 'Erro interno ao consultar equipamento.' });
+  }
+});
+
 // Rota de login real usando o PostgreSQL
 app.post('/api/login', async (req, res) => {
   try {
