@@ -1186,27 +1186,44 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 
     for (const row of rows) {
       // Mapeamento tolerante dos cabeçalhos
-      const gpon_sn = getVal(row, ['GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial']).toUpperCase();
-      const fabricante = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer']);
-      const modelo = getVal(row, ['Modelo', 'modelo', 'Model', 'model']);
-      
-      // Se não tiver o GPON SN básico, ignoramos a linha
-      if (!gpon_sn || gpon_sn.length < 4) {
-        errorCount++;
-        continue;
-      }
+      const fabricanteRaw = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer']);
+      const fabricante = fabricanteRaw || 'N/A';
 
-      const cpe_sn = getVal(row, ['CPE Serial Number', 'CPE Serial', 'cpe_sn', 'Cpe Sn', 'CPE SN']);
+      const modeloRaw = getVal(row, ['Modelo', 'modelo', 'Model', 'model']);
+      const modelo = modeloRaw || 'N/A';
+
+      const cpe_sn_raw = getVal(row, ['CPE Serial Number', 'CPE Serial', 'cpe_sn', 'Cpe Sn', 'CPE SN']);
+      const cpe_sn = cpe_sn_raw || 'N/A';
+
       const macRaw = getVal(row, ['Endereço MAC', 'MAC', 'mac', 'Mac', 'Endereço Mac', 'Endereco Mac']);
-      const mac = macRaw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-      const wifi_ssid = getVal(row, ['SSID Wi-Fi 2.4G / Único', 'SSID', 'wifi_ssid', 'SSID Wi-Fi', 'SSID Wifi']);
-      const wifi_ssid_5g = getVal(row, ['SSID Wi-Fi 5G', 'SSID 5G', 'wifi_ssid_5g', 'SSID Wifi 5G']);
-      const wifi_key = getVal(row, ['Senha WIFI', 'Senha Wi-Fi', 'wifi_key', 'Senha Wifi', 'Wifi Key', 'WIFI Key']);
-      const usuario = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username']);
-      const web_key = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key']);
-      const operador_email = getVal(row, ['Operador', 'operador_email', 'Operator', 'Operador Email']) || req.user.email;
+      const mac = macRaw ? macRaw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase() : 'N/A';
+
+      const wifi_ssid_raw = getVal(row, ['SSID Wi-Fi 2.4G / Único', 'SSID', 'wifi_ssid', 'SSID Wi-Fi', 'SSID Wifi', 'SSIDName']);
+      const wifi_ssid = wifi_ssid_raw || 'N/A';
+
+      const wifi_ssid_5g_raw = getVal(row, ['SSID Wi-Fi 5G', 'SSID 5G', 'wifi_ssid_5g', 'SSID Wifi 5G']);
+      const wifi_ssid_5g = wifi_ssid_5g_raw || 'N/A';
+
+      const wifi_key_raw = getVal(row, ['Senha WIFI', 'Senha Wi-Fi', 'wifi_key', 'Senha Wifi', 'Wifi Key', 'WIFI Key', 'WlanKey', 'Wlan Key']);
+      const wifi_key = wifi_key_raw || 'N/A';
+
+      const usuario_raw = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username']);
+      const usuario = usuario_raw || 'N/A';
+
+      const web_key_raw = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key', 'WebKey', 'Web Key']);
+      const web_key = web_key_raw || 'N/A';
+
+      const operador_email = getVal(row, ['Operador', 'operador_email', 'Operator', 'Operador Email']) || req.user.email || 'N/A';
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
+
+      // GPON Serial: Se não vier GPON serial na planilha, geramos um N/A único
+      const gpon_sn_raw = getVal(row, ['GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial']);
+      let gpon_sn = gpon_sn_raw ? gpon_sn_raw.toUpperCase().trim() : '';
+      if (!gpon_sn) {
+        const suffix = mac !== 'N/A' ? mac : (wifi_ssid !== 'N/A' ? wifi_ssid : Math.random().toString(36).substring(7).toUpperCase());
+        gpon_sn = 'N/A_' + suffix;
+      }
 
       try {
         const query = `
@@ -1226,16 +1243,16 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
             data_leitura = CURRENT_TIMESTAMP
         `;
         const values = [
-          fabricante || 'Desconhecido',
-          normalizedModelo || 'Desconhecido',
-          cpe_sn || '',
+          fabricante,
+          normalizedModelo,
+          cpe_sn,
           gpon_sn,
-          mac || '',
-          wifi_ssid || '',
-          wifi_ssid_5g || '',
-          wifi_key || '',
-          usuario || '',
-          web_key || '',
+          mac,
+          wifi_ssid,
+          wifi_ssid_5g,
+          wifi_key,
+          usuario,
+          web_key,
           operador_email
         ];
         await dbPool.query(query, values);
