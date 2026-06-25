@@ -1124,6 +1124,121 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
   }
 });
 
+// Rota para importar etiquetas a partir de uma planilha Excel (somente Admin)
+app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem importar planilhas.' });
+    }
+
+    const { fileBase64 } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ success: false, error: 'Nenhuma planilha foi fornecida.' });
+    }
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Obter dados em JSON
+    const rows = XLSX.utils.sheet_to_json<any>(worksheet);
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'A planilha está vazia ou não pôde ser lida.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // Função auxiliar para mapear chaves com flexibilidade
+    const getVal = (row: any, keys: string[]) => {
+      for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null) {
+          return String(row[k]).trim();
+        }
+      }
+      return '';
+    };
+
+    for (const row of rows) {
+      // Mapeamento tolerante dos cabeçalhos
+      const gpon_sn = getVal(row, ['GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial']).toUpperCase();
+      const fabricante = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer']);
+      const modelo = getVal(row, ['Modelo', 'modelo', 'Model', 'model']);
+      
+      // Se não tiver o GPON SN básico, ignoramos a linha
+      if (!gpon_sn || gpon_sn.length < 4) {
+        errorCount++;
+        continue;
+      }
+
+      const cpe_sn = getVal(row, ['CPE Serial Number', 'CPE Serial', 'cpe_sn', 'Cpe Sn', 'CPE SN']);
+      const macRaw = getVal(row, ['Endereço MAC', 'MAC', 'mac', 'Mac', 'Endereço Mac', 'Endereco Mac']);
+      const mac = macRaw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      const wifi_ssid = getVal(row, ['SSID Wi-Fi 2.4G / Único', 'SSID', 'wifi_ssid', 'SSID Wi-Fi', 'SSID Wifi']);
+      const wifi_ssid_5g = getVal(row, ['SSID Wi-Fi 5G', 'SSID 5G', 'wifi_ssid_5g', 'SSID Wifi 5G']);
+      const wifi_key = getVal(row, ['Senha WIFI', 'Senha Wi-Fi', 'wifi_key', 'Senha Wifi', 'Wifi Key', 'WIFI Key']);
+      const usuario = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username']);
+      const senha = getVal(row, ['Senha WEB', 'Senha', 'senha', 'Senha Web', 'Password', 'Pass']);
+      const operador_email = getVal(row, ['Operador', 'operador_email', 'Operator', 'Operador Email']) || req.user.email;
+
+      const normalizedModelo = normalizeModel(modelo, fabricante);
+
+      try {
+        const query = `
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, operador_email)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (gpon_sn) DO UPDATE SET
+            fabricante = EXCLUDED.fabricante,
+            modelo = EXCLUDED.modelo,
+            cpe_sn = EXCLUDED.cpe_sn,
+            mac = EXCLUDED.mac,
+            wifi_ssid = EXCLUDED.wifi_ssid,
+            wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
+            wifi_key = EXCLUDED.wifi_key,
+            usuario = EXCLUDED.usuario,
+            senha = EXCLUDED.senha,
+            operador_email = EXCLUDED.operador_email,
+            data_leitura = CURRENT_TIMESTAMP
+        `;
+        const values = [
+          fabricante || 'Desconhecido',
+          normalizedModelo || 'Desconhecido',
+          cpe_sn || '',
+          gpon_sn,
+          mac || '',
+          wifi_ssid || '',
+          wifi_ssid_5g || '',
+          wifi_key || '',
+          usuario || '',
+          senha || '',
+          operador_email
+        ];
+        await dbPool.query(query, values);
+        successCount++;
+      } catch (dbErr) {
+        console.error(`Erro ao importar linha com GPON SN ${gpon_sn}:`, dbErr);
+        errorCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Processamento concluído. ${successCount} registros importados/atualizados com sucesso. ${errorCount} erros ou linhas inválidas.`,
+      successCount,
+      errorCount
+    });
+
+  } catch (err: any) {
+    console.error('Erro na rota de importação de Excel:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao processar planilha.' });
+  }
+});
+
 import fs from 'fs';
 import path from 'path';
 

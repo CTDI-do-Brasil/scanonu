@@ -226,6 +226,11 @@ export default function App() {
   const [isPublicQuerying, setIsPublicQuerying] = useState(false);
   const [copiedPublicField, setCopiedPublicField] = useState<string | null>(null);
 
+  // Estados para importação de Excel (Admin)
+  const [isImportingExcel, setIsImportingExcel] = useState(false);
+  const [importExcelMessage, setImportExcelMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
     const storedUser = localStorage.getItem('scanonu_user');
@@ -465,6 +470,52 @@ export default function App() {
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
       alert('Erro ao exportar planilha Excel: ' + (err.message || err));
+    }
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const file = files[0];
+    setImportExcelMessage(null);
+    setIsImportingExcel(true);
+
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+          const resultStr = reader.result as string;
+          const base64Data = resultStr.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = error => reject(error);
+      });
+
+      const response = await fetch('/api/admin/import-excel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        },
+        body: JSON.stringify({ fileBase64: base64 })
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setImportExcelMessage({ type: 'success', text: result.message });
+        fetchStats();
+      } else {
+        setImportExcelMessage({ type: 'error', text: result.error || 'Erro ao importar planilha.' });
+      }
+    } catch (err: any) {
+      setImportExcelMessage({ type: 'error', text: err.message || 'Erro ao ler arquivo da planilha.' });
+    } finally {
+      setIsImportingExcel(false);
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -1549,7 +1600,8 @@ export default function App() {
 
             {/* Sub-tab 2: Consultar e Exportar */}
             {adminSubTab === 'export' && (
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
+              <>
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
                     <Download className="w-5 h-5" />
@@ -1627,7 +1679,61 @@ export default function App() {
                   </button>
                 </div>
               </div>
-            )}
+
+              {/* Importar Planilha Excel */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn mt-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800">Importar Planilha Excel</h4>
+                    <p className="text-[11px] text-slate-400">Envie uma planilha XLSX com registros de ONUs para salvar/atualizar no banco</p>
+                  </div>
+                </div>
+
+                {importExcelMessage && (
+                  <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+                    importExcelMessage.type === 'success' 
+                      ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                      : 'bg-red-50 border-red-200 text-red-800'
+                  }`}>
+                    {importExcelMessage.type === 'success' ? (
+                      <Check className="w-4 h-4 text-blue-600" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                    )}
+                    <span>{importExcelMessage.text}</span>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center">
+                  <input 
+                    type="file"
+                    accept=".xlsx, .xls"
+                    ref={importFileInputRef}
+                    onChange={handleImportExcel}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => importFileInputRef.current?.click()}
+                    disabled={isImportingExcel}
+                    className="w-full bg-slate-100 hover:bg-slate-200 active:bg-slate-300 disabled:bg-slate-100/60 text-slate-700 font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all text-xs border border-slate-200 shadow-sm"
+                  >
+                    {isImportingExcel ? (
+                      <div className="w-4 h-4 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin"></div>
+                    ) : (
+                      <Upload className="w-4 h-4 text-slate-500" />
+                    )}
+                    <span>{isImportingExcel ? 'Processando importação...' : 'Selecionar e Importar Planilha (.XLSX)'}</span>
+                  </button>
+                  <p className="text-[10px] text-slate-400 mt-2 text-center leading-relaxed">
+                    A planilha deve conter uma coluna com <b>GPON Serial Number</b> (ou GPON Serial, gpon_sn, Serial, S/N) e, opcionalmente, Fabricante, Modelo, Endereço MAC, Usuário e Senha. Registros com o mesmo GPON Serial serão atualizados automaticamente.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
 
             {/* Sub-tab 3: Cadastro e Lista de Usuários */}
             {adminSubTab === 'users' && (
