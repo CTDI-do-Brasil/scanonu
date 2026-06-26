@@ -182,6 +182,20 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   `;
   await pool.query(createSessionsTableQuery);
 
+  // Criar tabela de impressoras
+  const createPrintersTableQuery = `
+    CREATE TABLE IF NOT EXISTS impressoras_scan_onu (
+      id SERIAL PRIMARY KEY,
+      nome VARCHAR(150) NOT NULL,
+      descricao VARCHAR(250),
+      ip VARCHAR(50) NOT NULL,
+      porta INT NOT NULL DEFAULT 6101,
+      localizacao VARCHAR(150),
+      data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  await pool.query(createPrintersTableQuery);
+
   // Migração para remover a coluna ID caso ela já exista
   try {
     const checkColumn = await pool.query(
@@ -1218,6 +1232,72 @@ app.get('/api/admin/users', authenticateSession, async (req: any, res: any) => {
     return res.status(500).json({ error: 'Erro ao listar usuários.' });
   }
 });
+
+// --- ROTAS DE IMPRESSORAS (ADMIN) ---
+// Listar impressoras
+app.get('/api/admin/printers', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.json({ success: true, printers: [] });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    const printersRes = await dbPool.query('SELECT * FROM impressoras_scan_onu ORDER BY nome ASC');
+    return res.json({ success: true, printers: printersRes.rows });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao listar impressoras.' });
+  }
+});
+
+// Adicionar impressora
+app.post('/api/admin/printers', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    const { nome, descricao, ip, porta, localizacao } = req.body;
+    await dbPool.query(
+      'INSERT INTO impressoras_scan_onu (nome, descricao, ip, porta, localizacao) VALUES ($1, $2, $3, $4, $5)',
+      [nome, descricao, ip, parseInt(porta) || 6101, localizacao]
+    );
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao criar impressora.' });
+  }
+});
+
+// Editar impressora
+app.put('/api/admin/printers/:id', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    const { nome, descricao, ip, porta, localizacao } = req.body;
+    await dbPool.query(
+      'UPDATE impressoras_scan_onu SET nome = $1, descricao = $2, ip = $3, porta = $4, localizacao = $5 WHERE id = $6',
+      [nome, descricao, ip, parseInt(porta) || 6101, localizacao, req.params.id]
+    );
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao atualizar impressora.' });
+  }
+});
+
+// Deletar impressora
+app.delete('/api/admin/printers/:id', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    await dbPool.query('DELETE FROM impressoras_scan_onu WHERE id = $1', [req.params.id]);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao remover impressora.' });
+  }
+});
+// --- FIM ROTAS IMPRESSORAS ---
 
 // Rota para obter estatísticas do painel Admin
 app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {

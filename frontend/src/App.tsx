@@ -25,8 +25,13 @@ import {
   Search,
   ArrowLeft,
   Menu,
-  BarChart3
+  BarChart3,
+  Printer,
+  Monitor,
+  MapPin,
+  Trash2
 } from 'lucide-react';
+
 
 interface ScanData {
   fabricante: string;
@@ -160,7 +165,17 @@ export default function App() {
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterModel, setFilterModel] = useState('');
-  const [adminSubTab, setAdminSubTab] = useState<'metrics' | 'export' | 'users'>('metrics');
+  const [adminSubTab, setAdminSubTab] = useState<'metrics' | 'export' | 'users' | 'printers'>('metrics');
+  
+  // Impressoras
+  const [printers, setPrinters] = useState<any[]>([]);
+  const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
+  const [editingPrinter, setEditingPrinter] = useState<any>(null);
+  const [printerFormData, setPrinterFormData] = useState({
+    nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ'
+  });
+  const [printerError, setPrinterError] = useState<string | null>(null);
+  const [isUpdatingPrinter, setIsUpdatingPrinter] = useState(false);
 
   interface StatsData {
     totalLabels: number;
@@ -312,8 +327,29 @@ export default function App() {
     if (adminTab === 'admin') {
       fetchUsers();
       fetchStats();
+      fetchPrinters();
     }
   }, [adminTab]);
+
+  const fetchPrinters = async () => {
+    if (!user || user.role !== 'admin') return;
+    setIsLoadingPrinters(true);
+    try {
+      const response = await fetch('/api/admin/printers', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setPrinters(result.printers);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar impressoras:', err);
+    } finally {
+      setIsLoadingPrinters(false);
+    }
+  };
 
   const handlePublicQuery = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -459,6 +495,60 @@ export default function App() {
       setEditUserError('Erro de conexão com o servidor.');
     } finally {
       setIsUpdatingUser(false);
+    }
+  };
+
+  const handleSavePrinter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || user.role !== 'admin') return;
+    setPrinterError(null);
+    setIsUpdatingPrinter(true);
+
+    try {
+      const url = editingPrinter ? `/api/admin/printers/${editingPrinter.id}` : '/api/admin/printers';
+      const method = editingPrinter ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        },
+        body: JSON.stringify(printerFormData)
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setAdminMessage({ type: 'success', text: editingPrinter ? 'Impressora atualizada com sucesso!' : 'Impressora cadastrada com sucesso!' });
+        setEditingPrinter(null);
+        setPrinterFormData({ nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ' });
+        fetchPrinters();
+      } else {
+        setPrinterError(result.error || 'Erro ao salvar impressora.');
+      }
+    } catch (err) {
+      setPrinterError('Erro de conexão com o servidor.');
+    } finally {
+      setIsUpdatingPrinter(false);
+    }
+  };
+
+  const handleDeletePrinter = async (id: number) => {
+    if (!user || user.role !== 'admin') return;
+    if (!window.confirm('Tem certeza que deseja remover esta impressora?')) return;
+
+    try {
+      const response = await fetch(`/api/admin/printers/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
+      if (response.ok) {
+        setAdminMessage({ type: 'success', text: 'Impressora removida com sucesso!' });
+        fetchPrinters();
+      }
+    } catch (err) {
+      console.error('Erro ao remover impressora:', err);
     }
   };
 
@@ -1583,6 +1673,22 @@ export default function App() {
                 <Users className="w-4 h-4" />
                 Gerenciar Usuários
               </button>
+
+              <button
+                onClick={() => {
+                  setAdminTab('admin');
+                  setAdminSubTab('printers');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  adminTab === 'admin' && adminSubTab === 'printers'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Printer className="w-4 h-4" />
+                Gerenciar Impressoras
+              </button>
             </nav>
 
             {/* Sidebar User Profile Section */}
@@ -1703,6 +1809,16 @@ export default function App() {
                 }`}
               >
                 Usuários
+              </button>
+              <button
+                onClick={() => setAdminSubTab('printers')}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
+                  adminSubTab === 'printers'
+                    ? 'bg-white text-[#003865] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Impressoras
               </button>
             </div>
 
@@ -2093,6 +2209,162 @@ export default function App() {
                               title="Editar Usuário / Resetar Senha"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tab 4: Impressoras */}
+            {adminSubTab === 'printers' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-[#003865]/10 p-2 rounded-xl">
+                        <Printer className="w-5 h-5 text-[#003865]" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800">
+                        {editingPrinter ? 'Editar Impressora' : 'Cadastrar Impressora'}
+                      </h3>
+                    </div>
+                    {editingPrinter && (
+                      <button
+                        onClick={() => {
+                          setEditingPrinter(null);
+                          setPrinterFormData({ nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ' });
+                        }}
+                        className="text-sm font-semibold text-slate-500 hover:text-slate-700"
+                      >
+                        Cancelar Edição
+                      </button>
+                    )}
+                  </div>
+                  
+                  {printerError && (
+                    <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+                      {printerError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSavePrinter} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Printer Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={printerFormData.nome}
+                        onChange={e => setPrinterFormData({ ...printerFormData, nome: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
+                        placeholder="Ex: Acessórios - LINHA C1 - 1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Description</label>
+                      <input
+                        type="text"
+                        value={printerFormData.descricao}
+                        onChange={e => setPrinterFormData({ ...printerFormData, descricao: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
+                        placeholder="Ex: Acessórios - LINHA C1 - 1"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">IP Address</label>
+                        <input
+                          type="text"
+                          required
+                          value={printerFormData.ip}
+                          onChange={e => setPrinterFormData({ ...printerFormData, ip: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
+                          placeholder="Ex: 10.140.160.67"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Port Number</label>
+                        <input
+                          type="text"
+                          required
+                          value={printerFormData.porta}
+                          onChange={e => setPrinterFormData({ ...printerFormData, porta: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
+                          placeholder="6101"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Location</label>
+                      <input
+                        type="text"
+                        value={printerFormData.localizacao}
+                        onChange={e => setPrinterFormData({ ...printerFormData, localizacao: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
+                        placeholder="Ex: Cielo c/o CTDI Brazil"
+                      />
+                    </div>
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isUpdatingPrinter}
+                        className="bg-[#003865] hover:bg-[#002a4d] text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-blue-900/10 transition-all active:scale-[0.98] disabled:opacity-70"
+                      >
+                        {isUpdatingPrinter ? 'Salvando...' : 'Update Printer'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Lista de Impressoras */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800 mb-4">Impressoras Cadastradas na Rede</h3>
+                  {isLoadingPrinters ? (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-blue-100 border-t-[#003865] rounded-full animate-spin"></div>
+                    </div>
+                  ) : printers.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 text-sm">
+                      Nenhuma impressora cadastrada ainda.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {printers.map((ptr) => (
+                        <div key={ptr.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3.5 bg-slate-50 border border-slate-100 rounded-xl hover:border-slate-300 transition-colors gap-3 sm:gap-0">
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">{ptr.nome}</p>
+                            <div className="flex gap-3 text-xs text-slate-500 mt-1 font-medium">
+                              <span className="flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {ptr.ip}:{ptr.porta}</span>
+                              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {ptr.localizacao}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingPrinter(ptr);
+                                setPrinterFormData({
+                                  nome: ptr.nome,
+                                  descricao: ptr.descricao || '',
+                                  ip: ptr.ip,
+                                  porta: ptr.porta?.toString() || '6101',
+                                  localizacao: ptr.localizacao || ''
+                                });
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="p-2 text-slate-400 hover:text-[#003865] hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar impressora"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePrinter(ptr.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Remover impressora"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
