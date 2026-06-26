@@ -157,10 +157,16 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       id SERIAL PRIMARY KEY,
       email VARCHAR(150) UNIQUE NOT NULL,
       senha VARCHAR(100) NOT NULL,
-      role VARCHAR(50) DEFAULT 'operador'
+      role VARCHAR(50) DEFAULT 'operador',
+      operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'
     );
   `;
   await pool.query(createUsersTableQuery);
+
+  // Garantir coluna operacao se não existir
+  try {
+    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+  } catch (e) {}
 
   // Criar tabela de sessões
   const createSessionsTableQuery = `
@@ -783,7 +789,7 @@ Siga atentamente as instruções abaixo para cada campo:
 
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
-app.post('/api/save-label', authenticateSession, async (req, res) => {
+app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
   try {
     const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb } = req.body;
     const resolvedWebKey = web_key !== undefined ? web_key : senha;
@@ -816,6 +822,25 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
         } catch (e) {
           console.error(`Erro ao verificar existência no banco ${dbName}:`, e);
         }
+      }
+    }
+
+    // Se ainda não tiver escolhido, tentar buscar pela operação do usuário logado
+    if (!chosenDb && req.user && req.user.email) {
+      try {
+        const defaultPool = getPoolForDatabase('db-scanonu');
+        await ensureDatabaseSchema(defaultPool, 'db-scanonu');
+        const userRes = await defaultPool.query('SELECT operacao FROM usuarios_scan_onu WHERE email = $1', [req.user.email.trim().toLowerCase()]);
+        if (userRes.rowCount && userRes.rowCount > 0) {
+          const op = userRes.rows[0].operacao;
+          if (op === 'CTDI OPERAÇÃO GLP') {
+            chosenDb = 'ScanONU_Claro';
+          } else if (op === 'CTDI MATRIZ') {
+            chosenDb = 'db-scanonu';
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao consultar operacao do usuario:', err);
       }
     }
 
@@ -1044,7 +1069,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     const userRes = await dbPool.query(
-      'SELECT email, role FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
+      'SELECT email, role, operacao FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
       [email.trim().toLowerCase(), senha]
     );
 
@@ -1078,7 +1103,7 @@ app.post('/api/login', async (req, res) => {
 // Rota para cadastrar novos usuários (somente Admin)
 app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
-    const { email, senha, role } = req.body;
+    const { email, senha, role, operacao } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -1090,8 +1115,8 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
     }
 
     await dbPool.query(
-      'INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ($1, $2, $3)',
-      [email.trim().toLowerCase(), senha, role || 'operador']
+      'INSERT INTO usuarios_scan_onu (email, senha, role, operacao) VALUES ($1, $2, $3, $4)',
+      [email.trim().toLowerCase(), senha, role || 'operador', operacao || 'CTDI MATRIZ']
     );
 
     return res.json({ success: true, message: `Usuário ${email} cadastrado com sucesso!` });
@@ -1108,7 +1133,7 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
 // Rota para editar e resetar senhas de usuários (somente Admin)
 app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
-    const { id, email, senha, role } = req.body;
+    const { id, email, senha, role, operacao } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -1123,11 +1148,11 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
     let queryValues = [];
 
     if (senha && senha.trim() !== '') {
-      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3 WHERE id = $4';
-      queryValues = [email.trim().toLowerCase(), senha.trim(), role, id];
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3, operacao = $4 WHERE id = $5';
+      queryValues = [email.trim().toLowerCase(), senha.trim(), role, operacao || 'CTDI MATRIZ', id];
     } else {
-      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2 WHERE id = $3';
-      queryValues = [email.trim().toLowerCase(), role, id];
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2, operacao = $3 WHERE id = $4';
+      queryValues = [email.trim().toLowerCase(), role, operacao || 'CTDI MATRIZ', id];
     }
 
     await dbPool.query(queryText, queryValues);
@@ -1146,14 +1171,14 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
 app.get('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) {
-      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'admin' }] });
+      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'admin', operacao: 'CTDI MATRIZ' }] });
     }
 
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
-    const usersRes = await dbPool.query('SELECT id, email, role FROM usuarios_scan_onu ORDER BY email ASC');
+    const usersRes = await dbPool.query('SELECT id, email, role, operacao FROM usuarios_scan_onu ORDER BY email ASC');
     return res.json({ success: true, users: usersRes.rows });
 
   } catch (err: any) {
