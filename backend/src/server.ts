@@ -301,10 +301,16 @@ async function connectToDatabase() {
           id SERIAL PRIMARY KEY,
           email VARCHAR(150) UNIQUE NOT NULL,
           senha VARCHAR(100) NOT NULL,
-          role VARCHAR(50) DEFAULT 'operador'
+          role VARCHAR(50) DEFAULT 'operador',
+          operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'
         );
       `;
       await dbPool.query(createUsersTableQuery);
+
+      // Garantir coluna operacao se não existir
+      try {
+        await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+      } catch (e) {}
 
       // Criar a tabela de sessões
       const createSessionsTableQuery = `
@@ -317,6 +323,26 @@ async function connectToDatabase() {
         );
       `;
       await dbPool.query(createSessionsTableQuery);
+
+      // Migração para remover a coluna ID das etiquetas caso ela já exista
+      try {
+        const checkColumn = await dbPool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='id'"
+        );
+        if (checkColumn.rowCount && checkColumn.rowCount > 0) {
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP CONSTRAINT IF EXISTS etiquetas_scan_onu_pkey CASCADE');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS id CASCADE');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD PRIMARY KEY (gpon_sn)');
+        }
+      } catch (e) {}
+
+      // Garantir SSID e Imagem URL nas etiquetas
+      try {
+        await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
+        await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
+        await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
+      } catch (e) {}
+
       console.log('Tabelas de banco validadas/criadas com sucesso.');
 
       // Migração para remover a coluna ID caso ela já exista no banco
@@ -369,12 +395,12 @@ async function connectToDatabase() {
       const adminCheck = await dbPool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
       if (!adminCheck.rowCount || adminCheck.rowCount === 0) {
         await dbPool.query(
-          "INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ('admin@scanonu.com', 'admin123', 'admin')"
+          "INSERT INTO usuarios_scan_onu (email, senha, role, operacao) VALUES ('admin@scanonu.com', 'admin123', 'admin', 'CTDI MATRIZ')"
         );
         console.log('Usuário admin padrão (admin@scanonu.com / admin123) cadastrado com sucesso.');
       } else {
         await dbPool.query(
-          "UPDATE usuarios_scan_onu SET senha = 'admin123', role = 'admin' WHERE email = 'admin@scanonu.com'"
+          "UPDATE usuarios_scan_onu SET senha = 'admin123', role = 'admin', operacao = 'CTDI MATRIZ' WHERE email = 'admin@scanonu.com'"
         );
         console.log('Senha e perfil do usuário admin@scanonu.com resetados com sucesso.');
       }
