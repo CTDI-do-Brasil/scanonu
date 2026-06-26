@@ -782,13 +782,14 @@ Siga atentamente as instruções abaixo para cada campo:
 });
 
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
+// Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', authenticateSession, async (req, res) => {
   try {
-    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite } = req.body;
+    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb } = req.body;
     const resolvedWebKey = web_key !== undefined ? web_key : senha;
     const normalizedModelo = normalizeModel(modelo, fabricante);
 
-    if (!dbConnected || !dbPool) {
+    if (!dbConnected) {
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
       return res.json({ 
         success: true, 
@@ -797,7 +798,36 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
       });
     }
 
-    const checkRes = await dbPool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    // Determinar em qual banco de dados salvar
+    let chosenDb = targetDb;
+    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    
+    if (!chosenDb) {
+      // Procurar em qual banco o registro já existe
+      for (const dbName of databases) {
+        try {
+          const tempPool = getPoolForDatabase(dbName);
+          await ensureDatabaseSchema(tempPool, dbName);
+          const checkRes = await tempPool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (mac = $2 AND mac <> \'N/A\')', [gpon_sn, mac]);
+          if (checkRes.rowCount && checkRes.rowCount > 0) {
+            chosenDb = dbName;
+            break;
+          }
+        } catch (e) {
+          console.error(`Erro ao verificar existência no banco ${dbName}:`, e);
+        }
+      }
+    }
+
+    // Se ainda não tiver escolhido, usar o padrão
+    if (!chosenDb) {
+      chosenDb = getDefaultDatabaseName();
+    }
+
+    const pool = getPoolForDatabase(chosenDb);
+    await ensureDatabaseSchema(pool, chosenDb);
+
+    const checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
 
     if (exists) {
@@ -827,47 +857,47 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
         WHERE gpon_sn = $11
       `;
       const updateValues = [
-        fabricante || '',
-        normalizedModelo || '',
-        cpe_sn || '',
-        mac || '',
-        wifi_ssid || '',
-        wifi_ssid_5g || '',
-        wifi_key || '',
-        usuario || '',
-        resolvedWebKey || '',
+        fabricante || 'N/A',
+        normalizedModelo || 'N/A',
+        cpe_sn || 'N/A',
+        mac || 'N/A',
+        wifi_ssid || 'N/A',
+        wifi_ssid_5g || 'N/A',
+        wifi_key || 'N/A',
+        usuario || 'N/A',
+        resolvedWebKey || 'N/A',
         operador || 'sistema',
         gpon_sn
       ];
-      await dbPool.query(updateQuery, updateValues);
-      console.log(`Dados atualizados com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
+      await pool.query(updateQuery, updateValues);
+      console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
     } else {
       const insertQuery = `
         INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `;
       const insertValues = [
-        fabricante || '',
-        normalizedModelo || '',
-        cpe_sn || '',
-        gpon_sn || '',
-        mac || '',
-        wifi_ssid || '',
-        wifi_ssid_5g || '',
-        wifi_key || '',
-        usuario || '',
-        resolvedWebKey || '',
+        fabricante || 'N/A',
+        normalizedModelo || 'N/A',
+        cpe_sn || 'N/A',
+        gpon_sn || 'N/A',
+        mac || 'N/A',
+        wifi_ssid || 'N/A',
+        wifi_ssid_5g || 'N/A',
+        wifi_key || 'N/A',
+        usuario || 'N/A',
+        resolvedWebKey || 'N/A',
         operador || 'sistema'
       ];
-      await dbPool.query(insertQuery, insertValues);
-      console.log(`Dados salvos com sucesso no banco de dados. Serial GPON: ${gpon_sn}`);
+      await pool.query(insertQuery, insertValues);
+      console.log(`Dados salvos com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
     }
 
     return res.json({ 
       success: true, 
       message: exists 
-        ? 'Dados atualizados/sobrescritos com sucesso no PostgreSQL!'
-        : 'Dados salvos com sucesso no PostgreSQL!' 
+        ? `Dados atualizados/sobrescritos com sucesso no banco ${chosenDb}!`
+        : `Dados salvos com sucesso no banco ${chosenDb}!` 
     });
 
   } catch (dbError: any) {
@@ -880,29 +910,52 @@ app.post('/api/save-label', authenticateSession, async (req, res) => {
   }
 });
 
-// Rota para obter uma etiqueta existente pelo GPON SN (sem custo de token)
+// Rota para obter uma etiqueta existente pelo GPON SN, MAC ou rede WIFI nos dois bancos
 app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
   try {
     const { gpon_sn } = req.params;
 
-    if (!dbConnected || !dbPool) {
+    if (!dbConnected) {
       return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
-    const checkRes = await dbPool.query(
-      'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
-      [gpon_sn.toUpperCase().trim()]
-    );
+    const cleanQuery = gpon_sn.toUpperCase().trim();
+    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    let foundRecord = null;
+    let foundDb = '';
 
-    if (checkRes.rowCount && checkRes.rowCount > 0) {
+    for (const dbName of databases) {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        await ensureDatabaseSchema(pool, dbName);
+
+        const checkRes = await pool.query(
+          `SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha 
+           FROM etiquetas_scan_onu 
+           WHERE UPPER(gpon_sn) = $1 OR UPPER(mac) = $1 OR UPPER(wifi_ssid) = $1 OR UPPER(wifi_ssid_5g) = $1`,
+          [cleanQuery]
+        );
+
+        if (checkRes.rowCount && checkRes.rowCount > 0) {
+          foundRecord = checkRes.rows[0];
+          foundDb = dbName;
+          break;
+        }
+      } catch (err) {
+        console.error(`Erro ao buscar no banco ${dbName}:`, err);
+      }
+    }
+
+    if (foundRecord) {
       return res.json({
         success: true,
-        data: checkRes.rows[0]
+        data: foundRecord,
+        database: foundDb
       });
     } else {
       return res.status(404).json({
         success: false,
-        error: 'Equipamento não encontrado no banco de dados.'
+        error: 'Equipamento não encontrado em nenhum dos bancos de dados.'
       });
     }
   } catch (err: any) {
@@ -911,38 +964,60 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
   }
 });
 
-// Rota pública para obter apenas as credenciais de acesso de uma ONU pelo GPON SN ou MAC (usado na tela de login)
+// Rota pública para obter apenas as credenciais de acesso de uma ONU pelo GPON SN, MAC ou rede WIFI nos dois bancos
 app.get('/api/public/label/:query', async (req, res) => {
   try {
     const { query } = req.params;
 
-    if (!dbConnected || !dbPool) {
+    if (!dbConnected) {
       return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
     const cleanQuery = query.toUpperCase().trim();
-    const checkRes = await dbPool.query(
-      'SELECT fabricante, modelo, gpon_sn, mac, usuario, web_key FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $1',
-      [cleanQuery]
-    );
+    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    let foundRecord = null;
+    let foundDb = '';
 
-    if (checkRes.rowCount && checkRes.rowCount > 0) {
+    for (const dbName of databases) {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        await ensureDatabaseSchema(pool, dbName);
+
+        const checkRes = await pool.query(
+          `SELECT fabricante, modelo, gpon_sn, mac, usuario, web_key, wifi_ssid 
+           FROM etiquetas_scan_onu 
+           WHERE UPPER(gpon_sn) = $1 OR UPPER(mac) = $1 OR UPPER(wifi_ssid) = $1 OR UPPER(wifi_ssid_5g) = $1`,
+          [cleanQuery]
+        );
+
+        if (checkRes.rowCount && checkRes.rowCount > 0) {
+          foundRecord = checkRes.rows[0];
+          foundDb = dbName;
+          break;
+        }
+      } catch (err) {
+        console.error(`Erro ao buscar no banco público ${dbName}:`, err);
+      }
+    }
+
+    if (foundRecord) {
       return res.json({
         success: true,
         data: {
-          fabricante: checkRes.rows[0].fabricante,
-          modelo: checkRes.rows[0].modelo,
-          gpon_sn: checkRes.rows[0].gpon_sn,
-          mac: checkRes.rows[0].mac,
-          usuario: checkRes.rows[0].usuario,
-          senha: checkRes.rows[0].web_key,
-          web_key: checkRes.rows[0].web_key
-        }
+          fabricante: foundRecord.fabricante,
+          modelo: foundRecord.modelo,
+          gpon_sn: foundRecord.gpon_sn,
+          mac: foundRecord.mac,
+          usuario: foundRecord.usuario,
+          senha: foundRecord.web_key,
+          web_key: foundRecord.web_key
+        },
+        database: foundDb
       });
     } else {
       return res.status(404).json({
         success: false,
-        error: 'Equipamento não encontrado no banco de dados.'
+        error: 'Equipamento não encontrado em nenhum dos bancos de dados.'
       });
     }
   } catch (err: any) {

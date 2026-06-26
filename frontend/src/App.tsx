@@ -1212,7 +1212,7 @@ export default function App() {
                   <span className="font-bold text-lg text-slate-800 tracking-tight">Consulta Rápida</span>
                 </div>
                 <p className="text-xs text-slate-500 max-w-xs mt-1">
-                  Consulte usuário e senha de acesso da ONU pelo GPON SN ou MAC.
+                  Consulte usuário e senha de acesso da ONU pelo GPON SN, MAC ou Rede Wi-Fi.
                 </p>
               </div>
 
@@ -1225,11 +1225,11 @@ export default function App() {
 
               <form onSubmit={handlePublicQuery} className="w-full space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-[#002f56] block">GPON SN ou MAC</label>
+                  <label className="text-sm font-bold text-[#002f56] block">GPON SN, MAC ou Rede Wi-Fi (SSID)</label>
                   <input 
                     type="text" 
                     required
-                    placeholder="Ex: SMBS12345678"
+                    placeholder="Ex: GPON, MAC ou Rede Wi-Fi"
                     value={publicQueryInput}
                     onChange={(e) => setPublicQueryInput(e.target.value.toUpperCase().trim())}
                     className="w-full bg-white border border-slate-300 focus:border-[#002f56] focus:ring-1 focus:ring-[#002f56] rounded-2xl px-4 py-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400 font-mono"
@@ -2160,12 +2160,12 @@ export default function App() {
                       <span className="font-semibold text-xs text-slate-800">Ajustar ONU Existente</span>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Insira o GPON Serial Number da ONU para buscar os dados cadastrados e fazer edições diretamente no banco.
+                      Insira o GPON Serial, MAC ou nome da rede Wi-Fi da ONU para buscar os dados cadastrados e fazer edições.
                     </p>
                     <div className="flex gap-2">
                       <input 
                         type="text"
-                        placeholder="Ex: SMBS12345678"
+                        placeholder="Ex: GPON, MAC ou Rede Wi-Fi (SSID)"
                         value={searchGponInput}
                         onChange={(e) => setSearchGponInput(e.target.value.toUpperCase().trim())}
                         className="flex-1 bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all font-mono"
