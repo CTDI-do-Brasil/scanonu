@@ -795,6 +795,15 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
     const resolvedWebKey = web_key !== undefined ? web_key : senha;
     const normalizedModelo = normalizeModel(modelo, fabricante);
 
+    let resolvedWifiSsid5g = wifi_ssid_5g || 'N/A';
+    if (normalizedModelo.toUpperCase().includes('5676V2') || normalizedModelo.toUpperCase().includes('5676 V2')) {
+      if (resolvedWifiSsid5g && resolvedWifiSsid5g !== 'N/A' && resolvedWifiSsid5g.trim() !== '') {
+        if (!resolvedWifiSsid5g.toUpperCase().endsWith('_5G')) {
+          resolvedWifiSsid5g = resolvedWifiSsid5g.trim() + '_5G';
+        }
+      }
+    }
+
     if (!dbConnected) {
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
       return res.json({ 
@@ -887,7 +896,7 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
         cpe_sn || 'N/A',
         mac || 'N/A',
         wifi_ssid || 'N/A',
-        wifi_ssid_5g || 'N/A',
+        resolvedWifiSsid5g,
         wifi_key || 'N/A',
         usuario || 'N/A',
         resolvedWebKey || 'N/A',
@@ -908,7 +917,7 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
         gpon_sn || 'N/A',
         mac || 'N/A',
         wifi_ssid || 'N/A',
-        wifi_ssid_5g || 'N/A',
+        resolvedWifiSsid5g,
         wifi_key || 'N/A',
         usuario || 'N/A',
         resolvedWebKey || 'N/A',
@@ -1478,6 +1487,15 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
 
+      let finalWifiSsid5g = wifi_ssid_5g;
+      if (normalizedModelo.toUpperCase().includes('5676V2') || normalizedModelo.toUpperCase().includes('5676 V2')) {
+        if (finalWifiSsid5g && finalWifiSsid5g !== 'N/A' && finalWifiSsid5g.trim() !== '') {
+          if (!finalWifiSsid5g.toUpperCase().endsWith('_5G')) {
+            finalWifiSsid5g = finalWifiSsid5g.trim() + '_5G';
+          }
+        }
+      }
+
       // GPON Serial: Se não vier GPON serial na planilha, geramos um N/A único
       const gpon_sn_raw = getVal(row, ['GPON', 'gpon', 'GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial']);
       let gpon_sn = gpon_sn_raw ? gpon_sn_raw.toUpperCase().trim() : '';
@@ -1510,7 +1528,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           gpon_sn,
           mac,
           wifi_ssid,
-          wifi_ssid_5g,
+          finalWifiSsid5g,
           wifi_key,
           usuario,
           web_key,
@@ -1599,6 +1617,15 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
 
+      let finalWifiSsid5g = wifi_ssid_5g;
+      if (normalizedModelo.toUpperCase().includes('5676V2') || normalizedModelo.toUpperCase().includes('5676 V2')) {
+        if (finalWifiSsid5g && finalWifiSsid5g !== 'N/A' && finalWifiSsid5g.trim() !== '') {
+          if (!finalWifiSsid5g.toUpperCase().endsWith('_5G')) {
+            finalWifiSsid5g = finalWifiSsid5g.trim() + '_5G';
+          }
+        }
+      }
+
       const gpon_sn_raw = getVal(row, ['GPON', 'gpon', 'GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial']);
       let gpon_sn = gpon_sn_raw ? gpon_sn_raw.toUpperCase().trim() : '';
       if (!gpon_sn) {
@@ -1612,7 +1639,7 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
         cpe_sn,
         mac,
         wifi_ssid,
-        wifi_ssid_5g,
+        wifi_ssid_5g: finalWifiSsid5g,
         wifi_key,
         usuario,
         web_key,

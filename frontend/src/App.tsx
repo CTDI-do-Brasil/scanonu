@@ -110,6 +110,15 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
       dataCopy.wifi_ssid_5g = ''; // Only one Wi-Fi network
     }
   }
+
+  // Rule for 5676V2 5G SSID formatting
+  if (modelUpper.includes('5676V2') || modelUpper.includes('5676 V2')) {
+    if (dataCopy.wifi_ssid_5g && dataCopy.wifi_ssid_5g !== 'N/A' && dataCopy.wifi_ssid_5g.trim() !== '') {
+      if (!dataCopy.wifi_ssid_5g.toUpperCase().endsWith('_5G')) {
+        dataCopy.wifi_ssid_5g = dataCopy.wifi_ssid_5g.trim() + '_5G';
+      }
+    }
+  }
   
   return dataCopy;
 }
