@@ -231,6 +231,7 @@ export default function App() {
   const [importExcelMessage, setImportExcelMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [targetDatabase, setTargetDatabase] = useState<'db-scanonu' | 'ScanONU_Claro'>('db-scanonu');
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
@@ -480,6 +481,7 @@ export default function App() {
     
     const file = files[0];
     setImportExcelMessage(null);
+    setImportProgress(null);
     setIsImportingExcel(true);
 
     try {
@@ -494,26 +496,64 @@ export default function App() {
         reader.onerror = error => reject(error);
       });
 
-      const response = await fetch('/api/admin/import-excel', {
+      // 1. Enviar para parsear a planilha no backend
+      const parseResponse = await fetch('/api/admin/parse-excel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
         },
-        body: JSON.stringify({ fileBase64: base64, targetDb: targetDatabase })
+        body: JSON.stringify({ fileBase64: base64 })
       });
 
-      const result = await response.json();
-      if (response.ok && result.success) {
-        setImportExcelMessage({ type: 'success', text: result.message });
-        fetchStats();
-      } else {
-        setImportExcelMessage({ type: 'error', text: result.error || 'Erro ao importar planilha.' });
+      const parseResult = await parseResponse.json();
+      if (!parseResponse.ok || !parseResult.success) {
+        throw new Error(parseResult.error || 'Erro ao processar/ler a planilha Excel.');
       }
+
+      const rows = parseResult.rows || [];
+      if (rows.length === 0) {
+        throw new Error('A planilha está vazia ou nenhum registro válido foi encontrado.');
+      }
+
+      // 2. Enviar em lotes para atualizar o progresso
+      const batchSize = 50;
+      let successTotal = 0;
+      let errorTotal = 0;
+      setImportProgress({ current: 0, total: rows.length });
+
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const chunk = rows.slice(i, i + batchSize);
+        const chunkResponse = await fetch('/api/admin/import-excel-batch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+          },
+          body: JSON.stringify({ rows: chunk, targetDb: targetDatabase })
+        });
+
+        const chunkResult = await chunkResponse.json();
+        if (!chunkResponse.ok || !chunkResult.success) {
+          throw new Error(chunkResult.error || 'Erro ao importar lote de registros.');
+        }
+
+        successTotal += chunkResult.successCount || 0;
+        errorTotal += chunkResult.errorCount || 0;
+
+        setImportProgress({ current: Math.min(i + batchSize, rows.length), total: rows.length });
+      }
+
+      setImportExcelMessage({ 
+        type: 'success', 
+        text: `Importação concluída! ${successTotal} importados/atualizados com sucesso. ${errorTotal} erros.` 
+      });
+      fetchStats();
     } catch (err: any) {
-      setImportExcelMessage({ type: 'error', text: err.message || 'Erro ao ler arquivo da planilha.' });
+      setImportExcelMessage({ type: 'error', text: err.message || 'Erro ao realizar importação.' });
     } finally {
       setIsImportingExcel(false);
+      setImportProgress(null);
       if (e.target) {
         e.target.value = '';
       }
@@ -1720,7 +1760,25 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center w-full">
+                <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center w-full space-y-3">
+                  {importProgress && (
+                    <div className="w-full space-y-2 animate-fadeIn bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div className="flex justify-between text-[11px] font-bold text-slate-600">
+                        <span>Importando registros...</span>
+                        <span className="text-[#003865]">{Math.round((importProgress.current / importProgress.total) * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                        <div 
+                          className="bg-[#003865] h-full transition-all duration-300 ease-out rounded-full" 
+                          style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 text-center font-bold">
+                        Processados {importProgress.current} de {importProgress.total} registros
+                      </div>
+                    </div>
+                  )}
+
                   <input 
                     type="file"
                     accept=".xlsx, .xls"

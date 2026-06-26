@@ -1437,6 +1437,172 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
   }
 });
 
+// Nova rota para apenas parsear e retornar os registros normalizados da planilha
+app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem importar planilhas.' });
+    }
+
+    const { fileBase64 } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ success: false, error: 'Nenhuma planilha foi fornecida.' });
+    }
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    const rows = XLSX.utils.sheet_to_json<any>(worksheet);
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'A planilha está vazia ou não pôde ser lida.' });
+    }
+
+    const getVal = (row: any, keys: string[]) => {
+      for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null) {
+          return String(row[k]).trim();
+        }
+      }
+      return '';
+    };
+
+    const parsedRows = [];
+    for (const row of rows) {
+      const fabricanteRaw = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer']);
+      const fabricante = fabricanteRaw || 'N/A';
+
+      const modeloRaw = getVal(row, ['Modelo', 'modelo', 'Model', 'model']);
+      const modelo = modeloRaw || 'N/A';
+
+      const cpe_sn_raw = getVal(row, ['CPE Serial Number', 'CPE Serial', 'cpe_sn', 'Cpe Sn', 'CPE SN']);
+      const cpe_sn = cpe_sn_raw || 'N/A';
+
+      const macRaw = getVal(row, ['Endereço MAC', 'MAC', 'mac', 'Mac', 'Endereço Mac', 'Endereco Mac']);
+      const mac = macRaw ? macRaw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase() : 'N/A';
+
+      const wifi_ssid_raw = getVal(row, ['SSID Wi-Fi 2.4G / Único', 'SSID', 'wifi_ssid', 'SSID Wi-Fi', 'SSID Wifi', 'SSIDName']);
+      const wifi_ssid = wifi_ssid_raw || 'N/A';
+
+      const wifi_ssid_5g_raw = getVal(row, ['SSID Wi-Fi 5G', 'SSID 5G', 'wifi_ssid_5g', 'SSID Wifi 5G']);
+      const wifi_ssid_5g = wifi_ssid_5g_raw || 'N/A';
+
+      const wifi_key_raw = getVal(row, ['Senha WIFI', 'Senha Wi-Fi', 'wifi_key', 'Senha Wifi', 'Wifi Key', 'WIFI Key', 'WlanKey', 'Wlan Key']);
+      const wifi_key = wifi_key_raw || 'N/A';
+
+      const usuario_raw = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username']);
+      const usuario = usuario_raw || 'N/A';
+
+      const web_key_raw = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key', 'WebKey', 'Web Key']);
+      const web_key = web_key_raw || 'N/A';
+
+      const normalizedModelo = normalizeModel(modelo, fabricante);
+
+      const gpon_sn_raw = getVal(row, ['GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial']);
+      let gpon_sn = gpon_sn_raw ? gpon_sn_raw.toUpperCase().trim() : '';
+      if (!gpon_sn) {
+        const suffix = mac !== 'N/A' ? mac : (wifi_ssid !== 'N/A' ? wifi_ssid : Math.random().toString(36).substring(7).toUpperCase());
+        gpon_sn = 'N/A_' + suffix;
+      }
+
+      parsedRows.push({
+        fabricante,
+        modelo: normalizedModelo,
+        cpe_sn,
+        mac,
+        wifi_ssid,
+        wifi_ssid_5g,
+        wifi_key,
+        usuario,
+        web_key,
+        gpon_sn
+      });
+    }
+
+    return res.json({ success: true, rows: parsedRows });
+  } catch (err: any) {
+    console.error('Erro na rota de parsing de Excel:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro ao processar planilha.' });
+  }
+});
+
+// Nova rota para importar um lote (batch) de registros em um banco selecionado
+app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Acesso negado.' });
+    }
+
+    const { rows, targetDb } = req.body;
+    if (!rows || !Array.isArray(rows)) {
+      return res.status(400).json({ success: false, error: 'Lista de registros inválida ou vazia.' });
+    }
+
+    const targetDbName = targetDb || getDefaultDatabaseName();
+    let pool: Pool;
+    try {
+      pool = getPoolForDatabase(targetDbName);
+      await ensureDatabaseSchema(pool, targetDbName);
+    } catch (dbErr: any) {
+      console.error(`Erro ao conectar ao banco ${targetDbName}:`, dbErr);
+      return res.status(500).json({ success: false, error: `Não foi possível conectar ao banco de dados '${targetDbName}': ${dbErr.message || dbErr}` });
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+    const operatorEmail = req.user.email || 'N/A';
+
+    for (const row of rows) {
+      try {
+        const query = `
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (gpon_sn) DO UPDATE SET
+            fabricante = EXCLUDED.fabricante,
+            modelo = EXCLUDED.modelo,
+            cpe_sn = EXCLUDED.cpe_sn,
+            mac = EXCLUDED.mac,
+            wifi_ssid = EXCLUDED.wifi_ssid,
+            wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
+            wifi_key = EXCLUDED.wifi_key,
+            usuario = EXCLUDED.usuario,
+            web_key = EXCLUDED.web_key,
+            operador_email = EXCLUDED.operador_email,
+            data_leitura = CURRENT_TIMESTAMP
+        `;
+        const values = [
+          row.fabricante || 'N/A',
+          row.modelo || 'N/A',
+          row.cpe_sn || 'N/A',
+          row.gpon_sn,
+          row.mac || 'N/A',
+          row.wifi_ssid || 'N/A',
+          row.wifi_ssid_5g || 'N/A',
+          row.wifi_key || 'N/A',
+          row.usuario || 'N/A',
+          row.web_key || 'N/A',
+          operatorEmail
+        ];
+        await pool.query(query, values);
+        successCount++;
+      } catch (dbErr) {
+        console.error(`Erro ao importar linha no lote com GPON SN ${row.gpon_sn}:`, dbErr);
+        errorCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      successCount,
+      errorCount
+    });
+  } catch (err: any) {
+    console.error('Erro na rota de importação de lote:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao importar lote.' });
+  }
+});
+
 import fs from 'fs';
 import path from 'path';
 
