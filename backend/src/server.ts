@@ -1239,27 +1239,57 @@ app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
-    const totalLabelsRes = await dbPool.query('SELECT COUNT(*) FROM etiquetas_scan_onu');
-    const totalUsersRes = await dbPool.query('SELECT COUNT(*) FROM usuarios_scan_onu');
+    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    let totalLabels = 0;
     
-    const mfgRes = await dbPool.query(
-      'SELECT fabricante, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY fabricante ORDER BY count DESC LIMIT 10'
-    );
-    const modelRes = await dbPool.query(
-      'SELECT modelo, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY modelo ORDER BY count DESC LIMIT 10'
-    );
-    const opRes = await dbPool.query(
-      'SELECT operador_email, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY operador_email ORDER BY count DESC LIMIT 10'
-    );
+    let mfgMap: Record<string, number> = {};
+    let modelMap: Record<string, number> = {};
+    let opMap: Record<string, number> = {};
+
+    for (const dbName of databases) {
+      try {
+        const tempPool = getPoolForDatabase(dbName);
+        await ensureDatabaseSchema(tempPool, dbName);
+        
+        const countRes = await tempPool.query('SELECT COUNT(*) FROM etiquetas_scan_onu');
+        totalLabels += parseInt(countRes.rows[0].count);
+
+        const mfgRes = await tempPool.query('SELECT fabricante, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY fabricante');
+        mfgRes.rows.forEach(r => {
+          mfgMap[r.fabricante] = (mfgMap[r.fabricante] || 0) + parseInt(r.count);
+        });
+
+        const modelRes = await tempPool.query('SELECT modelo, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY modelo');
+        modelRes.rows.forEach(r => {
+          modelMap[r.modelo] = (modelMap[r.modelo] || 0) + parseInt(r.count);
+        });
+
+        const opRes = await tempPool.query('SELECT operador_email, COUNT(*) as count FROM etiquetas_scan_onu GROUP BY operador_email');
+        opRes.rows.forEach(r => {
+          opMap[r.operador_email] = (opMap[r.operador_email] || 0) + parseInt(r.count);
+        });
+
+      } catch (e) {
+        console.error(`Erro ao buscar stats no banco ${dbName}:`, e);
+      }
+    }
+
+    // A tabela de usuários fica apenas no banco principal (dbPool)
+    const totalUsersRes = await dbPool.query('SELECT COUNT(*) FROM usuarios_scan_onu');
+
+    // Transformar os mapas em arrays ordenados limitados a 10
+    const mfgArray = Object.keys(mfgMap).map(k => ({ fabricante: k, count: mfgMap[k] })).sort((a, b) => b.count - a.count).slice(0, 10);
+    const modelArray = Object.keys(modelMap).map(k => ({ modelo: k, count: modelMap[k] })).sort((a, b) => b.count - a.count).slice(0, 10);
+    const opArray = Object.keys(opMap).map(k => ({ operador_email: k, count: opMap[k] })).sort((a, b) => b.count - a.count).slice(0, 10);
 
     return res.json({
       success: true,
       stats: {
-        totalLabels: parseInt(totalLabelsRes.rows[0].count),
+        totalLabels: totalLabels,
         totalUsers: parseInt(totalUsersRes.rows[0].count),
-        labelsByManufacturer: mfgRes.rows,
-        labelsByModel: modelRes.rows,
-        scansByOperator: opRes.rows
+        labelsByManufacturer: mfgArray,
+        labelsByModel: modelArray,
+        scansByOperator: opArray
       }
     });
   } catch (err: any) {
