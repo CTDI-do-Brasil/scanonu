@@ -6,6 +6,7 @@ import { create } from 'xmlbuilder2';
 import * as XLSX from 'xlsx';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
+import { uploadZplToMinio } from './minio';
 
 dotenv.config();
 
@@ -145,6 +146,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       wifi_key VARCHAR(100),
       usuario VARCHAR(100),
       web_key VARCHAR(100),
+      imagem_url VARCHAR(500),
       operador_email VARCHAR(150),
       data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -192,10 +194,11 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
   } catch (e) {}
 
-  // Garantir SSID
+  // Garantir SSID e Imagem URL
   try {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
+    await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
   } catch (e) {}
 
   // Garantir UNIQUE
@@ -791,7 +794,7 @@ Siga atentamente as instruções abaixo para cada campo:
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
   try {
-    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb } = req.body;
+    const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url } = req.body;
     const resolvedWebKey = web_key !== undefined ? web_key : senha;
     const normalizedModelo = normalizeModel(modelo, fabricante);
 
@@ -861,6 +864,23 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
     const pool = getPoolForDatabase(chosenDb);
     await ensureDatabaseSchema(pool, chosenDb);
 
+    // Gerar arquivo ZPL e enviar para o MinIO
+    let zplUrl: string | null = null;
+    try {
+      zplUrl = await uploadZplToMinio({
+        fabricante, 
+        modelo: normalizedModelo, 
+        cpe_sn, 
+        gpon_sn, 
+        mac, 
+        wifi_ssid, 
+        wifi_ssid_5g: resolvedWifiSsid5g, 
+        wifi_key
+      });
+    } catch (minioErr) {
+      console.error('Erro ao gerar/enviar ZPL pro MinIO:', minioErr);
+    }
+
     const checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
 
@@ -887,6 +907,7 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
           usuario = $8,
           web_key = $9,
           operador_email = $10,
+          imagem_url = COALESCE($12, imagem_url),
           data_leitura = CURRENT_TIMESTAMP
         WHERE gpon_sn = $11
       `;
@@ -901,14 +922,15 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
         usuario || 'N/A',
         resolvedWebKey || 'N/A',
         operador || 'sistema',
-        gpon_sn
+        gpon_sn,
+        zplUrl || imagem_url || null
       ];
       await pool.query(updateQuery, updateValues);
       console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
     } else {
       const insertQuery = `
-        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, imagem_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `;
       const insertValues = [
         fabricante || 'N/A',
@@ -921,7 +943,8 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
         wifi_key || 'N/A',
         usuario || 'N/A',
         resolvedWebKey || 'N/A',
-        operador || 'sistema'
+        operador || 'sistema',
+        zplUrl || imagem_url || null
       ];
       await pool.query(insertQuery, insertValues);
       console.log(`Dados salvos com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
