@@ -23,7 +23,9 @@ import {
   Eye,
   EyeOff,
   Search,
-  ArrowLeft
+  ArrowLeft,
+  Menu,
+  BarChart3
 } from 'lucide-react';
 
 interface ScanData {
@@ -134,6 +136,7 @@ export default function App() {
 
   // Administração
   const [adminTab, setAdminTab] = useState<'scan' | 'admin'>('scan');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string; operacao?: string }>>([]);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -1465,80 +1468,208 @@ export default function App() {
 
   // APLICAÇÃO APÓS LOGADA (SCANNER)
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans w-full">
-      {/* HEADER FIXO */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 py-3 px-4">
-        <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-[#003865] text-white p-1.5 rounded-lg">
-              <Cpu className="w-5 h-5" />
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-800 font-sans w-full">
+      {/* SIDEBAR PARA ADMIN / OPERADOR */}
+      {user?.role === 'admin' ? (
+        <>
+          {/* Mobile Header (Only visible on small screens for Admin) */}
+          <div className="md:hidden flex items-center justify-between bg-white border-b border-slate-200/60 px-4 py-3 sticky top-0 z-40 w-full">
+            <div className="flex items-center gap-2">
+              <div className="bg-[#003865] text-white p-1.5 rounded-lg">
+                <Cpu className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-lg text-slate-800 tracking-tight">
+                Scan<span className="text-[#003865]">ONU</span>
+              </span>
             </div>
-            <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={openInNewTab}
+                className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors"
+                title="Abrir em Nova Aba"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <button 
-              onClick={openInNewTab}
-              className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-medium"
-              title="Abrir em Nova Aba"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-            
-            <button 
-              onClick={handleLogout}
-              className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors flex items-center gap-1 text-xs font-medium border border-transparent hover:border-red-100"
-              title="Sair"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </header>
 
-      {user?.role === 'admin' && (
-        <div className="bg-white border-b border-slate-200/60">
-          <div className="max-w-2xl mx-auto w-full flex">
-            <button
-              onClick={() => setAdminTab('scan')}
-              className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
-                adminTab === 'scan'
-                  ? 'border-[#003865] text-[#003865]'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Escaneador
-            </button>
-            <button
-              onClick={() => setAdminTab('admin')}
-              className={`flex-1 text-center py-3 text-xs font-bold border-b-2 transition-all ${
-                adminTab === 'admin'
-                  ? 'border-[#003865] text-[#003865]'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Painel Admin
-            </button>
+          {/* Sidebar Drawer Container */}
+          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-0'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none`}>
+            {/* Sidebar Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-white text-[#003865] p-1.5 rounded-lg">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <span className="font-extrabold text-lg tracking-tight">ScanONU</span>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden text-white/75 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Sidebar Navigation */}
+            <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mb-2">Geral</div>
+              <button
+                onClick={() => {
+                  setAdminTab('scan');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  adminTab === 'scan'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                Escaneador
+              </button>
+
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mt-6 mb-2">Painel Administrativo</div>
+              <button
+                onClick={() => {
+                  setAdminTab('admin');
+                  setAdminSubTab('metrics');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  adminTab === 'admin' && adminSubTab === 'metrics'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Métricas & Dashboard
+              </button>
+
+              <button
+                onClick={() => {
+                  setAdminTab('admin');
+                  setAdminSubTab('export');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  adminTab === 'admin' && adminSubTab === 'export'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Search className="w-4 h-4" />
+                Consulta & Exportação
+              </button>
+
+              <button
+                onClick={() => {
+                  setAdminTab('admin');
+                  setAdminSubTab('users');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  adminTab === 'admin' && adminSubTab === 'users'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Gerenciar Usuários
+              </button>
+            </nav>
+
+            {/* Sidebar User Profile Section */}
+            <div className="p-4 border-t border-white/10 bg-[#002f55]">
+              <div className="flex items-center justify-between">
+                <div className="overflow-hidden mr-2">
+                  <p className="text-xs font-bold truncate text-white">{user?.email}</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">Administrador</p>
+                </div>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={openInNewTab}
+                    className="hidden md:flex text-blue-200/70 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                    title="Abrir em Nova Aba"
+                  >
+                    <ExternalLink className="w-4.5 h-4.5" />
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="text-red-300 hover:text-red-100 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                    title="Sair"
+                  >
+                    <LogOut className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* Sidebar overlay backdrop for mobile */}
+          {sidebarOpen && (
+            <div
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm md:hidden"
+            />
+          )}
+        </>
+      ) : (
+        /* Non-admin / Operator Header */
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 py-3 px-4 w-full">
+          <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="bg-[#003865] text-white p-1.5 rounded-lg">
+                <Cpu className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">{user?.email}</span>
+              <button 
+                onClick={openInNewTab}
+                className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors"
+                title="Abrir em Nova Aba"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors flex items-center gap-1 text-xs font-medium border border-transparent hover:border-red-100"
+                title="Sair"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-        </div>
+        </header>
       )}
 
-      {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 p-4 flex flex-col space-y-4 max-w-2xl mx-auto w-full">
-        {/* Notificação de Erro */}
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5 text-red-800 text-sm">
-            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
-            <div className="flex-1">
-              <p className="font-semibold">Falha na Leitura</p>
-              <p className="text-red-700/90 text-xs mt-0.5">{error}</p>
+      {/* CONTEÚDO PRINCIPAL COM CONTAINER SCROLLÁVEL */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-6 flex flex-col space-y-4 max-w-4xl mx-auto w-full">
+          {/* Notificação de Erro */}
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5 text-red-800 text-sm">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+              <div className="flex-1">
+                <p className="font-semibold">Falha na Leitura</p>
+                <p className="text-red-700/90 text-xs mt-0.5">{error}</p>
+              </div>
+              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+          )}
 
-        {adminTab === 'admin' && user?.role === 'admin' ? (
+          {adminTab === 'admin' && user?.role === 'admin' ? (
+
           // PAINEL ADMINISTRATIVO COM SUB-TABS
           <div className="space-y-6 animate-fadeIn">
             {/* Sub-navegação do Painel Admin */}
@@ -2650,6 +2781,7 @@ export default function App() {
           <p className="text-[10px] text-slate-400">ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo</p>
         </div>
       </footer>
+      </div>
     </div>
   );
 }
