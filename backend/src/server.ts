@@ -788,6 +788,15 @@ Siga atentamente as instruções abaixo para cada campo:
       throw new Error('Não foi possível identificar o GPON Serial Number (S/N) na imagem da etiqueta.');
     }
 
+    // Regra específica para o modelo 5670V2: a senha web (web_key) deve ter exatamente 8 caracteres
+    const is5670v2 = scanResult.modelo && (scanResult.modelo.toUpperCase().includes('5670V2') || scanResult.modelo.toUpperCase().includes('5670 V2'));
+    if (is5670v2) {
+      const webKeyLength = (scanResult.web_key || '').length;
+      if (webKeyLength !== 8) {
+        throw new Error(`Erro de leitura OCR: O modelo ${scanResult.modelo} exige que a Senha Web tenha EXATAMENTE 8 caracteres. O sistema extraiu ${webKeyLength} caracteres ("${scanResult.web_key}"). Por favor, tente focar melhor a câmera, ou digite os dados manualmente.`);
+      }
+    }
+
     // Converter a resposta da reimpressão ("sim"/"nao") para boolean
     const isReimpressa = String(scanResult.reimpressa).toLowerCase().trim() === 'sim';
     scanResult.reimpressa = isReimpressa;
