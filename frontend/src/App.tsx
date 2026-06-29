@@ -267,7 +267,12 @@ export default function App() {
     const storedUser = localStorage.getItem('scanonu_user');
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        if (parsedUser.role === 'consulta') {
+          setAdminTab('admin');
+          setAdminSubTab('export');
+        }
       } catch (e) {
         localStorage.removeItem('scanonu_user');
       }
@@ -401,6 +406,10 @@ export default function App() {
         setUser(result.user);
         localStorage.setItem('scanonu_user', JSON.stringify(result.user));
         localStorage.setItem('scanonu_token', result.token);
+        if (result.user.role === 'consulta') {
+          setAdminTab('admin');
+          setAdminSubTab('export');
+        }
       } else {
         setLoginError(result.error || 'Credenciais inválidas. Verifique seu e-mail e senha.');
       }
@@ -1559,8 +1568,8 @@ export default function App() {
   // APLICAÇÃO APÓS LOGADA (SCANNER)
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-800 font-sans w-full">
-      {/* SIDEBAR PARA ADMIN / OPERADOR */}
-      {user?.role === 'admin' ? (
+      {/* SIDEBAR PARA ADMIN / CONSULTA */}
+      {['admin', 'consulta'].includes(user?.role || '') ? (
         <>
           {/* Mobile Header (Only visible on small screens for Admin) */}
           <div className="md:hidden flex items-center justify-between bg-white border-b border-slate-200/60 px-4 py-3 sticky top-0 z-40 w-full">
@@ -1580,17 +1589,19 @@ export default function App() {
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
+              {user?.role !== 'consulta' && (
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+              )}
             </div>
           </div>
 
           {/* Sidebar Drawer Container */}
-          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-0'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none`}>
+          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-0'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none ${user?.role === 'consulta' ? 'hidden md:hidden' : ''}`}>
             {/* Sidebar Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
               <div className="flex items-center gap-2.5">
@@ -1774,7 +1785,7 @@ export default function App() {
             </div>
           )}
 
-          {adminTab === 'admin' && user?.role === 'admin' ? (
+          {adminTab === 'admin' && ['admin', 'consulta'].includes(user?.role || '') ? (
 
           // PAINEL ADMINISTRATIVO COM SUB-TABS
           <div className="space-y-6 animate-fadeIn">
@@ -1984,7 +1995,8 @@ export default function App() {
               </div>
 
               {/* Importar Planilha Excel */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn mt-4">
+              {user?.role !== 'consulta' && (
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn mt-4">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
                     <Upload className="w-5 h-5" />
@@ -2065,6 +2077,7 @@ export default function App() {
                   </p>
                 </div>
               </div>
+              )}
             </>
           )}
 
@@ -2132,6 +2145,7 @@ export default function App() {
                       >
                         <option value="operador">Operador (Apenas scanner)</option>
                         <option value="admin">Administrador (Scanner + Painel)</option>
+                        <option value="consulta">Consulta (Apenas relatórios)</option>
                       </select>
                     </div>
 
@@ -3008,6 +3022,7 @@ export default function App() {
               >
                 <option value="operador">Operador (Apenas scanner)</option>
                 <option value="admin">Administrador (Scanner + Painel)</option>
+                <option value="consulta">Consulta (Apenas relatórios)</option>
               </select>
             </div>
 
