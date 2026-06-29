@@ -324,6 +324,20 @@ async function connectToDatabase() {
       `;
       await dbPool.query(createSessionsTableQuery);
 
+      // Criar tabela de impressoras
+      const createPrintersTableQuery = `
+        CREATE TABLE IF NOT EXISTS impressoras_scan_onu (
+          id SERIAL PRIMARY KEY,
+          nome VARCHAR(150) NOT NULL,
+          descricao VARCHAR(250),
+          ip VARCHAR(50) NOT NULL,
+          porta INT NOT NULL DEFAULT 6101,
+          localizacao VARCHAR(150),
+          data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+      await dbPool.query(createPrintersTableQuery);
+
       // Migração para remover a coluna ID das etiquetas caso ela já exista
       try {
         const checkColumn = await dbPool.query(
