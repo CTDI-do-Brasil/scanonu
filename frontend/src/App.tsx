@@ -1601,7 +1601,7 @@ export default function App() {
           </div>
 
           {/* Sidebar Drawer Container */}
-          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-0'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none ${user?.role === 'consulta' ? 'hidden md:hidden' : ''}`}>
+          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none ${user?.role === 'consulta' ? 'hidden md:hidden' : ''}`}>
             {/* Sidebar Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
               <div className="flex items-center gap-2.5">
