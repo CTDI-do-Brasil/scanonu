@@ -862,7 +862,7 @@ Siga atentamente as instruções abaixo para cada campo:
 app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
   try {
     const { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url } = req.body;
-    const resolvedWebKey = web_key !== undefined ? web_key : senha;
+    const resolvedWebKey = senha !== undefined ? senha : web_key;
     const normalizedModelo = normalizeModel(modelo, fabricante);
 
     let resolvedWifiSsid5g = wifi_ssid_5g || 'N/A';
