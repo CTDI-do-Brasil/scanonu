@@ -6,6 +6,9 @@ import { create } from 'xmlbuilder2';
 import * as XLSX from 'xlsx';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { uploadZplToMinio } from './minio';
 
 dotenv.config();
@@ -20,6 +23,16 @@ if (ai) {
 
 
 const app = express();
+
+app.use(helmet());
+
+const loginLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  message: { error: 'Muitas tentativas de login. Tente novamente em 1 minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 const PORT = process.env.PORT || 3001;
 
 // Configurar limites de payload grandes (50MB) para suportar fotos de alta resolução
@@ -1138,7 +1151,7 @@ app.get('/api/public/label/:query', async (req, res) => {
 });
 
 // Rota de login real usando o PostgreSQL
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { email, senha } = req.body;
 
