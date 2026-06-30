@@ -178,6 +178,12 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   `;
   await pool.query(createUsersTableQuery);
 
+  // Migrate existing admins to master
+  try {
+    await pool.query("UPDATE usuarios_scan_onu SET role = 'master' WHERE role = 'admin'");
+  } catch(err) { console.error('Erro ao migrar admins:', err); }
+
+
   // Garantir coluna operacao se não existir
   try {
     await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
@@ -248,7 +254,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   const adminCheck = await pool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
   if (!adminCheck.rowCount || adminCheck.rowCount === 0) {
     await pool.query(
-      "INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ('admin@scanonu.com', 'admin123', 'admin')"
+      "INSERT INTO usuarios_scan_onu (email, senha, role) VALUES ('admin@scanonu.com', 'admin123', 'master')"
     );
   }
 
@@ -319,6 +325,12 @@ async function connectToDatabase() {
         );
       `;
       await dbPool.query(createUsersTableQuery);
+
+      // Migrate existing admins to master
+      try {
+        await dbPool.query("UPDATE usuarios_scan_onu SET role = 'master' WHERE role = 'admin'");
+      } catch(err) { console.error('Erro ao migrar admins:', err); }
+
 
       // Garantir coluna operacao se não existir
       try {
@@ -422,12 +434,12 @@ async function connectToDatabase() {
       const adminCheck = await dbPool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
       if (!adminCheck.rowCount || adminCheck.rowCount === 0) {
         await dbPool.query(
-          "INSERT INTO usuarios_scan_onu (email, senha, role, operacao) VALUES ('admin@scanonu.com', 'admin123', 'admin', 'CTDI MATRIZ')"
+          "INSERT INTO usuarios_scan_onu (email, senha, role, operacao) VALUES ('admin@scanonu.com', 'admin123', 'master', 'CTDI MATRIZ')"
         );
         console.log('Usuário admin padrão (admin@scanonu.com / admin123) cadastrado com sucesso.');
       } else {
         await dbPool.query(
-          "UPDATE usuarios_scan_onu SET senha = 'admin123', role = 'admin', operacao = 'CTDI MATRIZ' WHERE email = 'admin@scanonu.com'"
+          "UPDATE usuarios_scan_onu SET senha = 'admin123', role = 'master', operacao = 'CTDI MATRIZ' WHERE email = 'admin@scanonu.com'"
         );
         console.log('Senha e perfil do usuário admin@scanonu.com resetados com sucesso.');
       }
@@ -1170,7 +1182,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
         return res.json({ 
           success: true, 
           token: 'fallback-admin-token',
-          user: { email, role: 'admin' } 
+          user: { email, role: 'master' } 
         });
       }
       return res.status(401).json({ error: 'Banco desconectado. Credenciais inválidas.' });
@@ -1218,7 +1230,7 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
     }
 
     // Verificar se quem está requisitando é admin de verdade
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem cadastrar usuários.' });
     }
 
@@ -1248,7 +1260,7 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
     }
 
     // Verificar se quem está requisitando é admin de verdade
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem gerenciar usuários.' });
     }
 
@@ -1279,10 +1291,10 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
 app.get('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) {
-      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'admin', operacao: 'CTDI MATRIZ' }] });
+      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'master', operacao: 'CTDI MATRIZ' }] });
     }
 
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
@@ -1300,7 +1312,7 @@ app.get('/api/admin/users', authenticateSession, async (req: any, res: any) => {
 app.get('/api/admin/printers', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) return res.json({ success: true, printers: [] });
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
     const printersRes = await dbPool.query('SELECT * FROM impressoras_scan_onu ORDER BY nome ASC');
     return res.json({ success: true, printers: printersRes.rows });
@@ -1314,7 +1326,7 @@ app.get('/api/admin/printers', authenticateSession, async (req: any, res: any) =
 app.post('/api/admin/printers', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
     const { nome, descricao, ip, porta, localizacao } = req.body;
     await dbPool.query(
@@ -1332,7 +1344,7 @@ app.post('/api/admin/printers', authenticateSession, async (req: any, res: any) 
 app.put('/api/admin/printers/:id', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
     const { nome, descricao, ip, porta, localizacao } = req.body;
     await dbPool.query(
@@ -1350,7 +1362,7 @@ app.put('/api/admin/printers/:id', authenticateSession, async (req: any, res: an
 app.delete('/api/admin/printers/:id', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso negado.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
     await dbPool.query('DELETE FROM impressoras_scan_onu WHERE id = $1', [req.params.id]);
     return res.json({ success: true });
@@ -1377,7 +1389,7 @@ app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {
       });
     }
 
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
@@ -1449,7 +1461,7 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
-    if (req.user.role !== 'admin' && req.user.role !== 'consulta') {
+    if (req.user.role !== 'master' && req.user.role !== 'consulta') {
       return res.status(403).json({ error: 'Acesso negado. Perfil sem permissão para exportar o banco.' });
     }
 
@@ -1536,7 +1548,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
-    if (req.user.role !== 'admin' && req.user.role !== 'consulta') {
+    if (req.user.role !== 'master' && req.user.role !== 'consulta') {
       return res.status(403).json({ error: 'Acesso negado. Perfil sem permissão para exportar a planilha.' });
     }
 
@@ -1606,7 +1618,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
 // Rota para importar etiquetas a partir de uma planilha Excel (somente Admin)
 app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: any) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem importar planilhas.' });
     }
 
@@ -1753,7 +1765,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 // Nova rota para apenas parsear e retornar os registros normalizados da planilha
 app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: any) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem importar planilhas.' });
     }
 
@@ -1852,7 +1864,7 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
 // Nova rota para importar um lote (batch) de registros em um banco selecionado
 app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, res: any) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Acesso negado.' });
     }
 

@@ -1569,7 +1569,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-800 font-sans w-full">
       {/* SIDEBAR PARA ADMIN / CONSULTA */}
-      {['admin', 'consulta'].includes(user?.role || '') ? (
+      {['master', 'consulta'].includes(user?.role || '') ? (
         <>
           {/* Mobile Header (Only visible on small screens for Admin) */}
           <div className="md:hidden flex items-center justify-between bg-white border-b border-slate-200/60 px-4 py-3 sticky top-0 z-40 w-full">
@@ -1589,7 +1589,7 @@ export default function App() {
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
-              {user?.role !== 'consulta' && (
+              {user?.role === 'master' && (
                 <button
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none"
@@ -1601,7 +1601,7 @@ export default function App() {
           </div>
 
           {/* Sidebar Drawer Container */}
-          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none ${user?.role === 'consulta' ? 'hidden md:hidden' : ''}`}>
+          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none ${(user?.role === 'consulta' || user?.role === 'admin') ? 'hidden md:hidden' : ''}`}>
             {/* Sidebar Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
               <div className="flex items-center gap-2.5">
@@ -1637,6 +1637,7 @@ export default function App() {
               </button>
 
               <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mt-6 mb-2">Painel Administrativo</div>
+              {user?.role !== 'admin' && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
@@ -1652,7 +1653,9 @@ export default function App() {
                 <BarChart3 className="w-4 h-4" />
                 Métricas & Dashboard
               </button>
+            )}
 
+              {user?.role !== 'admin' && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
@@ -1668,6 +1671,7 @@ export default function App() {
                 <Search className="w-4 h-4" />
                 Consulta & Exportação
               </button>
+            )}
 
               <button
                 onClick={() => {
@@ -1685,6 +1689,7 @@ export default function App() {
                 Gerenciar Usuários
               </button>
 
+              {user?.role !== 'admin' && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
@@ -1700,6 +1705,7 @@ export default function App() {
                 <Printer className="w-4 h-4" />
                 Gerenciar Impressoras
               </button>
+            )}
             </nav>
 
             {/* Sidebar User Profile Section */}
@@ -1791,6 +1797,7 @@ export default function App() {
           <div className="space-y-6 animate-fadeIn">
             {/* Sub-navegação do Painel Admin */}
             <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+              {user?.role !== 'admin' && (
               <button
                 onClick={() => setAdminSubTab('metrics')}
                 className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1801,6 +1808,7 @@ export default function App() {
               >
                 Métricas
               </button>
+            )}
               <button
                 onClick={() => setAdminSubTab('export')}
                 className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1821,6 +1829,7 @@ export default function App() {
               >
                 Usuários
               </button>
+              {user?.role !== 'admin' && (
               <button
                 onClick={() => setAdminSubTab('printers')}
                 className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1831,10 +1840,11 @@ export default function App() {
               >
                 Impressoras
               </button>
+            )}
             </div>
 
             {/* Sub-tab 1: Métricas / Dashboard */}
-            {adminSubTab === 'metrics' && (
+            {adminSubTab === 'metrics' && user?.role !== 'admin' && (
               <div className="space-y-6 animate-fadeIn">
                 {isLoadingStats ? (
                   <div className="flex items-center justify-center py-12">
@@ -1913,7 +1923,7 @@ export default function App() {
             )}
 
             {/* Sub-tab 2: Consultar e Exportar */}
-            {adminSubTab === 'export' && (
+            {adminSubTab === 'export' && user?.role !== 'admin' && (
               <>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
                 <div className="flex items-center gap-3">
@@ -1995,7 +2005,7 @@ export default function App() {
               </div>
 
               {/* Importar Planilha Excel */}
-              {user?.role !== 'consulta' && (
+              {user?.role === 'master' && (
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn mt-4">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 text-[#003865] p-2.5 rounded-xl border border-blue-100">
@@ -2144,7 +2154,8 @@ export default function App() {
                         className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
                       >
                         <option value="operador">Operador (Apenas scanner)</option>
-                        <option value="admin">Administrador (Scanner + Painel)</option>
+                        <option value="admin">Administrador (Somente Gerenciar Usuários)</option>
+   <option value="master">Master (Acesso Total)</option>
                         <option value="consulta">Consulta (Apenas relatórios)</option>
                       </select>
                     </div>
@@ -2208,7 +2219,7 @@ export default function App() {
                                 ? 'bg-purple-50 text-purple-700 border border-purple-100'
                                 : 'bg-blue-50 text-[#003865] border border-blue-100'
                             }`}>
-                              {usr.role === 'admin' ? 'Admin' : 'Operador'}
+                              {usr.role === 'master' ? 'Master' : usr.role === 'admin' ? 'Admin' : usr.role === 'consulta' ? 'Consulta' : 'Operador'}
                             </span>
                             <button
                               onClick={() => {
@@ -2234,7 +2245,7 @@ export default function App() {
             )}
 
             {/* Sub-tab 4: Impressoras */}
-            {adminSubTab === 'printers' && (
+            {adminSubTab === 'printers' && user?.role !== 'admin' && (
               <div className="space-y-6 animate-fadeIn">
                 <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
@@ -3021,7 +3032,8 @@ export default function App() {
                 className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
               >
                 <option value="operador">Operador (Apenas scanner)</option>
-                <option value="admin">Administrador (Scanner + Painel)</option>
+                <option value="admin">Administrador (Somente Gerenciar Usuários)</option>
+   <option value="master">Master (Acesso Total)</option>
                 <option value="consulta">Consulta (Apenas relatórios)</option>
               </select>
             </div>
