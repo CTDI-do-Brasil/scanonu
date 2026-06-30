@@ -288,7 +288,7 @@ export default function App() {
 
   // Buscar usuários quando na aba admin
   const fetchUsers = async () => {
-    if (!user || user.role !== 'admin') return;
+    if (!user || (user.role !== 'master' && user.role !== 'admin')) return;
     setIsLoadingUsers(true);
     try {
       const response = await fetch('/api/admin/users', {
@@ -309,7 +309,7 @@ export default function App() {
 
   // Buscar estatísticas do banco de dados
   const fetchStats = async () => {
-    if (!user || user.role !== 'admin') return;
+    if (!user || user.role !== 'master') return;
     setIsLoadingStats(true);
     try {
       const response = await fetch('/api/admin/stats', {
@@ -337,7 +337,7 @@ export default function App() {
   }, [adminTab]);
 
   const fetchPrinters = async () => {
-    if (!user || user.role !== 'admin') return;
+    if (!user || user.role !== 'master') return;
     setIsLoadingPrinters(true);
     try {
       const response = await fetch('/api/admin/printers', {
@@ -432,7 +432,7 @@ export default function App() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || user.role !== 'admin') return;
+    if (!user || (user.role !== 'master' && user.role !== 'admin')) return;
     setAdminMessage(null);
     setIsCreatingUser(true);
 
@@ -470,7 +470,7 @@ export default function App() {
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || user.role !== 'admin' || !editingUser) return;
+    if (!user || (user.role !== 'master' && user.role !== 'admin') || !editingUser) return;
     setEditUserError(null);
     setIsUpdatingUser(true);
 
@@ -509,7 +509,7 @@ export default function App() {
 
   const handleSavePrinter = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || user.role !== 'admin') return;
+    if (!user || (user.role !== 'master' && user.role !== 'admin')) return;
     setPrinterError(null);
     setIsUpdatingPrinter(true);
 
@@ -542,7 +542,7 @@ export default function App() {
   };
 
   const handleDeletePrinter = async (id: number) => {
-    if (!user || user.role !== 'admin') return;
+    if (!user || user.role !== 'master') return;
     if (!window.confirm('Tem certeza que deseja remover esta impressora?')) return;
 
     try {
@@ -562,7 +562,7 @@ export default function App() {
   };
 
   const handleExportExcel = async () => {
-    if (!user || user.role !== 'admin') return;
+    if (!user || user.role !== 'master') return;
     try {
       const response = await fetch(
         `/api/admin/export-excel?search=${encodeURIComponent(filterSearch)}` +
