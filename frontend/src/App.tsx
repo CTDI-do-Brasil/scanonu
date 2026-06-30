@@ -150,6 +150,8 @@ export default function App() {
   const [adminMessage, setAdminMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const currentVersionRef = useRef<string | null>(null);
 
   // Estados para edição/reset de senha de usuários
   const [editingUser, setEditingUser] = useState<{ id?: number; email: string; role: string; operacao?: string } | null>(null);
@@ -387,6 +389,28 @@ export default function App() {
     setCopiedPublicField(fieldId);
     setTimeout(() => setCopiedPublicField(null), 2000);
   };
+
+  
+  const checkVersion = async () => {
+    try {
+      const response = await fetch('/api/version');
+      const data = await response.json();
+      if (data && data.version) {
+        if (!currentVersionRef.current) {
+          currentVersionRef.current = data.version;
+        } else if (currentVersionRef.current !== data.version) {
+          setNewVersionAvailable(true);
+        }
+      }
+    } catch (err) {
+      // Ignore errors so it doesn't break anything if backend is temporarily down
+    }
+  };
+
+  useEffect(() => {
+    checkVersion();
+  }, []);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -941,6 +965,7 @@ export default function App() {
           }
         }
         setIsBatchProcessing(false);
+        checkVersion();
       }
     } finally {
       processingFilesRef.current = false;
@@ -1776,7 +1801,21 @@ export default function App() {
 
       {/* CONTEÚDO PRINCIPAL COM CONTAINER SCROLLÁVEL */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <main className="flex-1 p-4 md:p-6 flex flex-col space-y-4 max-w-4xl mx-auto w-full">
+        <main className="flex-1 p-4 md:p-6 flex flex-col space-y-4 max-w-4xl mx-auto w-full relative">
+        {newVersionAvailable && (
+          <div className="bg-orange-500 text-white px-4 py-3 shadow-md flex items-center justify-between sticky top-0 z-[100] animate-fadeIn rounded-xl mb-4">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin-slow" />
+              <span className="text-sm font-semibold">Uma nova atualização do sistema está disponível!</span>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-white text-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-50 transition-colors shadow-sm"
+            >
+              Atualizar Agora
+            </button>
+          </div>
+        )}
           {/* Notificação de Erro */}
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5 text-red-800 text-sm">

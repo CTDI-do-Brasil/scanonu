@@ -22,6 +22,7 @@ if (ai) {
 }
 
 
+const APP_VERSION = Date.now().toString();
 const app = express();
 
 app.use(helmet());
@@ -39,6 +40,12 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
+
+// Rota de verificação de versão
+app.get('/api/version', (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
 
 // Middleware para autenticar sessões usando o token no cabeçalho Authorization
 const authenticateSession = async (req: any, res: any, next: any) => {
