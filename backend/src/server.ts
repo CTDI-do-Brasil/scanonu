@@ -670,9 +670,9 @@ Siga atentamente as instruções abaixo para cada campo:
 5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Remova separadores como ':' ou '-'. Certifique-se de que o prefixo/OUI seja válido para o fabricante.
 6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única.
 7. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz, se existir separadamente.
-8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas (EX: 'X' maiúsculo vs 'x' minúsculo, 'C' vs 'c', 'S' vs 's'). Diferencie rigorosamente 'O' de '0', e o símbolo de exclamação '!' da letra 'I' maiúscula, da letra 'l' minúscula e do número '1'. Preserve a capitalização exata da imagem. NUNCA adicione ou deduza caracteres.
+8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas (EX: 'X' maiúsculo vs 'x' minúsculo, 'C' vs 'c', 'S' vs 's'). CUIDADO REDOBRADO com caracteres impressos muito próximos ou colados ao símbolo de porcentagem '%', não invente caracteres. Diferencie rigorosamente 'O' de '0', e o símbolo de exclamação '!' da letra 'I' maiúscula, da letra 'l' minúscula e do número '1'. Preserve a capitalização exata da imagem. NUNCA adicione ou deduza caracteres.
 9. usuario: Usuário padrão de acesso web (geralmente admin, user, etc.).
-10. web_key: Senha de acesso web (Password/Senha). ATENÇÃO MÁXIMA À EXATIDÃO: Pode conter caracteres especiais. É EXTREMAMENTE CRÍTICO diferenciar letras MAIÚSCULAS de minúsculas (EX: cuidado redobrado com 'X' maiúsculo vs 'x' minúsculo, 'C' vs 'c', 'S' vs 's', 'Z' vs 'z', 'W' vs 'w'). Tenha CUIDADO ABSOLUTO para não confundir o símbolo de exclamação '!' com a letra 'I' maiúscula, com o 'l' minúsculo ou com o número '1'. Leia exatamente o que está impresso. NUNCA adicione caracteres extras e respeite rigorosamente a capitalização.
+10. web_key: Senha de acesso web (Password/Senha). ATENÇÃO MÁXIMA À EXATIDÃO: Pode conter caracteres especiais. É EXTREMAMENTE CRÍTICO diferenciar letras MAIÚSCULAS de minúsculas (EX: cuidado redobrado com 'X' maiúsculo vs 'x' minúsculo, 'C' vs 'c', 'S' vs 's', 'Z' vs 'z', 'W' vs 'w'). CUIDADO REDOBRADO com caracteres impressos muito próximos ou colados ao símbolo de porcentagem '%', não invente caracteres que não existem. Tenha CUIDADO ABSOLUTO para não confundir o símbolo de exclamação '!' com a letra 'I' maiúscula, com o 'l' minúsculo ou com o número '1'. Leia exatamente o que está impresso. NUNCA adicione caracteres extras e respeite rigorosamente a capitalização.
 11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
 
     let response;
@@ -804,8 +804,8 @@ Siga atentamente as instruções abaixo para cada campo:
     const is5670v2 = scanResult.modelo && (scanResult.modelo.toUpperCase().includes('5670V2') || scanResult.modelo.toUpperCase().includes('5670 V2'));
     if (is5670v2) {
       const webKeyLength = (scanResult.web_key || '').length;
-      if (webKeyLength !== 8) {
-        throw new Error(`Erro de leitura OCR (SN: ${scanResult.gpon_sn}): O modelo ${scanResult.modelo} exige que a Senha Web tenha EXATAMENTE 8 caracteres. O sistema extraiu ${webKeyLength} caracteres ("${scanResult.web_key}"). Por favor, tente focar melhor a câmera, ou digite os dados manualmente.`);
+      if (webKeyLength !== 8 && webKeyLength !== 9) {
+        throw new Error(`Erro de leitura OCR (SN: ${scanResult.gpon_sn}): O modelo ${scanResult.modelo} exige que a Senha Web tenha 8 ou 9 caracteres. O sistema extraiu ${webKeyLength} caracteres ("${scanResult.web_key}"). Por favor, tente focar melhor a câmera, ou digite os dados manualmente.`);
       }
     }
 
