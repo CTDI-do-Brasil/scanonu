@@ -1791,7 +1791,7 @@ export default function App() {
             </div>
           )}
 
-          {adminTab === 'admin' && ['admin', 'consulta'].includes(user?.role || '') ? (
+          {adminTab === 'admin' && ['master', 'admin', 'consulta'].includes(user?.role || '') ? (
 
           // PAINEL ADMINISTRATIVO COM SUB-TABS
           <div className="space-y-6 animate-fadeIn">
