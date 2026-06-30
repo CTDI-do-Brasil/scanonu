@@ -805,7 +805,7 @@ Siga atentamente as instruções abaixo para cada campo:
     if (is5670v2) {
       const webKeyLength = (scanResult.web_key || '').length;
       if (webKeyLength !== 8) {
-        throw new Error(`Erro de leitura OCR: O modelo ${scanResult.modelo} exige que a Senha Web tenha EXATAMENTE 8 caracteres. O sistema extraiu ${webKeyLength} caracteres ("${scanResult.web_key}"). Por favor, tente focar melhor a câmera, ou digite os dados manualmente.`);
+        throw new Error(`Erro de leitura OCR (SN: ${scanResult.gpon_sn}): O modelo ${scanResult.modelo} exige que a Senha Web tenha EXATAMENTE 8 caracteres. O sistema extraiu ${webKeyLength} caracteres ("${scanResult.web_key}"). Por favor, tente focar melhor a câmera, ou digite os dados manualmente.`);
       }
     }
 
