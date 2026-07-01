@@ -1635,7 +1635,9 @@ export default function App() {
                 </div>
                 <span className="font-extrabold text-lg tracking-tight">ScanONU</span>
                 <div className="h-6 w-px bg-white/20 mx-1"></div>
-                <img src={logoCtdi} alt="CTDI" className="h-4 w-auto object-contain brightness-0 invert opacity-90" />
+                <div className="bg-white rounded p-0.5 shadow-sm">
+                  <img src={logoCtdi} alt="CTDI" className="h-4 w-auto object-contain" />
+                </div>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
