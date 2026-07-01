@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 // @ts-ignore
 import logoCtdi from './assets/logo-ctdi.png';
-import { 
+import {  
   Camera, 
   Upload, 
   Copy, 
@@ -30,7 +30,7 @@ import {
   Monitor,
   MapPin,
   Trash2
-} from 'lucide-react';
+, MonitorPlay } from 'lucide-react';
 
 
 interface ScanData {
@@ -133,6 +133,7 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
 export default function App() {
   // Autenticação
   const [user, setUser] = useState<{ email: string; role: string } | null>(null);
+  const [activeModule, setActiveModule] = useState<'selection' | 'gpon' | 'iptv'>('selection');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -1474,7 +1475,7 @@ export default function App() {
 
           {/* Footer */}
           <footer className="py-2 text-center text-[10px] text-blue-200/50">
-            ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo
+            SMART SCAN &copy; {new Date().getFullYear()} - Assistente de Campo
           </footer>
         </div>
       );
@@ -1584,13 +1585,110 @@ export default function App() {
 
         {/* Footer Login */}
         <footer className="py-2 text-center text-[10px] text-blue-200/50">
-          ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo
+          SMART SCAN &copy; {new Date().getFullYear()} - Assistente de Campo
         </footer>
       </div>
     );
   }
 
   // APLICAÇÃO APÓS LOGADA (SCANNER)
+  
+  if (activeModule === 'selection') {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center bg-[#002f56] p-6 animate-fadeIn relative">
+        {newVersionAvailable && (
+          <div className="absolute top-4 left-4 right-4 bg-orange-500 text-white px-4 py-3 shadow-md flex items-center justify-between z-[100] rounded-xl max-w-4xl mx-auto">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin-slow" />
+              <span className="text-sm font-semibold">Uma nova atualização está disponível!</span>
+            </div>
+            <button onClick={() => window.location.reload()} className="bg-white text-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-50">
+              Atualizar Agora
+            </button>
+          </div>
+        )}
+        
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-extrabold text-white tracking-tight mb-2">SMART SCAN</h1>
+          <p className="text-blue-200/80 font-medium">Selecione o módulo de operação</p>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl">
+          {/* Módulo GPON */}
+          <button
+            onClick={() => setActiveModule('gpon')}
+            className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
+          >
+            <div className="bg-[#003865]/10 p-4 rounded-2xl group-hover:bg-[#003865]/20 transition-colors">
+              <Cpu className="w-12 h-12 text-[#003865]" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo GPON</h2>
+              <p className="text-sm text-slate-500 font-medium">Captura e Auditoria de ONUs</p>
+            </div>
+          </button>
+
+          {/* Módulo IPTV */}
+          <button
+            onClick={() => setActiveModule('iptv')}
+            className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-blue-500/20"
+          >
+            <div className="bg-blue-500/10 p-4 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
+              <MonitorPlay className="w-12 h-12 text-blue-600" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo IPTV</h2>
+              <p className="text-sm text-slate-500 font-medium">Reimpressão e Setup Box</p>
+            </div>
+          </button>
+        </div>
+        
+        <button 
+          onClick={() => { setUser(null); localStorage.removeItem('scanonu_token'); }}
+          className="mt-12 text-white/50 hover:text-white transition-colors text-sm font-semibold flex items-center gap-2"
+        >
+          <LogOut className="w-4 h-4" /> Sair
+        </button>
+      </div>
+    );
+  }
+
+  if (activeModule === 'iptv') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+        <header className="bg-[#003865] text-white p-4 shadow-md flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setActiveModule('selection')} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <MonitorPlay className="w-6 h-6 text-blue-300" />
+            <h1 className="text-xl font-bold tracking-tight">Módulo IPTV <span className="text-sm font-normal text-blue-200 ml-2">Reimpressão</span></h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-bold text-white">{user?.email}</p>
+              <p className="text-[10px] text-blue-200 uppercase tracking-wider">{user?.role}</p>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-6 flex items-center justify-center">
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200/60 p-12 max-w-lg w-full text-center">
+            <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <MonitorPlay className="w-10 h-10 text-blue-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-3">Ambiente IPTV</h2>
+            <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+              Este módulo será configurado para bipar os códigos com scanner para reimpressão. 
+              <br/><br/>
+              Aguardando as especificações dos campos necessários...
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-800 font-sans w-full">
       {/* SIDEBAR PARA ADMIN / CONSULTA */}
@@ -1633,7 +1731,7 @@ export default function App() {
                 <div className="bg-white text-[#003865] p-1.5 rounded-lg">
                   <Cpu className="w-5 h-5" />
                 </div>
-                <span className="font-extrabold text-lg tracking-tight">ScanONU</span>
+                <span className="font-extrabold text-lg tracking-tight">SMART SCAN</span>
                 <div className="h-6 w-px bg-white/20 mx-1"></div>
                 <div className="bg-white rounded p-0.5 shadow-sm">
                   <img src={logoCtdi} alt="CTDI" className="h-4 w-auto object-contain" />
@@ -3120,7 +3218,7 @@ export default function App() {
       {/* FOOTER */}
       <footer className="py-4 text-center border-t border-slate-200/60 bg-white">
         <div className="max-w-2xl mx-auto w-full">
-          <p className="text-[10px] text-slate-400">ScanONU &copy; {new Date().getFullYear()} - Assistente de Campo</p>
+          <p className="text-[10px] text-slate-400">SMART SCAN &copy; {new Date().getFullYear()} - Assistente de Campo</p>
         </div>
       </footer>
       </div>
