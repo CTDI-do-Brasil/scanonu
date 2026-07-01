@@ -1497,7 +1497,7 @@ export default function App() {
                 <div className="bg-[#003865] text-white p-1.5 rounded-lg">
                   <Cpu className="w-5 h-5" />
                 </div>
-                <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
+                <span className="font-extrabold text-lg text-slate-800 tracking-tight">SMART SCAN</span>
               </div>
             </div>
 
@@ -1878,7 +1878,7 @@ export default function App() {
               <div className="bg-[#003865] text-white p-1.5 rounded-lg">
                 <Cpu className="w-5 h-5" />
               </div>
-              <span className="font-bold text-lg text-slate-800 tracking-tight">Scan<span className="text-[#003865]">ONU</span></span>
+              <span className="font-extrabold text-lg text-slate-800 tracking-tight">SMART SCAN</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">{user?.email}</span>
