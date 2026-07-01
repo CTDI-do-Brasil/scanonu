@@ -1697,12 +1697,17 @@ export default function App() {
           {/* Mobile Header (Only visible on small screens for Admin) */}
           <div className="md:hidden flex items-center justify-between bg-white border-b border-slate-200/60 px-4 py-3 sticky top-0 z-40 w-full">
             <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setActiveModule('selection')}
+                className="text-slate-500 hover:text-[#003865] p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"
+                title="Voltar aos Módulos"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
               <div className="bg-[#003865] text-white p-1.5 rounded-lg">
                 <Cpu className="w-5 h-5" />
               </div>
-              <span className="font-bold text-lg text-slate-800 tracking-tight">
-                Scan<span className="text-[#003865]">ONU</span>
-              </span>
+              <span className="font-extrabold text-lg tracking-tight text-slate-800">SMART SCAN</span>
             </div>
             <div className="flex items-center gap-2">
               <button 
@@ -1844,6 +1849,13 @@ export default function App() {
                 </div>
                 <div className="flex gap-1">
                   <button 
+                    onClick={() => setActiveModule('selection')}
+                    className="text-blue-200/70 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                    title="Voltar aos Módulos"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <button 
                     onClick={openInNewTab}
                     className="hidden md:flex text-blue-200/70 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
                     title="Abrir em Nova Aba"
@@ -1875,6 +1887,13 @@ export default function App() {
         <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/60 py-3 px-4 w-full">
           <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
             <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setActiveModule('selection')}
+                className="text-slate-500 hover:text-[#003865] p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"
+                title="Voltar aos Módulos"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
               <div className="bg-[#003865] text-white p-1.5 rounded-lg">
                 <Cpu className="w-5 h-5" />
               </div>
