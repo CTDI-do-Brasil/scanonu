@@ -1690,7 +1690,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-800 font-sans w-full">
+    <div className={`min-h-screen flex bg-slate-50 text-slate-800 font-sans w-full ${['master', 'consulta'].includes(user?.role || '') ? 'flex-col md:flex-row' : 'flex-col'}`}>
       {/* SIDEBAR PARA ADMIN / CONSULTA */}
       {['master', 'consulta'].includes(user?.role || '') ? (
         <>
