@@ -851,7 +851,7 @@ Siga atentamente as instruções abaixo para cada campo:
     let existsInDb = false;
     let existingData = null;
 
-    if (dbConnected && dbPool && scanResult.gpon_sn) {
+    if (dbConnected && dbPool && scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
       try {
         const checkRes = await dbPool.query(
           'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
@@ -948,7 +948,7 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
         try {
           const tempPool = getPoolForDatabase(dbName);
           await ensureDatabaseSchema(tempPool, dbName);
-          const checkRes = await tempPool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (mac = $2 AND mac <> \'N/A\')', [gpon_sn, mac]);
+          const checkRes = await tempPool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE (gpon_sn = $1 AND gpon_sn <> \'N/A\' AND gpon_sn <> \'NA\') OR (mac = $2 AND mac <> \'N/A\' AND mac <> \'NA\')', [gpon_sn, mac]);
           if (checkRes.rowCount && checkRes.rowCount > 0) {
             chosenDb = dbName;
             break;
@@ -1003,7 +1003,7 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
       console.error('Erro ao gerar/enviar ZPL pro MinIO:', minioErr);
     }
 
-    const checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    const checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1 AND gpon_sn <> \'N/A\' AND gpon_sn <> \'NA\'', [gpon_sn]);
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
 
     if (exists) {
