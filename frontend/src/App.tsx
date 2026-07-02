@@ -1075,7 +1075,7 @@ export default function App() {
                       dbMessage: { type: 'success', text: 'Salvo no banco!' }
                     } : item));
                   } else {
-                    throw new Error(saveResult.error || 'Erro ao salvar no banco.');
+                    throw new Error(saveResult.error + (saveResult.details ? ' Detalhes: ' + saveResult.details : ''));
                   }
                 } catch (saveErr: any) {
                   setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
@@ -1216,7 +1216,7 @@ export default function App() {
                 dbMessage: { type: 'success', text: 'Salvo no banco!' }
               } : it));
             } else {
-              throw new Error(saveResult.error || 'Erro ao salvar no banco.');
+                    throw new Error(saveResult.error + (saveResult.details ? ' Detalhes: ' + saveResult.details : ''));
             }
           } catch (saveErr: any) {
             setBatchResults(prev => prev.map(it => it.id === itemId ? { 
