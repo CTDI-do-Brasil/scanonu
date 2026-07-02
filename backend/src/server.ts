@@ -695,11 +695,11 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
     }
 
   // Analise a imagem da etiqueta...
-      const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
+        const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM). Se não encontrar na etiqueta, escreva 'N/A'.
 2. modelo: Modelo exato da ONU (ex: F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Se não encontrar na etiqueta, escreva 'N/A'.
-3. cpe_sn: Serial CPE/Equipamento (ex: PN, SAP, ou N7...). Se for igual ao GPON SN, deixe vazio ou extraia o correto se houver. Se não houver, escreva 'N/A'. No caso de PN ou SAP (como PN: 253925847, SAP: TM04014670), pode capturar essa informação como CPE SN ou Modelo, mas se não achar os clássicos, preencha N/A.
+3. cpe_sn: Serial CPE/Equipamento. Se não houver explicitamente o serial do equipamento (não confunda com PN ou SAP), escreva 'N/A'. Não capture PN ou SAP.
 4. gpon_sn: Serial GPON (ex: SMBS12345678, ZTEG12345678, FHTT12345678, ALCL12345678, HWTC12345678). Se a etiqueta NÃO TIVER Gpon SN explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
 5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Se a etiqueta NÃO TIVER MAC explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
 6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única. Se não achar, 'N/A'.
