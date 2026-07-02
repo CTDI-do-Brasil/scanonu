@@ -1,4 +1,5 @@
 import express from 'express';
+import net from 'net';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
@@ -222,6 +223,19 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   `;
   await pool.query(createPrintersTableQuery);
 
+  // Criar tabela de modelos IPTV
+  const createIptvModelsTableQuery = `
+    CREATE TABLE IF NOT EXISTS modelos_zpl_iptv (
+      id SERIAL PRIMARY KEY,
+      nome_modelo VARCHAR(150) NOT NULL,
+      codigo_zpl TEXT NOT NULL,
+      campos_config JSONB NOT NULL,
+      data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  await pool.query(createIptvModelsTableQuery);
+
+
   // Migração para remover a coluna ID caso ela já exista
   try {
     const checkColumn = await pool.query(
@@ -369,6 +383,19 @@ async function connectToDatabase() {
         );
       `;
       await dbPool.query(createPrintersTableQuery);
+
+      // Criar tabela de modelos IPTV
+      const createIptvModelsTableQuery = `
+        CREATE TABLE IF NOT EXISTS modelos_zpl_iptv (
+          id SERIAL PRIMARY KEY,
+          nome_modelo VARCHAR(150) NOT NULL,
+          codigo_zpl TEXT NOT NULL,
+          campos_config JSONB NOT NULL,
+          data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+      await dbPool.query(createIptvModelsTableQuery);
+
 
       // Migração para remover a coluna ID das etiquetas caso ela já exista
       try {
@@ -1379,6 +1406,134 @@ app.delete('/api/admin/printers/:id', authenticateSession, async (req: any, res:
   }
 });
 // --- FIM ROTAS IMPRESSORAS ---
+
+
+// --- ROTA DE IMPRESSÃO ZPL IPTV ---
+app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco de dados offline.' });
+
+    const { modelId, printerId, fieldsData } = req.body;
+    if (!modelId || !printerId || !fieldsData) {
+      return res.status(400).json({ error: 'Dados incompletos para impressão.' });
+    }
+
+    // 1. Obter impressora
+    const printerRes = await dbPool.query('SELECT ip, porta FROM impressoras_scan_onu WHERE id = $1', [printerId]);
+    if (printerRes.rowCount === 0) return res.status(404).json({ error: 'Impressora não encontrada.' });
+    const printer = printerRes.rows[0];
+
+    // 2. Obter modelo
+    const modelRes = await dbPool.query('SELECT codigo_zpl, campos_config FROM modelos_zpl_iptv WHERE id = $1', [modelId]);
+    if (modelRes.rowCount === 0) return res.status(404).json({ error: 'Modelo não encontrado.' });
+    const model = modelRes.rows[0];
+
+    // 3. Substituir variáveis no código ZPL
+    let zpl = model.codigo_zpl;
+    for (const key of Object.keys(model.campos_config)) {
+      const val = fieldsData[key] || '';
+      // Substituir a chave no formato ${chave} ou $\{chave\}
+      const regex = new RegExp('\\$\\\{\\s*' + key + '\\s*\\\}', 'g');
+      zpl = zpl.replace(regex, val);
+    }
+
+    // 4. Enviar para a impressora via Socket TCP
+    const client = new net.Socket();
+    client.setTimeout(5000); // 5 segundos timeout
+
+    client.connect(printer.porta || 9100, printer.ip, () => {
+      console.log('Conectado à impressora ' + printer.ip + ':' + printer.porta);
+      client.write(zpl, 'utf8', () => {
+        client.destroy(); // Fecha a conexão após enviar
+        res.json({ success: true, message: 'Enviado para impressão!' });
+      });
+    });
+
+    client.on('timeout', () => {
+      client.destroy();
+      res.status(504).json({ error: 'Timeout de conexão com a impressora.' });
+    });
+
+    client.on('error', (err: any) => {
+      client.destroy();
+      console.error('Erro de socket:', err);
+      res.status(500).json({ error: 'Erro na impressora: ' + err.message });
+    });
+
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao imprimir etiqueta IPTV.' });
+  }
+});
+
+
+
+// --- ROTAS DE MODELOS IPTV (ADMIN E OPERADOR) ---
+app.get('/api/iptv-models', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.json({ success: true, models: [] });
+    const modelsRes = await dbPool.query('SELECT * FROM modelos_zpl_iptv ORDER BY nome_modelo ASC');
+    return res.json({ success: true, models: modelsRes.rows });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao listar modelos IPTV.' });
+  }
+});
+
+app.post('/api/admin/iptv-models', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    const { nome_modelo, codigo_zpl, campos_config } = req.body;
+    if (!nome_modelo || !codigo_zpl || !campos_config) return res.status(400).json({ error: 'Preencha todos os campos.' });
+
+    const insertQuery = `
+      INSERT INTO modelos_zpl_iptv (nome_modelo, codigo_zpl, campos_config)
+      VALUES ($1, $2, $3) RETURNING *
+    `;
+    const result = await dbPool.query(insertQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config)]);
+    return res.json({ success: true, model: result.rows[0] });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao criar modelo IPTV.' });
+  }
+});
+
+app.put('/api/admin/iptv-models/:id', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    const { nome_modelo, codigo_zpl, campos_config } = req.body;
+    
+    const updateQuery = `
+      UPDATE modelos_zpl_iptv 
+      SET nome_modelo = $1, codigo_zpl = $2, campos_config = $3
+      WHERE id = $4 RETURNING *
+    `;
+    const result = await dbPool.query(updateQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), req.params.id]);
+    return res.json({ success: true, model: result.rows[0] });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao atualizar modelo IPTV.' });
+  }
+});
+
+app.delete('/api/admin/iptv-models/:id', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
+    
+    await dbPool.query('DELETE FROM modelos_zpl_iptv WHERE id = $1', [req.params.id]);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao deletar modelo IPTV.' });
+  }
+});
+
+
 
 // Rota para obter estatísticas do painel Admin
 app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {

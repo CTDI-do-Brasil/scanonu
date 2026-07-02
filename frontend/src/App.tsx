@@ -30,7 +30,7 @@ import {
   Monitor,
   MapPin,
   Trash2
-, MonitorPlay } from 'lucide-react';
+, MonitorPlay, Edit, Plus } from 'lucide-react';
 
 
 interface ScanData {
@@ -168,10 +168,15 @@ export default function App() {
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterModel, setFilterModel] = useState('');
-  const [adminSubTab, setAdminSubTab] = useState<'metrics' | 'export' | 'users' | 'printers'>('metrics');
+  const [adminSubTab, setAdminSubTab] = useState<'metrics' | 'export' | 'users' | 'printers' | 'iptv-models'>('metrics');
   
   // Impressoras
   const [printers, setPrinters] = useState<any[]>([]);
+  const [iptvModels, setIptvModels] = useState<any[]>([]);
+  const [isLoadingIptvModels, setIsLoadingIptvModels] = useState(false);
+  const [editingIptvModel, setEditingIptvModel] = useState<any>(null);
+  const [showIptvModelModal, setShowIptvModelModal] = useState(false);
+  const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '' });
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<any>(null);
   const [printerFormData, setPrinterFormData] = useState({
@@ -336,8 +341,86 @@ export default function App() {
       fetchUsers();
       fetchStats();
       fetchPrinters();
+      fetchIptvModels();
     }
   }, [adminTab]);
+
+  
+  const fetchIptvModels = async () => {
+    if (!user || user.role !== 'master') return;
+    setIsLoadingIptvModels(true);
+    try {
+      const response = await fetch('/api/iptv-models', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}` }
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setIptvModels(result.models);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar modelos IPTV:', err);
+    } finally {
+      setIsLoadingIptvModels(false);
+    }
+  };
+
+  const handleSaveIptvModel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let parsedCampos;
+      try {
+        parsedCampos = JSON.parse(iptvModelForm.campos_config);
+      } catch (e) {
+        alert('O campo de configurações (JSON) é inválido!');
+        return;
+      }
+
+      const url = editingIptvModel ? `/api/admin/iptv-models/${editingIptvModel.id}` : '/api/admin/iptv-models';
+      const method = editingIptvModel ? 'PUT' : 'POST';
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        },
+        body: JSON.stringify({
+          nome_modelo: iptvModelForm.nome_modelo,
+          codigo_zpl: iptvModelForm.codigo_zpl,
+          campos_config: parsedCampos
+        })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setShowIptvModelModal(false);
+        fetchIptvModels();
+        alert('Modelo salvo com sucesso!');
+      } else {
+        alert(result.error || 'Erro ao salvar modelo.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar modelo.');
+    }
+  };
+
+  const handleDeleteIptvModel = async (id: number) => {
+    if (!confirm('Deseja realmente deletar este modelo?')) return;
+    try {
+      const response = await fetch(`/api/admin/iptv-models/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}` }
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        fetchIptvModels();
+      } else {
+        alert(result.error || 'Erro ao deletar modelo.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao deletar modelo.');
+    }
+  };
 
   const fetchPrinters = async () => {
     if (!user || user.role !== 'master') return;
@@ -1653,7 +1736,71 @@ export default function App() {
     );
   }
 
+  
   if (activeModule === 'iptv') {
+    const [selectedModel, setSelectedModel] = useState<any>(null);
+    const [selectedPrinter, setSelectedPrinter] = useState('');
+    const [fieldsData, setFieldsData] = useState<any>({});
+    const [isPrinting, setIsPrinting] = useState(false);
+
+    // Initial load for Operator inside IPTV
+    useEffect(() => {
+      if (iptvModels.length === 0) fetchIptvModels();
+      if (printers.length === 0) fetchPrinters();
+    }, []);
+
+    const handleFieldChange = (key: string, value: string) => {
+      setFieldsData({ ...fieldsData, [key]: value.trim() });
+    };
+
+    const handlePrint = async () => {
+      if (!selectedModel || !selectedPrinter) {
+        alert('Selecione um modelo e uma impressora!');
+        return;
+      }
+
+      // Validar travas de caracteres
+      for (const [key, config] of Object.entries(selectedModel.campos_config) as any) {
+        const val = fieldsData[key] || '';
+        if (config.minLength && val.length < config.minLength) {
+          alert(`O campo ${config.label} precisa ter no mínimo ${config.minLength} caracteres. (Atual: ${val.length})`);
+          return;
+        }
+        if (config.maxLength && val.length > config.maxLength) {
+          alert(`O campo ${config.label} não pode ter mais de ${config.maxLength} caracteres. (Atual: ${val.length})`);
+          return;
+        }
+      }
+
+      setIsPrinting(true);
+      try {
+        const response = await fetch('/api/print-iptv', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+          },
+          body: JSON.stringify({
+            modelId: selectedModel.id,
+            printerId: selectedPrinter,
+            fieldsData
+          })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          alert('Etiqueta enviada para impressão com sucesso!');
+          setFieldsData({}); // Limpar os campos após imprimir
+        } else {
+          alert(result.error || 'Erro ao imprimir.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao se conectar com o servidor para impressão.');
+      } finally {
+        setIsPrinting(false);
+      }
+    };
+
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
         <header className="bg-[#003865] text-white p-4 shadow-md flex items-center justify-between">
@@ -1672,22 +1819,81 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 p-6 flex items-center justify-center">
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-200/60 p-12 max-w-lg w-full text-center">
-            <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <MonitorPlay className="w-10 h-10 text-blue-500" />
+        <main className="flex-1 p-6 flex flex-col items-center">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-sm border border-slate-200/60 p-8">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4">Configuração da Etiqueta</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Modelo do Equipamento</label>
+                <select
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  onChange={(e) => {
+                    const model = iptvModels.find(m => m.id === parseInt(e.target.value));
+                    setSelectedModel(model || null);
+                    setFieldsData({});
+                  }}
+                  defaultValue=""
+                >
+                  <option value="" disabled>Selecione um modelo...</option>
+                  {iptvModels.map(m => <option key={m.id} value={m.id}>{m.nome_modelo}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Impressora Destino</label>
+                <select
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  onChange={(e) => setSelectedPrinter(e.target.value)}
+                  defaultValue=""
+                >
+                  <option value="" disabled>Selecione uma impressora...</option>
+                  {printers.map(p => <option key={p.id} value={p.id}>{p.nome} ({p.ip})</option>)}
+                </select>
+              </div>
             </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-3">Ambiente IPTV</h2>
-            <p className="text-slate-500 font-medium mb-8 leading-relaxed">
-              Este módulo será configurado para bipar os códigos com scanner para reimpressão. 
-              <br/><br/>
-              Aguardando as especificações dos campos necessários...
-            </p>
+
+            {selectedModel ? (
+              <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <h3 className="font-bold text-[#003865] mb-4">Dados da Etiqueta</h3>
+                {Object.entries(selectedModel.campos_config || {}).map(([key, config]: [string, any]) => (
+                  <div key={key}>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">
+                      {config.label} {config.minLength ? `(${config.minLength} chars)` : ''}
+                    </label>
+                    <input
+                      type="text"
+                      value={fieldsData[key] || ''}
+                      onChange={(e) => handleFieldChange(key, e.target.value)}
+                      placeholder="Biper com o scanner ou digite..."
+                      className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono focus:border-[#003865] focus:ring-0 transition-colors"
+                      maxLength={config.maxLength}
+                    />
+                  </div>
+                ))}
+
+                <button
+                  onClick={handlePrint}
+                  disabled={isPrinting}
+                  className="w-full mt-6 bg-[#003865] hover:bg-blue-900 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPrinting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+                  <span>Imprimir Etiqueta</span>
+                </button>
+              </div>
+            ) : (
+              <div className="text-center p-12 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                <MonitorPlay className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Selecione um modelo acima para habilitar os campos.</p>
+              </div>
+            )}
+
           </div>
         </main>
       </div>
     );
   }
+
 
   return (
     <div className={`min-h-screen flex bg-slate-50 text-slate-800 font-sans w-full ${['master', 'consulta'].includes(user?.role || '') ? 'flex-col md:flex-row' : 'flex-col'}`}>
@@ -1838,6 +2044,39 @@ export default function App() {
                 Gerenciar Impressoras
               </button>
             )}
+
+              {user?.role === 'master' && (
+              <button
+                onClick={() => setAdminSubTab('iptv-models')}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
+                  adminSubTab === 'iptv-models'
+                    ? 'bg-white text-[#003865] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Modelos IPTV
+              </button>
+              )}
+
+
+              {user?.role === 'master' && (
+              <button
+                onClick={() => {
+                  setAdminTab('admin');
+                  setAdminSubTab('iptv-models');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  adminTab === 'admin' && adminSubTab === 'iptv-models'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <MonitorPlay className="w-4 h-4" />
+                Modelos IPTV
+              </button>
+              )}
+
             </nav>
 
             {/* Sidebar User Profile Section */}
@@ -3089,6 +3328,168 @@ export default function App() {
           </>
         )}
       </main>
+
+      
+            {/* --- ABA MODELOS IPTV --- */}
+            {adminSubTab === 'iptv-models' && user?.role === 'master' && (
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60 animate-fadeIn">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-[#003865] flex items-center gap-2">
+                      <MonitorPlay className="w-5 h-5" /> Modelos IPTV (ZPL)
+                    </h3>
+                    <p className="text-sm text-slate-500 font-medium">Gerencie os modelos e códigos de impressão</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingIptvModel(null);
+                      setIptvModelForm({
+                        nome_modelo: '',
+                        codigo_zpl: '',
+                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 15, "maxLength": 15 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
+                      });
+                      setShowIptvModelModal(true);
+                    }}
+                    className="bg-[#003865] hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-colors text-sm"
+                  >
+                    <Plus className="w-4 h-4" /> Novo Modelo
+                  </button>
+                </div>
+
+                {isLoadingIptvModels ? (
+                  <div className="flex justify-center py-10"><RefreshCw className="w-8 h-8 text-[#003865] animate-spin" /></div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-slate-500 uppercase bg-slate-50">
+                        <tr>
+                          <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
+                          <th className="px-4 py-3 font-bold">Modelo</th>
+                          <th className="px-4 py-3 font-bold text-center">Campos</th>
+                          <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {iptvModels.map((model: any) => (
+                          <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                                {Object.keys(model.campos_config || {}).length} campos
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => {
+                                  setEditingIptvModel(model);
+                                  setIptvModelForm({
+                                    nome_modelo: model.nome_modelo,
+                                    codigo_zpl: model.codigo_zpl,
+                                    campos_config: JSON.stringify(model.campos_config, null, 2)
+                                  });
+                                  setShowIptvModelModal(true);
+                                }}
+                                className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors mr-2"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteIptvModel(model.id)}
+                                className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                title="Deletar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {iptvModels.length === 0 && (
+                          <tr><td colSpan={4} className="text-center py-6 text-slate-500 font-medium">Nenhum modelo cadastrado.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+
+      
+      {/* MODAL MODELO IPTV */}
+      {showIptvModelModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-3xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-800">
+                {editingIptvModel ? 'Editar Modelo' : 'Novo Modelo IPTV'}
+              </h3>
+              <button onClick={() => setShowIptvModelModal(false)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveIptvModel} className="flex-1 overflow-y-auto pr-2 space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Modelo</label>
+                <input 
+                  required type="text"
+                  value={iptvModelForm.nome_modelo}
+                  onChange={(e) => setIptvModelForm({...iptvModelForm, nome_modelo: e.target.value})}
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  placeholder="Ex: S4KW3"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Código ZPL</label>
+                <p className="text-[10px] text-slate-500 mb-2 leading-tight">
+                  Insira as variáveis entre chaves com cifrão, ex: <code>{"$"+"{sn}"}</code>, <code>{"$"+"{mac}"}</code>.
+                </p>
+                <textarea 
+                  required rows={6}
+                  value={iptvModelForm.codigo_zpl}
+                  onChange={(e) => setIptvModelForm({...iptvModelForm, codigo_zpl: e.target.value})}
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono text-xs focus:border-[#003865] focus:ring-0 transition-colors"
+                  placeholder="^XA...^FD${sn}^FS...^XZ"
+                ></textarea>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Configuração de Campos (JSON)</label>
+                <p className="text-[10px] text-slate-500 mb-2 leading-tight">
+                  Defina os campos obrigatórios e suas travas (min/max length). Exemplo:<br/>
+                  <code>{"{ \"sn\": { \"label\": \"S/N:\", \"minLength\": 15, \"maxLength\": 15 } }"}</code>
+                </p>
+                <textarea 
+                  required rows={6}
+                  value={iptvModelForm.campos_config}
+                  onChange={(e) => setIptvModelForm({...iptvModelForm, campos_config: e.target.value})}
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono text-xs focus:border-[#003865] focus:ring-0 transition-colors"
+                ></textarea>
+              </div>
+            </form>
+            
+            <div className="mt-6 pt-4 border-t border-slate-100 flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setShowIptvModelModal(false)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSaveIptvModel}
+                className="flex-1 bg-[#003865] hover:bg-blue-900 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-md"
+              >
+                Salvar Modelo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* MODAL DE AVISO DE DUPLICIDADE */}
       {showDuplicateModal && existingEquipmentData && (
