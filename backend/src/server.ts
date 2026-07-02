@@ -695,7 +695,7 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
     }
 
   // Analise a imagem da etiqueta...
-  const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
+    const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM).
 2. modelo: Modelo exato da ONU (ex: F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.).
@@ -704,9 +704,9 @@ Siga atentamente as instruções abaixo para cada campo:
 5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Remova separadores como ':' ou '-'. Certifique-se de que o prefixo/OUI seja válido para o fabricante.
 6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única.
 7. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz, se existir separadamente.
-8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas (EX: 'C' vs 'c', 'I' vs 'i', 'J' vs 'j', 'K' vs 'k', 'M' vs 'm', 'O' vs 'o', 'P' vs 'p', 'S' vs 's', 'U' vs 'u', 'V' vs 'v', 'W' vs 'w', 'X' vs 'x', 'Y' vs 'y', 'Z' vs 'z'). CUIDADO REDOBRADO com caracteres impressos muito próximos ou colados ao símbolo de porcentagem '%', não invente caracteres. Diferencie rigorosamente 'O' de '0', e o símbolo de exclamação '!' da letra 'I' maiúscula, da letra 'l' minúscula e do número '1'. Preserve a capitalização exata da imagem. NUNCA adicione ou deduza caracteres.
+8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas. CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'.
 9. usuario: Usuário padrão de acesso web (geralmente admin, user, etc.).
-10. web_key: Senha de acesso web (Password/Senha). ATENÇÃO MÁXIMA À EXATIDÃO: Pode conter caracteres especiais. É EXTREMAMENTE CRÍTICO diferenciar letras MAIÚSCULAS de minúsculas (EX: cuidado redobrado com 'C' vs 'c', 'I' vs 'i', 'J' vs 'j', 'K' vs 'k', 'M' vs 'm', 'O' vs 'o', 'P' vs 'p', 'S' vs 's', 'U' vs 'u', 'V' vs 'v', 'W' vs 'w', 'X' vs 'x', 'Y' vs 'y', 'Z' vs 'z'). CUIDADO REDOBRADO com caracteres impressos muito próximos ou colados ao símbolo de porcentagem '%', não invente caracteres que não existem. Tenha CUIDADO ABSOLUTO para não confundir o símbolo de exclamação '!' com a letra 'I' maiúscula, com o 'l' minúsculo ou com o número '1'. Leia exatamente o que está impresso. NUNCA adicione caracteres extras e respeite rigorosamente a capitalização.
+10. web_key: Senha de acesso web (Password/Senha). ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie letras MAIÚSCULAS de minúsculas. EXTREMO CUIDADO COM O SÍMBOLO DE EXCLAMAÇÃO '!'. Você está lendo o símbolo '!' como a letra 'I' maiúscula incorretamente em suas últimas leituras. Reveja a imagem e garanta que está lendo '!' como exclamação. Muitas senhas web de fabricantes terminam com '!'. NÃO converta '!' para 'I'.
 11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
 
     let response;
