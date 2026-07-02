@@ -204,6 +204,10 @@ export default function App() {
 
   // Estados de Fluxo da Tela: 'idle', 'camera', 'processing', 'result'
   const [screen, setScreen] = useState<'idle' | 'camera' | 'processing' | 'result'>('idle');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [minZoom, setMinZoom] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(1);
+  const [isZoomSupported, setIsZoomSupported] = useState(false);
   
   // Dicas rápidas colapsáveis
   const [showTips, setShowTips] = useState(true);
@@ -806,11 +810,10 @@ export default function App() {
     }
   };
 
-  const startCamera = async () => {
+    const startCamera = async () => {
     setError(null);
     setScreen('camera');
     try {
-      // Priorizar a câmera traseira do celular (environment)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -823,10 +826,41 @@ export default function App() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
+      
+      // CONFIGURAR ZOOM AUTOMÁTICO (Auto-Zoom)
+      const [videoTrack] = stream.getVideoTracks();
+      const capabilities = videoTrack.getCapabilities() as any;
+      if (capabilities && capabilities.zoom) {
+        setIsZoomSupported(true);
+        setMinZoom(capabilities.zoom.min || 1);
+        setMaxZoom(capabilities.zoom.max || 1);
+        
+        // Aplica um zoom de 2.5x por padrão (ou o máximo se for menor que 2.5)
+        const targetZoom = Math.min(2.5, capabilities.zoom.max || 1);
+        setZoomLevel(targetZoom);
+        await videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
+      } else {
+        setIsZoomSupported(false);
+      }
+      
     } catch (err: any) {
       console.error('Erro ao acessar a câmera:', err);
       setError('Não foi possível acessar a câmera. Verifique se deu permissão ou utilize a Galeria.');
       setScreen('idle');
+    }
+  };
+
+  
+  const handleZoomChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newZoom = parseFloat(e.target.value);
+    setZoomLevel(newZoom);
+    if (streamRef.current) {
+      const [videoTrack] = streamRef.current.getVideoTracks();
+      try {
+        await videoTrack.applyConstraints({ advanced: [{ zoom: newZoom }] } as any);
+      } catch (err) {
+        console.error('Erro ao aplicar zoom:', err);
+      }
     }
   };
 
@@ -3088,7 +3122,7 @@ export default function App() {
                 </div>
 
                 {/* Stream de Vídeo com Guia Retícula */}
-                <div className="relative flex-1 bg-neutral-950 flex items-center justify-center overflow-hidden">
+                <div className="relative flex-1 bg-neutral-950 flex flex-col items-center justify-center overflow-hidden">
                   <video 
                     ref={videoRef}
                     autoPlay 
@@ -3109,6 +3143,22 @@ export default function App() {
                       Alinhe a etiqueta da ONU aqui
                     </span>
                   </div>
+
+                  {/* Controle de Zoom Manual */}
+                  {isZoomSupported && (
+                    <div className="absolute bottom-8 w-3/4 max-w-[250px] z-20 bg-black/50 backdrop-blur-md rounded-2xl p-3 flex items-center gap-3 border border-white/10 shadow-lg">
+                      <span className="text-white font-bold text-xs w-8 text-center bg-blue-500/20 px-1 py-0.5 rounded">{(zoomLevel).toFixed(1)}x</span>
+                      <input 
+                        type="range" 
+                        min={minZoom} 
+                        max={maxZoom} 
+                        step="0.1" 
+                        value={zoomLevel} 
+                        onChange={handleZoomChange}
+                        className="w-full accent-blue-500 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Rodapé da Câmera com Botão de Captura */}
