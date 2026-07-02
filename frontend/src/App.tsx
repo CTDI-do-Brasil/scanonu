@@ -231,6 +231,27 @@ export default function App() {
   const [existingEquipmentData, setExistingEquipmentData] = useState<ScanData | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
+  // --- SANITIZAÇÃO GLOBAL DE INPUT DO SCANNER (! -> I) ---
+  useEffect(() => {
+    let hasChanges = false;
+    const sanitizedData = { ...data };
+    
+    // Ignorar senha web na sanitização se necessário, mas o comum é sanitizar tudo
+    // já que o scanner confunde ! com I
+    const skipFields = ['senha', 'wifi_key']; // Opcional: ignorar campos que podem ter ! de propósito
+
+    for (const [key, value] of Object.entries(sanitizedData)) {
+      if (typeof value === 'string' && value.includes('!') && !skipFields.includes(key)) {
+        (sanitizedData as any)[key] = value.replace(/!/g, 'I');
+        hasChanges = true;
+      }
+    }
+    if (hasChanges) {
+      setData(sanitizedData as ScanData);
+    }
+  }, [data]);
+
+
   // Estados de Busca Manual/Ajuste sem Token
   const [searchGponInput, setSearchGponInput] = useState('');
   const [isSearchingGpon, setIsSearchingGpon] = useState(false);
@@ -1749,9 +1770,13 @@ export default function App() {
       if (printers.length === 0) fetchPrinters();
     }, []);
 
+    
     const handleFieldChange = (key: string, value: string) => {
-      setFieldsData({ ...fieldsData, [key]: value.trim() });
+      // Automagicamente troca ! por I para corrigir bugs de scanner no mobile
+      const sanitized = value.replace(/!/g, 'I');
+      setFieldsData({ ...fieldsData, [key]: sanitized.trim() });
     };
+
 
     const handlePrint = async () => {
       if (!selectedModel || !selectedPrinter) {
