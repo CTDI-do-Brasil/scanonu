@@ -1453,6 +1453,11 @@ export default function App() {
     setScreen('idle');
   };
 
+  const handleGoBackToModules = () => {
+    resetAll();
+    setActiveModule('selection');
+  };
+
   const openInNewTab = () => {
     window.open(window.location.href, '_blank');
   };
@@ -1864,7 +1869,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
         <header className="bg-[#003865] text-white p-4 shadow-md flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => setActiveModule('selection')} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+            <button onClick={handleGoBackToModules} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <MonitorPlay className="w-6 h-6 text-blue-300" />
@@ -1963,7 +1968,7 @@ export default function App() {
           <div className="md:hidden flex items-center justify-between bg-white border-b border-slate-200/60 px-4 py-3 sticky top-0 z-40 w-full">
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => setActiveModule('selection')}
+                onClick={handleGoBackToModules}
                 className="text-slate-500 hover:text-[#003865] p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"
                 title="Voltar aos Módulos"
               >
@@ -2147,7 +2152,7 @@ export default function App() {
                 </div>
                 <div className="flex gap-1">
                   <button 
-                    onClick={() => setActiveModule('selection')}
+                    onClick={handleGoBackToModules}
                     className="text-blue-200/70 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
                     title="Voltar aos Módulos"
                   >
@@ -2186,7 +2191,7 @@ export default function App() {
           <div className="max-w-2xl mx-auto w-full flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => setActiveModule('selection')}
+                onClick={handleGoBackToModules}
                 className="text-slate-500 hover:text-[#003865] p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"
                 title="Voltar aos Módulos"
               >
