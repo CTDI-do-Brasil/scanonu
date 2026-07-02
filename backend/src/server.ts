@@ -255,6 +255,20 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
   } catch (e) {}
 
+  // Migração para mover data_leitura para a última posição
+  try {
+    const lastCol = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' ORDER BY ordinal_position DESC LIMIT 1");
+    if (lastCol.rowCount && lastCol.rowCount > 0 && lastCol.rows[0].column_name !== 'data_leitura') {
+      console.log('Movendo a coluna data_leitura para a ultima posicao no banco', dbName);
+      await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN data_leitura TO data_leitura_old');
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+      await pool.query('UPDATE etiquetas_scan_onu SET data_leitura = data_leitura_old');
+      await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN data_leitura_old');
+    }
+  } catch (e) {
+    console.error('Erro ao mover a coluna data_leitura:', e);
+  }
+
   // Garantir UNIQUE
   try {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
@@ -415,6 +429,20 @@ async function connectToDatabase() {
         await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
         await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
       } catch (e) {}
+
+      // Migração para mover data_leitura para a última posição
+      try {
+        const lastCol = await dbPool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' ORDER BY ordinal_position DESC LIMIT 1");
+        if (lastCol.rowCount && lastCol.rowCount > 0 && lastCol.rows[0].column_name !== 'data_leitura') {
+          console.log('Movendo a coluna data_leitura para a ultima posicao no banco padrao');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN data_leitura TO data_leitura_old');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+          await dbPool.query('UPDATE etiquetas_scan_onu SET data_leitura = data_leitura_old');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN data_leitura_old');
+        }
+      } catch (e) {
+        console.error('Erro ao mover a coluna data_leitura:', e);
+      }
 
       console.log('Tabelas de banco validadas/criadas com sucesso.');
 
