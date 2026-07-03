@@ -1591,9 +1591,14 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
     let zpl = model.codigo_zpl;
     for (const key of Object.keys(model.campos_config)) {
       const val = fieldsData[key] || '';
-      // Substituir a chave no formato ${chave} ou $\{chave\}
+      // Substituir a chave no formato ${chave} ou \${chave\}
       const regex = new RegExp('\\$\\\{\\s*' + key + '\\s*\\\}', 'g');
       zpl = zpl.replace(regex, val);
+
+      // Nova variável automatizada: ${campo_clean} (remove dois-pontos e espaços, ideal para código de barras)
+      const valClean = val.replace(/[^A-Za-z0-9]/g, '');
+      const regexClean = new RegExp('\\$\\\{\\s*' + key + '_clean\\s*\\\}', 'g');
+      zpl = zpl.replace(regexClean, valClean);
     }
 
     // 4. Enviar para a impressora via Socket TCP
