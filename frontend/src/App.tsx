@@ -185,6 +185,19 @@ export default function App() {
   const [printerError, setPrinterError] = useState<string | null>(null);
   const [isUpdatingPrinter, setIsUpdatingPrinter] = useState(false);
 
+  // Estados para Módulo IPTV (declarados no topo para seguir as regras do React)
+  const [selectedModel, setSelectedModel] = useState<any>(null);
+  const [selectedPrinter, setSelectedPrinter] = useState('');
+  const [fieldsData, setFieldsData] = useState<any>({});
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  useEffect(() => {
+    if (activeModule === 'iptv') {
+      if (iptvModels.length === 0) fetchIptvModels();
+      if (printers.length === 0) fetchPrinters();
+    }
+  }, [activeModule]);
+
   interface StatsData {
     totalLabels: number;
     totalUsers: number;
@@ -1798,16 +1811,6 @@ export default function App() {
 
   
   if (activeModule === 'iptv') {
-    const [selectedModel, setSelectedModel] = useState<any>(null);
-    const [selectedPrinter, setSelectedPrinter] = useState('');
-    const [fieldsData, setFieldsData] = useState<any>({});
-    const [isPrinting, setIsPrinting] = useState(false);
-
-    // Initial load for Operator inside IPTV
-    useEffect(() => {
-      if (iptvModels.length === 0) fetchIptvModels();
-      if (printers.length === 0) fetchPrinters();
-    }, []);
 
     
     const handleFieldChange = (key: string, value: string) => {
