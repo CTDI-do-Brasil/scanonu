@@ -650,6 +650,16 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'F@ST 5655V2';
   }
 
+  // Sagemcom F@ST 5657 TIM LIVE
+  if (
+    modelClean.includes('FAST5657') || 
+    modelClean.includes('F@ST5657') || 
+    (modelClean.includes('5657') && (modelClean.includes('FAST') || modelClean.includes('F@ST'))) ||
+    (mfgUpper.includes('SAGEM') && modelClean.includes('5657'))
+  ) {
+    return 'F@ST 5657 TIM LIVE';
+  }
+
   // Sagemcom F@ST 5670V2
   if (
     modelClean.includes('FAST5670V2') || 
