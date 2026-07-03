@@ -1957,7 +1957,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
       }
 
       // GPON Serial: Se não vier GPON serial na planilha, geramos um N/A único
-      const gpon_sn_raw = getVal(row, ['GPON', 'gpon', 'GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial', 'CUSN']);
+      const gpon_sn_raw = getVal(row, ['GPON', 'gpon', 'GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'GPON ID', 'Serial', 'S/N', 'serial', 'CUSN']);
       let gpon_sn = gpon_sn_raw ? gpon_sn_raw.toUpperCase().trim() : '';
       if (!gpon_sn) {
         const suffix = mac !== 'N/A' ? mac : (wifi_ssid !== 'N/A' ? wifi_ssid : Math.random().toString(36).substring(7).toUpperCase());
@@ -2112,7 +2112,7 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
         }
       }
 
-      const gpon_sn_raw = getVal(row, ['GPON', 'gpon', 'GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'Serial', 'S/N', 'serial', 'CUSN']);
+      const gpon_sn_raw = getVal(row, ['GPON', 'gpon', 'GPON Serial Number', 'GPON Serial', 'gpon_sn', 'Gpon Sn', 'GPON SN', 'GPON ID', 'Serial', 'S/N', 'serial', 'CUSN']);
       let gpon_sn = gpon_sn_raw ? gpon_sn_raw.toUpperCase().trim() : '';
       if (!gpon_sn) {
         const suffix = mac !== 'N/A' ? mac : (wifi_ssid !== 'N/A' ? wifi_ssid : Math.random().toString(36).substring(7).toUpperCase());
