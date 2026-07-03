@@ -973,13 +973,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
     const normalizedModelo = normalizeModel(modelo, fabricante);
     const isFast5670 = normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
 
-    // Gerar um GPON SN unico se vier como N/A apenas para F@ST 5670
-    if (isFast5670 && (!gpon_sn || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA')) {
-      const suffix = (mac && mac.toUpperCase() !== 'N/A') ? mac : Math.random().toString(36).substring(2, 10).toUpperCase();
-      gpon_sn = 'N/A_' + suffix;
-    } else if (!gpon_sn || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
-      gpon_sn = 'N/A';
-    }
+    // Gerar um GPON SN unico se vier como N/A SEMPRE para não violar UNIQUE constraint
+      if (!gpon_sn || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
+        const suffix = (mac && mac.toUpperCase() !== 'N/A') ? mac : Math.random().toString(36).substring(2, 10).toUpperCase();
+        gpon_sn = 'N/A_' + suffix;
+      }
 
     const resolvedWebKey = senha !== undefined ? senha : web_key;
     let resolvedWifiSsid5g = wifi_ssid_5g || 'N/A';
