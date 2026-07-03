@@ -200,6 +200,10 @@ export default function App() {
     }
     const timer = setTimeout(() => {
       let tempZpl = selectedModel.codigo_zpl;
+      
+      // Remover dados gráficos pesados para evitar erro 414 (URL Too Large) no Labelary
+      tempZpl = tempZpl.replace(/\^GF[^~^]*/gi, '');
+
       Object.keys(selectedModel.campos_config || {}).forEach((key) => {
         const val = fieldsData[key] || `[${key.toUpperCase()}]`;
         const regex = new RegExp('\\$\\{\\s*' + key + '\\s*\\}', 'g');
