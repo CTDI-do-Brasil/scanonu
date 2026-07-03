@@ -1086,8 +1086,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let checkRes: any = { rowCount: 0 };
     let duplicateType = 'GPON Serial';
 
-    if (gpon_sn && !gpon_sn.startsWith('N/A_') && gpon_sn.toUpperCase() !== 'N/A') {
-      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1 AND gpon_sn <> \'N/A\' AND gpon_sn <> \'NA\'', [gpon_sn]);
+    if (gpon_sn && gpon_sn.toUpperCase() !== 'N/A' && gpon_sn.toUpperCase() !== 'NA') {
+      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
     } else if (wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
       checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE wifi_ssid = $1', [wifi_ssid]);
       duplicateType = 'SSID da Rede (pois não há GPON na etiqueta)';
