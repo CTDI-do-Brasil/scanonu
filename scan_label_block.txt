@@ -1,0 +1,22 @@
+﻿    scanResult.reimpressa = isReimpressa;
+
+    // VERIFICAÃ‡ÃƒO DE DUPLICIDADE: verifica se o GPON_SN jÃ¡ existe no banco de dados
+    let existsInDb = false;
+    let existingData = null;
+
+    if (dbConnected && dbPool && scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
+      try {
+        const checkRes = await dbPool.query(
+          'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1',
+          [scanResult.gpon_sn]
+        );
+        if (checkRes.rowCount && checkRes.rowCount > 0) {
+          existsInDb = true;
+          existingData = checkRes.rows[0];
+        }
+      } catch (dbErr) {
+        console.error('Erro ao verificar duplicidade no scan-label:', dbErr);
+      }
+    }
+
+    // Registrar o escaneamento bem-sucedido para auditoria e diagnÃ³stico
