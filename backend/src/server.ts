@@ -645,6 +645,14 @@ function correctMacPrefix(mac: string): string {
   return cleanMac;
 }
 
+function normalizeFabricante(fabricante: string, modelo: string): string {
+  const modelUpper = (modelo || '').toUpperCase().trim();
+  if (modelUpper.includes('FGA2232TIB')) {
+    return 'VANTIVA';
+  }
+  return fabricante || 'N/A';
+}
+
 function normalizeModel(modelo: string, fabricante: string): string {
   let modelNorm = (modelo || '').trim();
   const mfgUpper = (fabricante || '').toUpperCase();
@@ -1967,11 +1975,10 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 
     for (const row of rows) {
       // Mapeamento tolerante dos cabeçalhos
-      const fabricanteRaw = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer', 'Brand', 'brand']);
-      const fabricante = fabricanteRaw || 'N/A';
-
       const modeloRaw = getVal(row, ['Modelo', 'modelo', 'Model', 'model', 'HOST_PID']);
-      const modelo = modeloRaw || 'N/A';
+        const modelo = modeloRaw || 'N/A';
+        const fabricanteRaw = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer', 'Brand', 'brand']);
+        const fabricante = normalizeFabricante(fabricanteRaw || 'N/A', modelo);
 
       const cpe_sn_raw = getVal(row, ['CPE Serial Number', 'CPE Serial', 'cpe_sn', 'Cpe Sn', 'CPE SN', 'CPE S/N', 'CPE', 'HOST_SERIAL_NO']);
       const cpe_sn = cpe_sn_raw || 'N/A';
@@ -2132,11 +2139,10 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
 
     const parsedRows = [];
     for (const row of rows) {
-      const fabricanteRaw = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer', 'Brand', 'brand']);
-      const fabricante = fabricanteRaw || 'N/A';
-
       const modeloRaw = getVal(row, ['Modelo', 'modelo', 'Model', 'model', 'HOST_PID']);
-      const modelo = modeloRaw || 'N/A';
+        const modelo = modeloRaw || 'N/A';
+        const fabricanteRaw = getVal(row, ['Fabricante', 'fabricante', 'Manufacturer', 'manufacturer', 'Brand', 'brand']);
+        const fabricante = normalizeFabricante(fabricanteRaw || 'N/A', modelo);
 
       const cpe_sn_raw = getVal(row, ['CPE Serial Number', 'CPE Serial', 'cpe_sn', 'Cpe Sn', 'CPE SN', 'CPE S/N', 'CPE', 'HOST_SERIAL_NO']);
       const cpe_sn = cpe_sn_raw || 'N/A';
