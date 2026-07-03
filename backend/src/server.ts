@@ -48,6 +48,16 @@ app.get('/api/version', (req, res) => {
 });
 
 // Rota temporária para limpar o lixo do banco
+app.get('/api/admin/padronizar-5657', async (req, res) => {
+  try {
+    if (!dbPool) return res.send('Banco não conectado.');
+    const result = await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F@ST 5657 TIM LIVE' WHERE modelo ILIKE '%5657%'");
+    res.send('Padronização concluida com sucesso! ' + result.rowCount + ' modelos atualizados. Voce ja pode fechar esta aba.');
+  } catch (e: any) {
+    res.send('Erro: ' + e.message);
+  }
+});
+
 app.get('/api/admin/limpar-lixo', async (req, res) => {
   try {
     if (!dbPool) return res.send('Banco não conectado.');
