@@ -58,6 +58,17 @@ app.get('/api/admin/padronizar-5657', async (req, res) => {
   }
 });
 
+  // Rota temporária para padronizar fabricante VANTIVA no banco
+  app.get('/api/admin/padronizar-vantiva', async (req, res) => {
+    try {
+      if (!dbPool) return res.send('Banco não conectado.');
+      const result = await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'VANTIVA' WHERE modelo ILIKE '%FGA2232TIB%'");
+      res.send('Padronização concluida com sucesso! ' + result.rowCount + ' fabricantes atualizados para VANTIVA. Voce ja pode fechar esta aba.');
+    } catch (e: any) {
+      res.send('Erro: ' + e.message);
+    }
+  });
+
 app.get('/api/admin/limpar-lixo', async (req, res) => {
   try {
     if (!dbPool) return res.send('Banco não conectado.');
