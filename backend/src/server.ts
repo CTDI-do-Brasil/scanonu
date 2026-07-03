@@ -965,7 +965,7 @@ Siga atentamente as instruções abaixo para cada campo:
 
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
-app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
+app.post('/api/save-label', async (req: any, res: any) => {
   try {
     let { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url } = req.body;
 
@@ -1185,7 +1185,7 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
     console.error('Erro ao salvar no PostgreSQL:', dbError);
     return res.status(500).json({
       success: false,
-      error: 'Não foi possível gravar os dados no PostgreSQL.',
+      error: 'Erro BD: ' + (dbError.message || String(dbError)),
       details: dbError.message || String(dbError)
     });
   }
