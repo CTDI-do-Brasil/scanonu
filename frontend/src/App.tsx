@@ -2018,7 +2018,7 @@ export default function App() {
             {selectedModel ? (
               <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
                 <h3 className="font-bold text-[#003865] mb-4">Dados da Etiqueta</h3>
-                {Object.entries(selectedModel.campos_config || {}).map(([key, config]: [string, any]) => (
+                {Object.entries(selectedModel.campos_config || {}).filter(([key]) => !key.endsWith('_clean')).map(([key, config]: [string, any]) => (
                   <div key={key}>
                     <label className="block text-sm font-bold text-slate-700 mb-1">
                       {config.label} {config.minLength ? `(${config.minLength} chars)` : ''}
