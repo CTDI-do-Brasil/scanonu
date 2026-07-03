@@ -1905,10 +1905,12 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
     let errorCount = 0;
     
     // Função auxiliar para mapear chaves com flexibilidade
-    const getVal = (row: any, keys: string[]) => {
+        const getVal = (row: any, keys: string[]) => {
+      const rowKeys = Object.keys(row);
       for (const k of keys) {
-        if (row[k] !== undefined && row[k] !== null) {
-          return String(row[k]).trim();
+        const matchingKey = rowKeys.find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
+        if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) {
+          return String(row[matchingKey]).trim();
         }
       }
       return '';
@@ -2063,10 +2065,12 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
       return res.status(400).json({ success: false, error: 'A planilha está vazia ou não pôde ser lida.' });
     }
 
-    const getVal = (row: any, keys: string[]) => {
+        const getVal = (row: any, keys: string[]) => {
+      const rowKeys = Object.keys(row);
       for (const k of keys) {
-        if (row[k] !== undefined && row[k] !== null) {
-          return String(row[k]).trim();
+        const matchingKey = rowKeys.find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
+        if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) {
+          return String(row[matchingKey]).trim();
         }
       }
       return '';
