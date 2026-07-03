@@ -1079,8 +1079,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let reconciledGpon = null;
     let reconciledMac = null;
     let reconciledCpe = null;
-    if (!exists && isFast5670 && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-      let macSuffix = null;
+    if (!exists && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
+        let macSuffix = null;
       const match = wifi_ssid.match(/([0-9a-fA-F]{4})(?:_2G|_5G)?$/i);
       if (match) {
         macSuffix = match[1].toUpperCase();
@@ -1093,14 +1093,15 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
       if (macSuffix) {
         const orphanRes = await pool.query(
-          "SELECT gpon_sn, mac, cpe_sn FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND UPPER(mac) LIKE '%' || $1 AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)",
+          "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE UPPER(mac) LIKE '%' || $1 AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)",
           [macSuffix]
         );
         if (orphanRes.rowCount && orphanRes.rowCount > 0) {
           reconciledGpon = orphanRes.rows[0].gpon_sn;
           reconciledMac = orphanRes.rows[0].mac;
-          reconciledCpe = orphanRes.rows[0].cpe_sn;
-        }
+            reconciledCpe = orphanRes.rows[0].cpe_sn;
+            if (orphanRes.rows[0].fabricante) fabricante = orphanRes.rows[0].fabricante;
+          }
       }
     }
 
