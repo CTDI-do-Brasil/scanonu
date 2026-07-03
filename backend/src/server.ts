@@ -1172,12 +1172,12 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
       // Se for para sobrescrever, usamos um UPDATE
       const updateQuery = `
-        UPDATE etiquetas_scan_onu 
-        SET 
-          fabricante = $1,
-          modelo = $2,
-          cpe_sn = COALESCE(NULLIF($3, 'N/A'), cpe_sn),
-          mac = COALESCE(NULLIF($4, 'N/A'), mac),
+          UPDATE etiquetas_scan_onu 
+          SET 
+            fabricante = $1,
+            modelo = $2,
+            cpe_sn = $3,
+            mac = $4,
           wifi_ssid = $5,
           wifi_ssid_5g = $6,
           wifi_key = $7,
