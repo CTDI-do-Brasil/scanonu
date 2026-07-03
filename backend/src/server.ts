@@ -47,6 +47,17 @@ app.get('/api/version', (req, res) => {
   res.json({ version: APP_VERSION });
 });
 
+// Rota temporária para limpar o lixo do banco
+app.get('/api/admin/limpar-lixo', async (req, res) => {
+  try {
+    if (!dbPool) return res.send('Banco não conectado.');
+    const result = await dbPool.query("DELETE FROM etiquetas_scan_onu WHERE gpon_sn LIKE 'N/A_%'");
+    res.send('Limpeza concluida com sucesso! ' + result.rowCount + ' linhas apagadas. Voce ja pode fechar esta aba.');
+  } catch (e: any) {
+    res.send('Erro: ' + e.message);
+  }
+});
+
 
 // Middleware para autenticar sessões usando o token no cabeçalho Authorization
 const authenticateSession = async (req: any, res: any, next: any) => {
@@ -2060,12 +2071,17 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
-    const rows = XLSX.utils.sheet_to_json<any>(worksheet);
+        const rows = XLSX.utils.sheet_to_json<any>(worksheet, { defval: '' });
     if (!rows || rows.length === 0) {
       return res.status(400).json({ success: false, error: 'A planilha está vazia ou não pôde ser lida.' });
     }
 
-        const getVal = (row: any, keys: string[]) => {
+    console.log('--- DEBUG IMPORT EXCEL ---');
+    console.log('Headers encontrados:', Object.keys(rows[0]));
+    console.log('Primeira linha:', rows[0]);
+    console.log('--------------------------');
+
+    const getVal = (row: any, keys: string[]) => {
       const rowKeys = Object.keys(row);
       for (const k of keys) {
         const matchingKey = rowKeys.find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
