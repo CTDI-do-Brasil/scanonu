@@ -1088,8 +1088,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     if (gpon_sn && !gpon_sn.startsWith('N/A_') && gpon_sn.toUpperCase() !== 'N/A') {
       checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1 AND gpon_sn <> \'N/A\' AND gpon_sn <> \'NA\'', [gpon_sn]);
-    } else if (isFast5670 && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-      checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE wifi_ssid = $1 AND (modelo = \'F@ST 5670\' OR modelo = \'F@ST 5670V2\')', [wifi_ssid]);
+    } else if (wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
+      checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE wifi_ssid = $1', [wifi_ssid]);
       duplicateType = 'SSID da Rede (pois não há GPON na etiqueta)';
     }
 
@@ -1177,11 +1177,15 @@ app.post('/api/save-label', async (req: any, res: any) => {
         INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, imagem_url)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `;
-      const insertValues = [
-        fabricante || 'N/A',
-        normalizedModelo || 'N/A',
-        cpe_sn || 'N/A',
-        gpon_sn || 'N/A',
+      if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
+          gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        }
+
+        const insertValues = [
+          fabricante || 'N/A',
+          normalizedModelo || 'N/A',
+          cpe_sn || 'N/A',
+          gpon_sn,
         mac || 'N/A',
         wifi_ssid || 'N/A',
         resolvedWifiSsid5g,
