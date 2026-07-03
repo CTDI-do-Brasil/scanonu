@@ -1065,9 +1065,38 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
     }
 
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
+    
+    // NOVO: Lógica de reconciliação (IA -> Planilha)
+    let reconciledGpon = null;
+    let reconciledMac = null;
+    let reconciledCpe = null;
+    if (!exists && isFast5670 && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
+      let macSuffix = null;
+      const match = wifi_ssid.match(/([0-9a-fA-F]{4})(?:_2G|_5G)?$/i);
+      if (match) {
+        macSuffix = match[1].toUpperCase();
+      } else {
+        const cleanSsid = wifi_ssid.replace(/_(2G|5G)$/i, '');
+        if (cleanSsid.length >= 4) {
+          macSuffix = cleanSsid.slice(-4).toUpperCase();
+        }
+      }
 
-    if (exists) {
-      if (!overwrite) {
+      if (macSuffix) {
+        const orphanRes = await pool.query(
+          "SELECT gpon_sn, mac, cpe_sn FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND UPPER(mac) LIKE '%' || $1 AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)",
+          [macSuffix]
+        );
+        if (orphanRes.rowCount && orphanRes.rowCount > 0) {
+          reconciledGpon = orphanRes.rows[0].gpon_sn;
+          reconciledMac = orphanRes.rows[0].mac;
+          reconciledCpe = orphanRes.rows[0].cpe_sn;
+        }
+      }
+    }
+
+    if (exists || reconciledGpon) {
+      if (exists && !overwrite) {
         return res.status(409).json({
           success: false,
           conflict: true,
@@ -1075,14 +1104,16 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
         });
       }
 
+      const targetGpon = reconciledGpon || gpon_sn;
+
       // Se for para sobrescrever, usamos um UPDATE
       const updateQuery = `
         UPDATE etiquetas_scan_onu 
         SET 
           fabricante = $1,
           modelo = $2,
-          cpe_sn = $3,
-          mac = $4,
+          cpe_sn = COALESCE(NULLIF($3, 'N/A'), cpe_sn),
+          mac = COALESCE(NULLIF($4, 'N/A'), mac),
           wifi_ssid = $5,
           wifi_ssid_5g = $6,
           wifi_key = $7,
@@ -1096,19 +1127,19 @@ app.post('/api/save-label', authenticateSession, async (req: any, res: any) => {
       const updateValues = [
         fabricante || 'N/A',
         normalizedModelo || 'N/A',
-        cpe_sn || 'N/A',
-        mac || 'N/A',
+        reconciledCpe || cpe_sn || 'N/A',
+        reconciledMac || mac || 'N/A',
         wifi_ssid || 'N/A',
         resolvedWifiSsid5g,
         wifi_key || 'N/A',
         usuario || 'N/A',
         resolvedWebKey || 'N/A',
         operador || 'sistema',
-        gpon_sn,
+        targetGpon,
         zplUrl || imagem_url || null
       ];
       await pool.query(updateQuery, updateValues);
-      console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
+      console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON alvo: ${targetGpon}`);
     } else {
       const insertQuery = `
         INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, imagem_url)
@@ -1933,6 +1964,32 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
         gpon_sn = 'N/A_' + suffix;
       }
 
+      // NOVO: Lógica de reconciliação (Planilha -> IA)
+      let reconciledWifiSsid = null;
+      let reconciledWifiSsid5g = null;
+      let reconciledWifiKey = null;
+      let reconciledWebKey = null;
+
+      const isFast5670 = normalizedModelo.toUpperCase() === 'F@ST 5670' || normalizedModelo.toUpperCase() === 'F@ST 5670V2';
+      if (isFast5670 && mac !== 'N/A' && mac.length >= 4) {
+        const macSuffix = mac.slice(-4);
+        
+        const orphanRes = await pool.query(
+          "SELECT gpon_sn, wifi_ssid, wifi_ssid_5g, wifi_key, web_key FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND UPPER(wifi_ssid) LIKE '%' || $1 || '%' AND (mac = 'N/A' OR mac = 'NA' OR mac IS NULL)",
+          [macSuffix]
+        );
+        if (orphanRes.rowCount && orphanRes.rowCount > 0) {
+          const orphanGpon = orphanRes.rows[0].gpon_sn;
+          reconciledWifiSsid = orphanRes.rows[0].wifi_ssid;
+          reconciledWifiSsid5g = orphanRes.rows[0].wifi_ssid_5g;
+          reconciledWifiKey = orphanRes.rows[0].wifi_key;
+          reconciledWebKey = orphanRes.rows[0].web_key;
+          
+          await pool.query("DELETE FROM etiquetas_scan_onu WHERE gpon_sn = $1", [orphanGpon]);
+          console.log(`Registro órfão ${orphanGpon} deletado para reconciliação com o MAC ${mac}`);
+        }
+      }
+
       try {
         const query = `
           INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
@@ -1940,13 +1997,13 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
-            cpe_sn = EXCLUDED.cpe_sn,
-            mac = EXCLUDED.mac,
-            wifi_ssid = EXCLUDED.wifi_ssid,
-            wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
-            wifi_key = EXCLUDED.wifi_key,
-            usuario = EXCLUDED.usuario,
-            web_key = EXCLUDED.web_key,
+            cpe_sn = COALESCE(NULLIF(EXCLUDED.cpe_sn, 'N/A'), etiquetas_scan_onu.cpe_sn),
+            mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
+            wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
+            wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
+            wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
+            usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
+            web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
             operador_email = EXCLUDED.operador_email,
             data_leitura = CURRENT_TIMESTAMP
         `;
@@ -1956,11 +2013,11 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           cpe_sn,
           gpon_sn,
           mac,
-          wifi_ssid,
-          finalWifiSsid5g,
-          wifi_key,
+          reconciledWifiSsid || wifi_ssid,
+          reconciledWifiSsid5g || finalWifiSsid5g,
+          reconciledWifiKey || wifi_key,
           usuario,
-          web_key,
+          reconciledWebKey || web_key,
           operador_email
         ];
         await pool.query(query, values);
@@ -2110,6 +2167,34 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
     const operatorEmail = req.user.email || 'N/A';
 
     for (const row of rows) {
+      let reconciledWifiSsid = null;
+      let reconciledWifiSsid5g = null;
+      let reconciledWifiKey = null;
+      let reconciledWebKey = null;
+      
+      const normalizedModelo = row.modelo || 'N/A';
+      const mac = row.mac || 'N/A';
+      
+      const isFast5670 = normalizedModelo.toUpperCase() === 'F@ST 5670' || normalizedModelo.toUpperCase() === 'F@ST 5670V2';
+      if (isFast5670 && mac !== 'N/A' && mac.length >= 4) {
+        const macSuffix = mac.slice(-4);
+        
+        const orphanRes = await pool.query(
+          "SELECT gpon_sn, wifi_ssid, wifi_ssid_5g, wifi_key, web_key FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND UPPER(wifi_ssid) LIKE '%' || $1 || '%' AND (mac = 'N/A' OR mac = 'NA' OR mac IS NULL)",
+          [macSuffix]
+        );
+        if (orphanRes.rowCount && orphanRes.rowCount > 0) {
+          const orphanGpon = orphanRes.rows[0].gpon_sn;
+          reconciledWifiSsid = orphanRes.rows[0].wifi_ssid;
+          reconciledWifiSsid5g = orphanRes.rows[0].wifi_ssid_5g;
+          reconciledWifiKey = orphanRes.rows[0].wifi_key;
+          reconciledWebKey = orphanRes.rows[0].web_key;
+          
+          await pool.query("DELETE FROM etiquetas_scan_onu WHERE gpon_sn = $1", [orphanGpon]);
+          console.log(`Registro órfão ${orphanGpon} deletado para reconciliação no lote com o MAC ${mac}`);
+        }
+      }
+
       try {
         const query = `
           INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
@@ -2117,13 +2202,13 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
-            cpe_sn = EXCLUDED.cpe_sn,
-            mac = EXCLUDED.mac,
-            wifi_ssid = EXCLUDED.wifi_ssid,
-            wifi_ssid_5g = EXCLUDED.wifi_ssid_5g,
-            wifi_key = EXCLUDED.wifi_key,
-            usuario = EXCLUDED.usuario,
-            web_key = EXCLUDED.web_key,
+            cpe_sn = COALESCE(NULLIF(EXCLUDED.cpe_sn, 'N/A'), etiquetas_scan_onu.cpe_sn),
+            mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
+            wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
+            wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
+            wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
+            usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
+            web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
             operador_email = EXCLUDED.operador_email,
             data_leitura = CURRENT_TIMESTAMP
         `;
@@ -2133,11 +2218,11 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
           row.cpe_sn || 'N/A',
           row.gpon_sn,
           row.mac || 'N/A',
-          row.wifi_ssid || 'N/A',
-          row.wifi_ssid_5g || 'N/A',
-          row.wifi_key || 'N/A',
+          reconciledWifiSsid || row.wifi_ssid || 'N/A',
+          reconciledWifiSsid5g || row.wifi_ssid_5g || 'N/A',
+          reconciledWifiKey || row.wifi_key || 'N/A',
           row.usuario || 'N/A',
-          row.web_key || 'N/A',
+          reconciledWebKey || row.web_key || 'N/A',
           operatorEmail
         ];
         await pool.query(query, values);
