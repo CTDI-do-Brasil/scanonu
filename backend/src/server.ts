@@ -1079,6 +1079,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let reconciledGpon = null;
     let reconciledMac = null;
     let reconciledCpe = null;
+      let reconciledModelo = null;
     if (!exists && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
         let macSuffix = null;
       const match = wifi_ssid.match(/([0-9a-fA-F]{4})(?:_2G|_5G)?$/i);
@@ -1101,6 +1102,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           reconciledMac = orphanRes.rows[0].mac;
             reconciledCpe = orphanRes.rows[0].cpe_sn;
             if (orphanRes.rows[0].fabricante) fabricante = orphanRes.rows[0].fabricante;
+            reconciledModelo = orphanRes.rows[0].modelo;
           }
       }
     }
@@ -1135,8 +1137,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
         WHERE gpon_sn = $11
       `;
       const updateValues = [
-        fabricante || 'N/A',
-        normalizedModelo || 'N/A',
+          fabricante || 'N/A',
+          reconciledModelo || normalizedModelo || 'N/A',
         reconciledCpe || cpe_sn || 'N/A',
         reconciledMac || mac || 'N/A',
         wifi_ssid || 'N/A',
