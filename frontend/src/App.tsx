@@ -410,6 +410,9 @@ export default function App() {
     const detectedVariables: string[] = [];
     while ((match = regex.exec(zpl)) !== null) {
       const varName = match[1].trim();
+      if (varName.endsWith('_clean')) {
+        continue;
+      }
       if (!detectedVariables.includes(varName)) {
         detectedVariables.push(varName);
       }
