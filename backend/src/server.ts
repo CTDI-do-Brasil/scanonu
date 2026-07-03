@@ -1087,9 +1087,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let duplicateType = 'GPON Serial';
 
     if (gpon_sn && !gpon_sn.startsWith('N/A_') && gpon_sn.toUpperCase() !== 'N/A') {
-      checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE gpon_sn = $1 AND gpon_sn <> \'N/A\' AND gpon_sn <> \'NA\'', [gpon_sn]);
+      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1 AND gpon_sn <> \'N/A\' AND gpon_sn <> \'NA\'', [gpon_sn]);
     } else if (wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-      checkRes = await pool.query('SELECT gpon_sn FROM etiquetas_scan_onu WHERE wifi_ssid = $1', [wifi_ssid]);
+      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE wifi_ssid = $1', [wifi_ssid]);
       duplicateType = 'SSID da Rede (pois não há GPON na etiqueta)';
     }
 
@@ -1128,15 +1128,28 @@ app.post('/api/save-label', async (req: any, res: any) => {
     }
 
     if (exists || reconciledGpon) {
-      if (exists && !overwrite) {
-        return res.status(409).json({
-          success: false,
-          conflict: true,
-          error: `Equipamento com este ${duplicateType} já existe no banco de dados.`
-        });
-      }
+        if (exists) {
+          const dbRow = checkRes.rows[0];
+          const fieldsChanged = 
+            (fabricante || 'N/A').toUpperCase() !== (dbRow.fabricante || 'N/A').toUpperCase() ||
+            (normalizedModelo || 'N/A').toUpperCase() !== (dbRow.modelo || 'N/A').toUpperCase() ||
+            (cpe_sn || 'N/A').toUpperCase() !== (dbRow.cpe_sn || 'N/A').toUpperCase() ||
+            (mac || 'N/A').toUpperCase() !== (dbRow.mac || 'N/A').toUpperCase() ||
+            (wifi_ssid || 'N/A').toUpperCase() !== (dbRow.wifi_ssid || 'N/A').toUpperCase() ||
+            (resolvedWifiSsid5g || 'N/A').toUpperCase() !== (dbRow.wifi_ssid_5g || 'N/A').toUpperCase() ||
+            (wifi_key || 'N/A') !== (dbRow.wifi_key || 'N/A') ||
+            (usuario || 'N/A') !== (dbRow.usuario || 'N/A') ||
+            (resolvedWebKey || 'N/A') !== (dbRow.web_key || 'N/A');
 
-      const targetGpon = reconciledGpon || gpon_sn;
+          if (!fieldsChanged) {
+            return res.json({
+              success: true,
+              message: 'Dados identicos, nada foi alterado.'
+            });
+          }
+        }
+
+        const targetGpon = exists ? checkRes.rows[0].gpon_sn : (reconciledGpon || gpon_sn);
 
       // Se for para sobrescrever, usamos um UPDATE
       const updateQuery = `
