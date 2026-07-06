@@ -1809,7 +1809,7 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
-    if (req.user.role !== 'master' && req.user.role !== 'consulta') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin' && req.user.role !== 'consulta') {
       return res.status(403).json({ error: 'Acesso negado. Perfil sem permissão para exportar o banco.' });
     }
 
@@ -1896,7 +1896,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
-    if (req.user.role !== 'master' && req.user.role !== 'consulta') {
+    if (req.user.role !== 'master' && req.user.role !== 'admin' && req.user.role !== 'consulta') {
       return res.status(403).json({ error: 'Acesso negado. Perfil sem permissão para exportar a planilha.' });
     }
 
