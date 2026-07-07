@@ -1173,7 +1173,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
         // Função auxiliar para fundir dados da nova captura com os dados existentes do banco
         // Evita que campos válidos já preenchidos no banco sejam apagados com "N/A" ou vazio
-        const getMergedValue = (newVal, dbVal) => {
+        const getMergedValue = (newVal: any, dbVal: any) => {
           if (!newVal || newVal.toUpperCase() === 'N/A' || newVal.toUpperCase() === 'NA' || newVal.trim() === '') {
             return dbVal || 'N/A';
           }
