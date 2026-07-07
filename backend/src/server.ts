@@ -658,8 +658,8 @@ function matchMacAndSsidSuffix(mac: string, ssid: string): boolean {
   if (isNaN(macVal) || isNaN(ssidVal)) return false;
   
   const diff = macVal - ssidVal;
-  // Permite uma margem de offset de até 15 hex (ex: 5477 - 5470 = 7)
-  return diff >= 0 && diff <= 15;
+  // Permite uma margem de offset de até 15 hex em qualquer direção (positivo ou negativo)
+  return Math.abs(diff) <= 15;
 }
 
 function correctMacPrefix(mac: string): string {
