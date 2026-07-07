@@ -995,9 +995,20 @@ Siga atentamente as instruções abaixo para cada campo:
               const candidatesRes = await dbPool.query(
                 "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
               );
-              const matchedRow = candidatesRes.rows.find((row: any) => 
-                matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid)
-              );
+              const matchedRow = candidatesRes.rows.find((row: any) => {
+                const normModel = row.modelo ? row.modelo.toUpperCase() : '';
+                const isFast5670 = normModel.includes('5670');
+                if (isFast5670) {
+                  return matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid);
+                } else {
+                  const cleanMac = row.mac ? row.mac.replace(/[^0-9A-FA-F]/g, '').toUpperCase() : '';
+                  const cleanSsid = scanResult.wifi_ssid.replace(/_(2G|5G)$/i, '').trim().toUpperCase();
+                  if (cleanMac.length >= 4 && cleanSsid.length >= 4) {
+                    return cleanMac.endsWith(cleanSsid.slice(-4));
+                  }
+                  return false;
+                }
+              });
               if (matchedRow) {
                 checkRes.rows = [matchedRow];
                 checkRes.rowCount = 1;
@@ -1181,9 +1192,20 @@ app.post('/api/save-label', async (req: any, res: any) => {
       const candidatesRes = await pool.query(
         "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
       );
-      const matchedRow = candidatesRes.rows.find((row: any) => 
-        matchMacAndSsidSuffix(row.mac, wifi_ssid)
-      );
+      const matchedRow = candidatesRes.rows.find((row: any) => {
+          const normModel = row.modelo ? row.modelo.toUpperCase() : '';
+          const isFast5670 = normModel.includes('5670');
+          if (isFast5670) {
+            return matchMacAndSsidSuffix(row.mac, wifi_ssid);
+          } else {
+            const cleanMac = row.mac ? row.mac.replace(/[^0-9A-FA-F]/g, '').toUpperCase() : '';
+            const cleanSsid = wifi_ssid.replace(/_(2G|5G)$/i, '').trim().toUpperCase();
+            if (cleanMac.length >= 4 && cleanSsid.length >= 4) {
+              return cleanMac.endsWith(cleanSsid.slice(-4));
+            }
+            return false;
+          }
+        });
       if (matchedRow) {
         reconciledGpon = matchedRow.gpon_sn;
         reconciledMac = matchedRow.mac;
