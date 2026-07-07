@@ -968,10 +968,19 @@ Siga atentamente as instruções abaixo para cada campo:
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.wifi_ssid && scanResult.wifi_ssid.toUpperCase() !== 'N/A' && scanResult.wifi_ssid.toUpperCase() !== 'NA') {
-            checkRes = await dbPool.query(
-              'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
-              [scanResult.wifi_ssid]
-            );
+            const cleanSsid = scanResult.wifi_ssid.replace(/_(2G|5G)$/i, '');
+            const ssidSuffix = cleanSsid.length >= 4 ? cleanSsid.slice(-4).toUpperCase() : '';
+            if (ssidSuffix) {
+              checkRes = await dbPool.query(
+                'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1 OR REPLACE(UPPER(mac), \':\', \'\') LIKE \'%\' || $2',
+                [scanResult.wifi_ssid, ssidSuffix]
+              );
+            } else {
+              checkRes = await dbPool.query(
+                'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
+                [scanResult.wifi_ssid]
+              );
+            }
           }
 
         if (checkRes.rowCount && checkRes.rowCount > 0) {
@@ -1160,7 +1169,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
       if (macSuffix) {
         const orphanRes = await pool.query(
-          "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE UPPER(mac) LIKE '%' || $1 AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)",
+          "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE REPLACE(UPPER(mac), ':', '') LIKE '%' || $1 AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)",
           [macSuffix]
         );
         if (orphanRes.rowCount && orphanRes.rowCount > 0) {
