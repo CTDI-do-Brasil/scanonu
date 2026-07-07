@@ -1507,16 +1507,25 @@ export default function App() {
         if (result.existsInDb && result.existingData) {
           setData(prevData => {
             const merged = { ...prevData } as any;
-            Object.keys(result.existingData).forEach(key => {
-              const newVal = (result.existingData as any)[key];
-              const oldVal = merged[key];
-              if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
-                merged[key] = newVal;
-              } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
-                merged[key] = oldVal || 'N/A';
+            
+            // 1. Mesclar a captura atual (ex: senhas e SSID capturados pelo Gemini)
+            const scanData = result.data || {};
+            Object.keys(scanData).forEach(key => {
+              const val = scanData[key];
+              if (val && val.toUpperCase() !== 'N/A' && val.toUpperCase() !== 'NA' && val.trim() !== '') {
+                merged[key] = val;
               }
             });
-            return merged;
+
+            // 2. Mesclar os dados existentes no banco (ex: SN/MAC/GPON pre-carregados)
+            Object.keys(result.existingData).forEach(key => {
+              const newVal = (result.existingData as any)[key];
+              if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+                merged[key] = newVal;
+              }
+            });
+            
+            return applyMacSsidRules(merged);
           });
           setEquipmentExistsInDb(true);
           setExistingEquipmentData(result.existingData);
