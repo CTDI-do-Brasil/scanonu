@@ -643,6 +643,25 @@ app.get('/api/debug-models', async (req, res) => {
 // Função de parsing baseada em RegEx para extrair dados estruturados do OCR
 const KNOWN_SAGEMCOM_OUIS = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6', '34DB1C', '34DB9C', 'D8D7F7'];
 
+function matchMacAndSsidSuffix(mac: string, ssid: string): boolean {
+  if (!mac || !ssid) return false;
+  const cleanMac = mac.replace(/[^0-9A-FA-F]/g, '');
+  const cleanSsid = ssid.replace(/_(2G|5G)$/i, '').trim();
+  if (cleanMac.length < 4 || cleanSsid.length < 4) return false;
+  
+  const macSuffix = cleanMac.slice(-4);
+  const ssidSuffix = cleanSsid.slice(-4);
+  
+  const macVal = parseInt(macSuffix, 16);
+  const ssidVal = parseInt(ssidSuffix, 16);
+  
+  if (isNaN(macVal) || isNaN(ssidVal)) return false;
+  
+  const diff = macVal - ssidVal;
+  // Permite uma margem de offset de até 15 hex (ex: 5477 - 5470 = 7)
+  return diff >= 0 && diff <= 15;
+}
+
 function correctMacPrefix(mac: string): string {
   const cleanMac = mac.replace(/[^0-9A-F]/ig, '').toUpperCase();
   if (cleanMac.length !== 12) return mac;
@@ -968,18 +987,21 @@ Siga atentamente as instruções abaixo para cada campo:
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.wifi_ssid && scanResult.wifi_ssid.toUpperCase() !== 'N/A' && scanResult.wifi_ssid.toUpperCase() !== 'NA') {
-            const cleanSsid = scanResult.wifi_ssid.replace(/_(2G|5G)$/i, '');
-            const ssidSuffix = cleanSsid.length >= 4 ? cleanSsid.slice(-4).toUpperCase() : '';
-            if (ssidSuffix) {
-              checkRes = await dbPool.query(
-                'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1 OR REPLACE(UPPER(mac), \':\', \'\') LIKE \'%\' || $2',
-                [scanResult.wifi_ssid, ssidSuffix]
+            checkRes = await dbPool.query(
+              'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
+              [scanResult.wifi_ssid]
+            );
+            if (checkRes.rowCount === 0) {
+              const candidatesRes = await dbPool.query(
+                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
               );
-            } else {
-              checkRes = await dbPool.query(
-                'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
-                [scanResult.wifi_ssid]
+              const matchedRow = candidatesRes.rows.find((row: any) => 
+                matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid)
               );
+              if (matchedRow) {
+                checkRes.rows = [matchedRow];
+                checkRes.rowCount = 1;
+              }
             }
           }
 
@@ -1156,29 +1178,18 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let reconciledCpe = null;
       let reconciledModelo = null;
     if (!exists && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-        let macSuffix = null;
-      const match = wifi_ssid.match(/([0-9a-fA-F]{4})(?:_2G|_5G)?$/i);
-      if (match) {
-        macSuffix = match[1].toUpperCase();
-      } else {
-        const cleanSsid = wifi_ssid.replace(/_(2G|5G)$/i, '');
-        if (cleanSsid.length >= 4) {
-          macSuffix = cleanSsid.slice(-4).toUpperCase();
-        }
-      }
-
-      if (macSuffix) {
-        const orphanRes = await pool.query(
-          "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE REPLACE(UPPER(mac), ':', '') LIKE '%' || $1 AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)",
-          [macSuffix]
-        );
-        if (orphanRes.rowCount && orphanRes.rowCount > 0) {
-          reconciledGpon = orphanRes.rows[0].gpon_sn;
-          reconciledMac = orphanRes.rows[0].mac;
-            reconciledCpe = orphanRes.rows[0].cpe_sn;
-            if (orphanRes.rows[0].fabricante) fabricante = orphanRes.rows[0].fabricante;
-            reconciledModelo = orphanRes.rows[0].modelo;
-          }
+      const candidatesRes = await pool.query(
+        "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
+      );
+      const matchedRow = candidatesRes.rows.find((row: any) => 
+        matchMacAndSsidSuffix(row.mac, wifi_ssid)
+      );
+      if (matchedRow) {
+        reconciledGpon = matchedRow.gpon_sn;
+        reconciledMac = matchedRow.mac;
+        reconciledCpe = matchedRow.cpe_sn;
+        if (matchedRow.fabricante) fabricante = matchedRow.fabricante;
+        reconciledModelo = matchedRow.modelo;
       }
     }
 
