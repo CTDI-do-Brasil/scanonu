@@ -1464,7 +1464,19 @@ export default function App() {
             const dbResult = await dbResponse.json();
             if (dbResult.success && dbResult.data) {
               console.log('Equipamento encontrado no banco localmente (0 tokens gastos!).');
-              setData(dbResult.data);
+              setData(prevData => {
+                const merged = { ...prevData } as any;
+                Object.keys(dbResult.data).forEach(key => {
+                  const newVal = (dbResult.data as any)[key];
+                  const oldVal = merged[key];
+                  if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+                    merged[key] = newVal;
+                  } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
+                    merged[key] = oldVal || 'N/A';
+                  }
+                });
+                return merged;
+              });
               setEquipmentExistsInDb(true);
               setExistingEquipmentData(dbResult.data);
               setShowDuplicateModal(true);
@@ -1493,12 +1505,36 @@ export default function App() {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
         if (result.existsInDb && result.existingData) {
-          setData(result.existingData);
+          setData(prevData => {
+            const merged = { ...prevData } as any;
+            Object.keys(result.existingData).forEach(key => {
+              const newVal = (result.existingData as any)[key];
+              const oldVal = merged[key];
+              if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+                merged[key] = newVal;
+              } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
+                merged[key] = oldVal || 'N/A';
+              }
+            });
+            return merged;
+          });
           setEquipmentExistsInDb(true);
           setExistingEquipmentData(result.existingData);
           setShowDuplicateModal(true);
         } else {
-          setData(applyMacSsidRules(result.data));
+          setData(prevData => {
+            const merged = { ...prevData } as any;
+            Object.keys(result.data).forEach(key => {
+              const newVal = (result.data as any)[key];
+              const oldVal = merged[key];
+              if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+                merged[key] = newVal;
+              } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
+                merged[key] = oldVal || 'N/A';
+              }
+            });
+            return applyMacSsidRules(merged);
+          });
         }
         setScreen('result');
       } else {
