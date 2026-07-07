@@ -1019,6 +1019,29 @@ Siga atentamente as instruções abaixo para cada campo:
         if (checkRes.rowCount && checkRes.rowCount > 0) {
           existsInDb = true;
           existingData = checkRes.rows[0];
+          
+          // Se o registro encontrado no banco é temporário (não tem GPON real)
+          const isTempGpon = existingData.gpon_sn && existingData.gpon_sn.toUpperCase().startsWith('N/A');
+          if (isTempGpon && scanResult.wifi_ssid) {
+            // Tenta achar um registro real pré-carregado no banco que tenha o MAC compatível
+            const candidatesRes = await dbPool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn NOT LIKE 'N/A%' AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)"
+            );
+            const realMatchedRow = candidatesRes.rows.find((row: any) => 
+              matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid)
+            );
+            if (realMatchedRow) {
+              // Mescla os dados do registro real (S/N, GPON, MAC) com os dados de senhas do registro temporário
+              existingData = {
+                ...existingData,
+                gpon_sn: realMatchedRow.gpon_sn,
+                mac: realMatchedRow.mac,
+                cpe_sn: realMatchedRow.cpe_sn,
+                fabricante: realMatchedRow.fabricante || existingData.fabricante,
+                modelo: realMatchedRow.modelo || existingData.modelo
+              };
+            }
+          }
         }
       } catch (dbErr) {
         console.error('Erro ao verificar duplicidade no scan-label:', dbErr);
@@ -1212,6 +1235,18 @@ app.post('/api/save-label', async (req: any, res: any) => {
         reconciledCpe = matchedRow.cpe_sn;
         if (matchedRow.fabricante) fabricante = matchedRow.fabricante;
         reconciledModelo = matchedRow.modelo;
+      }
+    }
+
+    // Se estamos salvando um registro completo com GPON real, limpamos registros temporários duplicados com o mesmo SSID
+    if (gpon_sn && !gpon_sn.toUpperCase().startsWith('N/A') && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A') {
+      try {
+        await pool.query(
+          "DELETE FROM etiquetas_scan_onu WHERE wifi_ssid = $1 AND gpon_sn LIKE 'N/A%'",
+          [wifi_ssid]
+        );
+      } catch (delErr) {
+        console.error('Erro ao limpar registro temporario duplicado:', delErr);
       }
     }
 
