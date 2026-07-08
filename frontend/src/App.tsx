@@ -75,22 +75,30 @@ const DEFAULT_SCAN_DATA: ScanData = {
 };
 
 function applyMacSsidRules(currentData: ScanData): ScanData {
-  if (!currentData.mac) return currentData;
+  const dataCopy = { ...currentData };
+  const modelUpper = (dataCopy.modelo || '').toUpperCase();
+  const mfgUpper = (dataCopy.fabricante || '').toUpperCase();
+  const isKaon = modelUpper.includes('KAON') || mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.startsWith('PG');
+
+  // Auto-fill CPE SN for KAON PG2447 if it starts with GP
+  if (isKaon && dataCopy.gpon_sn && dataCopy.gpon_sn.toUpperCase().startsWith('GP')) {
+    if (!dataCopy.cpe_sn || dataCopy.cpe_sn.toUpperCase() === 'N/A' || dataCopy.cpe_sn.trim() === '') {
+      dataCopy.cpe_sn = 'N7' + dataCopy.gpon_sn.substring(2).toUpperCase();
+    }
+  }
+
+  if (!dataCopy.mac) return dataCopy;
   
   // Clean MAC (remove colons, hyphens, spaces, and make uppercase)
-  const cleanMac = currentData.mac.replace(/[:\s-]/g, '').toUpperCase();
-  if (cleanMac.length < 4) return currentData;
+  const cleanMac = dataCopy.mac.replace(/[:\s-]/g, '').toUpperCase();
+  if (cleanMac.length < 4) return dataCopy;
   
   const last4Hex = cleanMac.slice(-4);
   const last4Int = parseInt(last4Hex, 16);
-  if (isNaN(last4Int)) return currentData;
+  if (isNaN(last4Int)) return dataCopy;
 
-  const modelUpper = (currentData.modelo || '').toUpperCase();
-  const mfgUpper = (currentData.fabricante || '').toUpperCase();
-  const dataCopy = { ...currentData };
-  
   // Rule 1: KAON
-  if (modelUpper.includes('KAON') || mfgUpper.includes('KAON')) {
+  if (isKaon) {
     dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
     dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
   }

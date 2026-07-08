@@ -925,13 +925,26 @@ Siga atentamente as instruções abaixo para cada campo:
     }
 
     let macNorm = (geminiData.mac || '').replace(/[^0-9A-F]/ig, '').toUpperCase();
-    if (macNorm) {
+    if (macNorm && macNorm.length === 12) {
       macNorm = correctMacPrefix(macNorm);
+    } else {
+      macNorm = 'N/A';
     }
 
     let cpeNorm = (geminiData.cpe_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
     if (cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
       cpeNorm = 'N7' + cpeNorm.substring(2);
+    }
+
+    const modelNormTemp = normalizeModel(geminiData.modelo || '', fabricanteNorm);
+    const modelUpper = modelNormTemp.toUpperCase();
+    const mfgUpper = fabricanteNorm.toUpperCase();
+    const isKaon = mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.startsWith('PG');
+
+    if (isKaon && gponNorm.startsWith('GP')) {
+      if (!cpeNorm || cpeNorm === 'N/A' || cpeNorm.trim() === '') {
+        cpeNorm = 'N7' + gponNorm.substring(2);
+      }
     }
 
     scanResult = {
