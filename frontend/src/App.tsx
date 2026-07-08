@@ -783,13 +783,14 @@ export default function App() {
   };
 
   const handleExportExcel = async () => {
-    if (!user || user.role !== 'master') return;
+    if (!user || (user.role !== 'master' && user.role !== 'admin' && user.role !== 'consulta')) return;
     try {
       const response = await fetch(
         `/api/admin/export-excel?search=${encodeURIComponent(filterSearch)}` +
         `&startDate=${encodeURIComponent(filterStartDate)}` +
         `&endDate=${encodeURIComponent(filterEndDate)}` +
-        `&modelo=${encodeURIComponent(filterModel)}`,
+        `&modelo=${encodeURIComponent(filterModel)}` +
+        `&targetDb=${targetDatabase}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`

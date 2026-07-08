@@ -1905,9 +1905,10 @@ app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {
 // Rota para exportar todas as etiquetas em XML (somente Admin)
 app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any) => {
   try {
-    const { serialNumber, mac, startDate, endDate, modelo } = req.query;
+    const { serialNumber, mac, startDate, endDate, modelo, targetDb } = req.query;
 
-    if (!dbConnected || !dbPool) {
+    const pool = targetDb ? getPoolForDatabase(targetDb as string) : dbPool;
+    if (!dbConnected || !pool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
@@ -1950,7 +1951,7 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
     }
 
     queryText += ' ORDER BY data_leitura ASC';
-    const etiquetasRes = await dbPool.query(queryText, queryValues);
+    const etiquetasRes = await pool.query(queryText, queryValues);
     
     // Construção do XML usando xmlbuilder2
     const root = create({ version: '1.0', encoding: 'UTF-8' })
@@ -1992,9 +1993,10 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
 // Rota para exportar todas as etiquetas em Excel (somente Admin)
 app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: any) => {
   try {
-    const { search, startDate, endDate, modelo } = req.query;
+    const { search, startDate, endDate, modelo, targetDb } = req.query;
 
-    if (!dbConnected || !dbPool) {
+    const pool = targetDb ? getPoolForDatabase(targetDb as string) : dbPool;
+    if (!dbConnected || !pool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
     }
 
@@ -2031,7 +2033,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
     }
 
     queryText += ' ORDER BY data_leitura ASC';
-    const etiquetasRes = await dbPool.query(queryText, queryValues);
+    const etiquetasRes = await pool.query(queryText, queryValues);
 
     const dataRows = etiquetasRes.rows.map((row, index) => ({
       'ID': index + 1,
