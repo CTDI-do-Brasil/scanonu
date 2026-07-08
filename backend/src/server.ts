@@ -995,7 +995,7 @@ Siga atentamente as instruções abaixo para cada campo:
               const candidatesRes = await dbPool.query(
                 "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
               );
-              const matchedRow = candidatesRes.rows.find((row: any) => {
+              const matchingRows = candidatesRes.rows.filter((row: any) => {
                 const normModel = row.modelo ? row.modelo.toUpperCase() : '';
                 const isFast5670 = normModel.includes('5670');
                 if (isFast5670) {
@@ -1009,8 +1009,14 @@ Siga atentamente as instruções abaixo para cada campo:
                   return false;
                 }
               });
-              if (matchedRow) {
-                checkRes.rows = [matchedRow];
+
+              if (matchingRows.length > 1) {
+                return res.json({
+                  success: false,
+                  error: 'Separe esta unidade e entregue para o seu Líder'
+                });
+              } else if (matchingRows.length === 1) {
+                checkRes.rows = [matchingRows[0]];
                 checkRes.rowCount = 1;
               }
             }
@@ -1215,7 +1221,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
       const candidatesRes = await pool.query(
         "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
       );
-      const matchedRow = candidatesRes.rows.find((row: any) => {
+      const matchingRows = candidatesRes.rows.filter((row: any) => {
           const normModel = row.modelo ? row.modelo.toUpperCase() : '';
           const isFast5670 = normModel.includes('5670');
           if (isFast5670) {
@@ -1229,13 +1235,19 @@ app.post('/api/save-label', async (req: any, res: any) => {
             return false;
           }
         });
-      if (matchedRow) {
-        reconciledGpon = matchedRow.gpon_sn;
-        reconciledMac = matchedRow.mac;
-        reconciledCpe = matchedRow.cpe_sn;
-        if (matchedRow.fabricante) fabricante = matchedRow.fabricante;
-        reconciledModelo = matchedRow.modelo;
-      }
+
+        if (matchingRows.length > 1) {
+          return res.status(400).json({
+            error: 'Separe esta unidade e entregue para o seu Líder'
+          });
+        } else if (matchingRows.length === 1) {
+          const matchedRow = matchingRows[0];
+          reconciledGpon = matchedRow.gpon_sn;
+          reconciledMac = matchedRow.mac;
+          reconciledCpe = matchedRow.cpe_sn;
+          if (matchedRow.fabricante) fabricante = matchedRow.fabricante;
+          reconciledModelo = matchedRow.modelo;
+        }
     }
 
     // Se estamos salvando um registro completo com GPON real, limpamos registros temporários duplicados com o mesmo SSID
