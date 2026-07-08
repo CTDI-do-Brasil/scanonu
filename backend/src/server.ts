@@ -988,12 +988,12 @@ Siga atentamente as instruções abaixo para cada campo:
         
         if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR cpe_sn = $2 OR (mac = $3 AND mac <> \'N/A\')',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $3 AND mac <> \'N/A\')',
             [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE cpe_sn = $1 OR (mac = $2 AND mac <> \'N/A\')',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE (cpe_sn = $1 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $2 AND mac <> \'N/A\')',
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.wifi_ssid && scanResult.wifi_ssid.toUpperCase() !== 'N/A' && scanResult.wifi_ssid.toUpperCase() !== 'NA') {
@@ -2530,21 +2530,6 @@ app.get('/api/external/units', async (req, res) => {
   } catch (err: any) {
     console.error('Erro na API externa de consulta:', err);
     return res.status(500).json({ success: false, error: 'Erro interno ao consultar unidades.' });
-  }
-});
-
-app.get('/api/debug-db-check', async (req, res) => {
-  try {
-    const databases = ['db-scanonu', 'ScanONU_Claro'];
-    const results: any = {};
-    for (const dbName of databases) {
-      const pool = getPoolForDatabase(dbName);
-      const queryRes = await pool.query("SELECT fabricante, modelo, cpe_sn, gpon_sn, mac FROM etiquetas_scan_onu WHERE mac = '24E4CE8AF780' OR gpon_sn = 'GP02023120184066' OR mac = '24E4CE8AF780' OR gpon_sn = 'KAON090277BB'");
-      results[dbName] = queryRes.rows;
-    }
-    return res.json(results);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
   }
 });
 
