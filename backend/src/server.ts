@@ -2539,7 +2539,7 @@ app.get('/api/debug-db-check', async (req, res) => {
     const results: any = {};
     for (const dbName of databases) {
       const pool = getPoolForDatabase(dbName);
-      const queryRes = await pool.query("SELECT id, fabricante, modelo, cpe_sn, gpon_sn, mac FROM etiquetas_scan_onu WHERE mac = '24E4CE8AF780' OR gpon_sn = 'GP02023120184066' OR mac = '24E4CE8AF780' OR gpon_sn = 'KAON090277BB'");
+      const queryRes = await pool.query("SELECT fabricante, modelo, cpe_sn, gpon_sn, mac FROM etiquetas_scan_onu WHERE mac = '24E4CE8AF780' OR gpon_sn = 'GP02023120184066' OR mac = '24E4CE8AF780' OR gpon_sn = 'KAON090277BB'");
       results[dbName] = queryRes.rows;
     }
     return res.json(results);
