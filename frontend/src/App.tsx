@@ -1966,6 +1966,8 @@ export default function App() {
           // Detectar e imprimir via Zebra Browser Print local
           let localUrl = '';
           const endpoints = [
+            'http://localhost:9100',
+            'http://127.0.0.1:9100',
             'https://localhost:9101',
             'https://127.0.0.1.local.zebra.com:9101',
             'https://localhost:9102',
@@ -2548,7 +2550,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.4</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.5</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
