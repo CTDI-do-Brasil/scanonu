@@ -918,6 +918,7 @@ Siga atentamente as instruções abaixo para cada campo:
     else if (upperMfg.includes('NOKIA')) fabricanteNorm = 'Nokia';
     else if (upperMfg.includes('ALCATEL')) fabricanteNorm = 'Alcatel';
     else if (upperMfg.includes('SAGEMCOM') || upperMfg.includes('SAGEM') || upperMfg.includes('SMBS') || upperMfg.includes('SMB8')) fabricanteNorm = 'SagemCOM';
+    else if (upperMfg.includes('BLU') || upperMfg.includes('CASTLE')) fabricanteNorm = 'Blu-Castle';
 
     let gponNorm = (geminiData.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
     if (gponNorm.startsWith('SMB8')) {
@@ -939,7 +940,7 @@ Siga atentamente as instruções abaixo para cada campo:
     const modelNormTemp = normalizeModel(geminiData.modelo || '', fabricanteNorm);
     const modelUpper = modelNormTemp.toUpperCase();
 
-    if (modelUpper.includes('PG2447')) {
+    if (modelUpper.includes('PG2447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || fabricanteNorm === 'Blu-Castle') {
       cpeNorm = 'N/A';
     }
 

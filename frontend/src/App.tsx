@@ -80,8 +80,8 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   const mfgUpper = (dataCopy.fabricante || '').toUpperCase();
   const isKaon = modelUpper.includes('KAON') || mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.startsWith('PG');
 
-  // PG2447 does not use CPE SN, set to N/A
-  if (modelUpper.includes('PG2447')) {
+  // PG2447 and BCSKV630 do not use CPE SN, set to N/A
+  if (modelUpper.includes('PG2447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || mfgUpper.includes('BLU')) {
     dataCopy.cpe_sn = 'N/A';
   }
 
@@ -99,6 +99,12 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   if (isKaon) {
     dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
     dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
+  }
+  
+  // Rule 1.5: BLU-CASTLE BCSKV630
+  else if (modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK')) {
+    dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4Hex}_2G`;
+    dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Hex}_5G`;
   }
   
   // Rule 2 & 3: F@ST 5655V2
@@ -2517,7 +2523,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.6</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.8</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
