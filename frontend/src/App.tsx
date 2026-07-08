@@ -2032,9 +2032,9 @@ export default function App() {
         } else {
           alert(result.error || 'Erro ao imprimir.');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        alert('Erro ao se conectar com o servidor para impressão.');
+        alert(err.message || 'Erro ao se conectar com o servidor para impressão.');
       } finally {
         setIsPrinting(false);
       }
