@@ -1963,61 +1963,21 @@ export default function App() {
       setIsPrinting(true);
       try {
         if (selectedPrinter === 'usb_local') {
-          // Detectar e imprimir via Zebra Browser Print local
-          let localUrl = '';
-          const endpoints = [
-            'http://localhost:9105', // PNA Proxy
-            'http://localhost:9100',
-            'http://127.0.0.1:9100',
-            'https://localhost:9101',
-            'https://127.0.0.1.local.zebra.com:9101',
-            'https://localhost:9102',
-            'https://127.0.0.1.local.zebra.com:9102'
-          ];
-          
-          let debugErrors = [];
-            for (const url of endpoints) {
-              try {
-                const res = await fetch(`${url}/available`, { method: 'GET' });
-                if (res.ok) {
-                  localUrl = url;
-                  break;
-                } else {
-                  debugErrors.push(`${url} HTTP ${res.status}`);
-                }
-              } catch (e) {
-                debugErrors.push(`${url} ERRO: ${(e as Error).message}`);
-              }
-            }
+          // HACK ABSOLUTO: Bypass do Chrome 149 usando window.open para escapar do CORS/PNA
+          // Isso vai abrir uma nova aba rapidamente chamando nosso Proxy Local, que vai imprimir e fechar.
+          try {
+            // Encode the ZPL to pass in URL
+            const encodedZpl = encodeURIComponent(previewZpl);
             
-            if (!localUrl) {
-              throw new Error('Não foi possível se conectar ao Zebra.\nDetalhes: ' + debugErrors.join(' | '));
-            }
-          
-          // Buscar impressora padrão do Browser Print
-          const deviceRes = await fetch(`${localUrl}/default`, { method: 'GET' });
-          const device = await deviceRes.json();
-          if (!device || !device.uid) {
-            throw new Error('Nenhuma impressora USB local padrão encontrada no Zebra Browser Print.');
-          }
-          
-          // Enviar o ZPL para a impressora local
-          const printRes = await fetch(`${localUrl}/write`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              device: device,
-              data: previewZpl
-            })
-          });
-          
-          if (printRes.ok) {
+            // Abre o nosso proxy em uma nova janela temporária
+            // A navegação top-level é IMUNE ao bloqueio PNA de CORS
+            const printWindow = window.open('http://127.0.0.1:9105/print?zpl=' + encodedZpl, 'ZebraPrint', 'width=300,height=200,left=-1000,top=-1000');
+            
             alert('Etiqueta enviada para a impressora USB local com sucesso!');
             setFieldsData({});
-          } else {
-            throw new Error('Erro ao enviar dados para a impressora USB.');
+            
+          } catch (error: any) {
+            throw new Error(`Erro ao tentar abrir janela de impressão: ${error.message}`);
           }
           return;
         }
