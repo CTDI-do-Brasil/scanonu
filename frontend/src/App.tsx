@@ -80,11 +80,9 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   const mfgUpper = (dataCopy.fabricante || '').toUpperCase();
   const isKaon = modelUpper.includes('KAON') || mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.startsWith('PG');
 
-  // Auto-fill CPE SN for KAON PG2447 if it starts with GP
-  if (isKaon && dataCopy.gpon_sn && dataCopy.gpon_sn.toUpperCase().startsWith('GP')) {
-    if (!dataCopy.cpe_sn || dataCopy.cpe_sn.toUpperCase() === 'N/A' || dataCopy.cpe_sn.trim() === '') {
-      dataCopy.cpe_sn = 'N7' + dataCopy.gpon_sn.substring(2).toUpperCase();
-    }
+  // PG2447 does not use CPE SN, set to N/A
+  if (modelUpper.includes('PG2447')) {
+    dataCopy.cpe_sn = 'N/A';
   }
 
   if (!dataCopy.mac) return dataCopy;

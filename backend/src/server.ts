@@ -938,13 +938,9 @@ Siga atentamente as instruções abaixo para cada campo:
 
     const modelNormTemp = normalizeModel(geminiData.modelo || '', fabricanteNorm);
     const modelUpper = modelNormTemp.toUpperCase();
-    const mfgUpper = fabricanteNorm.toUpperCase();
-    const isKaon = mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.startsWith('PG');
 
-    if (isKaon && gponNorm.startsWith('GP')) {
-      if (!cpeNorm || cpeNorm === 'N/A' || cpeNorm.trim() === '') {
-        cpeNorm = 'N7' + gponNorm.substring(2);
-      }
+    if (modelUpper.includes('PG2447')) {
+      cpeNorm = 'N/A';
     }
 
     scanResult = {
