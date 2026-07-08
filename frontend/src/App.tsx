@@ -193,7 +193,7 @@ export default function App() {
   const [adminMessage, setAdminMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
-  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const newVersionAvailable = false;
   const currentVersionRef = useRef<string | null>(null);
 
   // Estados para edição/reset de senha de usuários
