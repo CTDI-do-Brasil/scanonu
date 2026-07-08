@@ -1972,19 +1972,24 @@ export default function App() {
             'https://127.0.0.1.local.zebra.com:9102'
           ];
           
-          for (const url of endpoints) {
-            try {
-              const res = await fetch(`${url}/default`, { method: 'GET' });
-              if (res.ok) {
-                localUrl = url;
-                break;
+          let debugErrors = [];
+            for (const url of endpoints) {
+              try {
+                const res = await fetch(`${url}/default`, { method: 'GET' });
+                if (res.ok) {
+                  localUrl = url;
+                  break;
+                } else {
+                  debugErrors.push(`${url} HTTP ${res.status}`);
+                }
+              } catch (e) {
+                debugErrors.push(`${url} ERRO: ${e.message}`);
               }
-            } catch (e) {}
-          }
-          
-          if (!localUrl) {
-            throw new Error('Não foi possível se conectar ao aplicativo Zebra Browser Print. Certifique-se de que ele está instalado, aberto e rodando em sua máquina local.');
-          }
+            }
+            
+            if (!localUrl) {
+              throw new Error('Não foi possível se conectar ao Zebra.\nDetalhes: ' + debugErrors.join(' | '));
+            }
           
           // Buscar impressora padrão do Browser Print
           const deviceRes = await fetch(`${localUrl}/default`, { method: 'GET' });
@@ -2543,7 +2548,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.2</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.3</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
