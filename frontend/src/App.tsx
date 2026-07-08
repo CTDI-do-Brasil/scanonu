@@ -1971,7 +1971,7 @@ export default function App() {
             
             // Abre o nosso proxy em uma nova janela temporária
             // A navegação top-level é IMUNE ao bloqueio PNA de CORS
-            const printWindow = window.open('http://127.0.0.1:9105/print?zpl=' + encodedZpl, 'ZebraPrint', 'width=300,height=200,left=-1000,top=-1000');
+            window.open('http://127.0.0.1:9105/print?zpl=' + encodedZpl, 'ZebraPrint', 'width=300,height=200,left=-1000,top=-1000');
             
             alert('Etiqueta enviada para a impressora USB local com sucesso!');
             setFieldsData({});
