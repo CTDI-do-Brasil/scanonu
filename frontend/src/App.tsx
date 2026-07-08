@@ -1983,7 +1983,7 @@ export default function App() {
                   debugErrors.push(`${url} HTTP ${res.status}`);
                 }
               } catch (e) {
-                debugErrors.push(`${url} ERRO: ${e.message}`);
+                debugErrors.push(`${url} ERRO: ${(e as Error).message}`);
               }
             }
             

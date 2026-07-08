@@ -1,12 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const file = path.join(__dirname, 'frontend/src/App.tsx');
-let code = fs.readFileSync(file, 'utf8');
 
-code = code.replace(
-  /sanitizedData\[key as keyof ScanData\] = value\.replace\(\/!\/g, 'I'\);/g,
-  '(sanitizedData as any)[key] = value.replace(/!/g, \'I\');'
-);
+const appPath = path.join(__dirname, 'frontend/src/App.tsx');
+let appCode = fs.readFileSync(appPath, 'utf8');
 
-fs.writeFileSync(file, code, 'utf8');
-console.log('App.tsx typescript error fixed.');
+appCode = appCode.replace('e.message', '(e as Error).message');
+fs.writeFileSync(appPath, appCode, 'utf8');
+console.log('Update App.tsx catch e as Error complete');
