@@ -714,6 +714,12 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'PG2447';
   }
 
+  // Blu-Castle BC-UM221E / UM221E
+  const modelCleanNoDashes = modelNorm.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (modelCleanNoDashes.includes('BCUM221E') || modelCleanNoDashes.includes('UM221E') || modelCleanNoDashes.includes('BCUM221') || modelCleanNoDashes.includes('UM221')) {
+    return 'BC-UM221E';
+  }
+
   // Sagemcom F@ST 5655V2
   if (
     modelClean.includes('FAST5655V2') || 
@@ -960,7 +966,7 @@ Siga atentamente as instruções abaixo para cada campo:
       cpeNorm = 'N/A';
     }
 
-    if (modelUpper.includes('PG2447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || fabricanteNorm === 'Blu-Castle') {
+    if (modelUpper.includes('PG2447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E') || fabricanteNorm === 'Blu-Castle') {
       cpeNorm = 'N/A';
     }
 

@@ -104,8 +104,8 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     }
   }
 
-  // PG2447 and BCSKV630 do not use CPE SN, set to N/A
-  if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || mfgUpper.includes('BLU')) {
+  // PG2447 and BCSKV630/BC-UM221E do not use CPE SN, set to N/A
+  if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E') || mfgUpper.includes('BLU')) {
     dataCopy.cpe_sn = 'N/A';
   }
 
@@ -126,9 +126,15 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   }
   
   // Rule 1.5: BLU-CASTLE BCSKV630
-  else if (modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK')) {
+  else if (modelUpper.includes('BCSKV630') || (modelUpper.includes('BCSK') && !modelUpper.includes('UM221E'))) {
     dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4Hex}_2G`;
     dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Hex}_5G`;
+  }
+
+  // Rule 1.6: BLU-CASTLE BC-UM221E
+  else if (modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E')) {
+    dataCopy.wifi_ssid = `TIM ULTRAFIBRA_${last4Hex}`;
+    dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
   
   // Rule 2 & 3: F@ST 5655V2
@@ -2547,7 +2553,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.0</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.1</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
