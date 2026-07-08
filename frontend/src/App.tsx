@@ -638,7 +638,7 @@ export default function App() {
         if (!currentVersionRef.current) {
           currentVersionRef.current = data.version;
         } else if (currentVersionRef.current !== data.version) {
-          setNewVersionAvailable(true);
+          window.location.reload();
         }
       }
     } catch (err) {
@@ -2556,7 +2556,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.2</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.3</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
