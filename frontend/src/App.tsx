@@ -78,10 +78,34 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   const dataCopy = { ...currentData };
   const modelUpper = (dataCopy.modelo || '').toUpperCase();
   const mfgUpper = (dataCopy.fabricante || '').toUpperCase();
-  const isKaon = modelUpper.includes('KAON') || mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.startsWith('PG');
+  const isKaonModel = modelUpper.includes('KAON') || mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.includes('P82447') || modelUpper.startsWith('PG') || modelUpper.startsWith('P8');
+
+  // Normalizar modelo se for P82447
+  if (modelUpper.includes('P82447') || modelUpper.includes('82447')) {
+    dataCopy.modelo = 'PG2447';
+  }
+
+  // Se for Kaon, restaurar o GPON correto (começando com GP02...) se foi jogado em cpe_sn
+  if (isKaonModel) {
+    let actualGpon = '';
+    const gponUpper = (dataCopy.gpon_sn || '').toUpperCase();
+    const cpeUpper = (dataCopy.cpe_sn || '').toUpperCase();
+
+    if (gponUpper.startsWith('GP')) {
+      actualGpon = gponUpper;
+    } else if (cpeUpper.startsWith('GP')) {
+      actualGpon = cpeUpper;
+    } else if (cpeUpper.startsWith('N7')) {
+      actualGpon = 'GP' + cpeUpper.substring(2);
+    }
+
+    if (actualGpon) {
+      dataCopy.gpon_sn = actualGpon.replace(/[^A-Z0-9]/ig, '');
+    }
+  }
 
   // PG2447 and BCSKV630 do not use CPE SN, set to N/A
-  if (modelUpper.includes('PG2447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || mfgUpper.includes('BLU')) {
+  if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || mfgUpper.includes('BLU')) {
     dataCopy.cpe_sn = 'N/A';
   }
 
@@ -96,7 +120,7 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   if (isNaN(last4Int)) return dataCopy;
 
   // Rule 1: KAON
-  if (isKaon) {
+  if (isKaonModel) {
     dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
     dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
   }
@@ -2523,7 +2547,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.2.9</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.0</p>
                 </div>
                 <div className="flex gap-1">
                   <button 

@@ -706,9 +706,13 @@ function normalizeFabricante(fabricante: string, modelo: string): string {
 }
 
 function normalizeModel(modelo: string, fabricante: string): string {
-  let modelNorm = (modelo || '').trim();
+  const modelNorm = (modelo || '').trim();
   const mfgUpper = (fabricante || '').toUpperCase();
   const modelClean = modelNorm.toUpperCase().replace(/[^A-Z0-9@]/g, '');
+  // Kaon PG2447 / P82447
+  if (modelClean.includes('PG2447') || modelClean.includes('P82447') || modelClean.includes('82447') || (mfgUpper.includes('KAON') && modelClean.includes('2447'))) {
+    return 'PG2447';
+  }
 
   // Sagemcom F@ST 5655V2
   if (
@@ -939,6 +943,22 @@ Siga atentamente as instruções abaixo para cada campo:
 
     const modelNormTemp = normalizeModel(geminiData.modelo || '', fabricanteNorm);
     const modelUpper = modelNormTemp.toUpperCase();
+
+    if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || fabricanteNorm.toUpperCase().includes('KAON')) {
+      let actualGpon = '';
+      if (gponNorm && gponNorm.startsWith('GP')) {
+        actualGpon = gponNorm;
+      } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP')) {
+        actualGpon = geminiData.cpe_sn.toUpperCase();
+      } else if (cpeNorm && cpeNorm.startsWith('N7')) {
+        actualGpon = 'GP' + cpeNorm.substring(2);
+      }
+
+      if (actualGpon) {
+        gponNorm = actualGpon.replace(/[^A-Z0-9]/ig, '');
+      }
+      cpeNorm = 'N/A';
+    }
 
     if (modelUpper.includes('PG2447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || fabricanteNorm === 'Blu-Castle') {
       cpeNorm = 'N/A';
