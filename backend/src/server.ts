@@ -856,6 +856,8 @@ DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
   - '5' vs 'S': Dobre a atenção nas curvas de cantos.
   - '2' vs 'Z': Analise se a base é reta ou curvada.
   - 'U' vs 'V': Verifique se o fundo da letra é arredondado ou pontiagudo.
+* Diferenciação de Maiúsculas e Minúsculas com Grafia Idêntica (ex: X/x, C/c, O/o, S/s, Z/z, V/v):
+  - Avalie com rigor a altura vertical relativa do caractere em comparação com os números ou caracteres adjacentes. Se o caractere tiver a mesma altura de topo de um número ou letra maiúscula adjacente, ele é MAIÚSCULO. Se tiver cerca de metade da altura vertical (x-height) de seus vizinhos, ele é MINÚSCULO.
 * Validação por Contexto Cruzado:
   - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 dígitos hexadecimais (ex: '95C8'), compare com os últimos 4 dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
 
