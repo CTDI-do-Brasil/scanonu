@@ -720,6 +720,11 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'BC-UM221E';
   }
 
+  // Blu-Castle BCSKV630 / BCSK
+  if (modelClean.includes('BCSKV630') || modelClean.includes('BCSK') || modelClean.includes('630')) {
+    return 'BCSKV630';
+  }
+
   // ZTE ZXHN F6600P
   if (modelClean.includes('F6600') || modelClean.includes('6600P') || modelClean.includes('6600') || modelClean.includes('ZXHN')) {
     return 'ZXHN F6600P';

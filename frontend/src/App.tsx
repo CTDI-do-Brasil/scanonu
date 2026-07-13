@@ -91,6 +91,12 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'ZTE';
   }
 
+  // Normalizar modelo se for Blu-Castle BCSKV630
+  if (modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || modelUpper.includes('630')) {
+    dataCopy.modelo = 'BCSKV630';
+    dataCopy.fabricante = 'Blu-Castle';
+  }
+
   // Se for Kaon, restaurar o GPON correto (começando com GP02...) se foi jogado em cpe_sn
   if (isKaonModel) {
     let actualGpon = '';
@@ -2568,7 +2574,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.4</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.5</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
