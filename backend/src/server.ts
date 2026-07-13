@@ -720,6 +720,11 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'BC-UM221E';
   }
 
+  // ZTE ZXHN F6600P
+  if (modelClean.includes('F6600') || modelClean.includes('6600P') || modelClean.includes('6600') || modelClean.includes('ZXHN')) {
+    return 'ZXHN F6600P';
+  }
+
   // Sagemcom F@ST 5655V2
   if (
     modelClean.includes('FAST5655V2') || 
@@ -943,7 +948,7 @@ Siga atentamente as instruções abaixo para cada campo:
     }
 
     let cpeNorm = (geminiData.cpe_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
-    if (cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
+    if (fabricanteNorm === 'SagemCOM' && cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
       cpeNorm = 'N7' + cpeNorm.substring(2);
     }
 

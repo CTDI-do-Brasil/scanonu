@@ -85,6 +85,12 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.modelo = 'PG2447';
   }
 
+  // Normalizar modelo se for ZTE ZXHN F6600P
+  if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+    dataCopy.modelo = 'ZXHN F6600P';
+    dataCopy.fabricante = 'ZTE';
+  }
+
   // Se for Kaon, restaurar o GPON correto (começando com GP02...) se foi jogado em cpe_sn
   if (isKaonModel) {
     let actualGpon = '';
@@ -133,6 +139,12 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
 
   // Rule 1.6: BLU-CASTLE BC-UM221E
   else if (modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E')) {
+    dataCopy.wifi_ssid = `TIM ULTRAFIBRA_${last4Hex}`;
+    dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
+  }
+
+  // Rule 1.7: ZTE ZXHN F6600P
+  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
     dataCopy.wifi_ssid = `TIM ULTRAFIBRA_${last4Hex}`;
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
@@ -2556,7 +2568,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.3</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.4</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
