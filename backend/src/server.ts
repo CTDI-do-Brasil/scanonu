@@ -846,7 +846,18 @@ Siga atentamente as instruções abaixo para cada campo:
 8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas. CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
 9. usuario: Usuário padrão de acesso web (ex: admin). Se não achar, 'N/A'.
 10. web_key: Senha de acesso web (Password/Senha). Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
-11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.`;
+11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.
+
+DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
+* Diferenciação de Letras e Números Semelhantes (Importante para GPON, MAC, CPE, Senhas e SSIDs):
+  - '8' vs 'B' vs 'G': Olhe atentamente os contornos. Um erro aqui invalida o serial.
+  - '0' (Zero) vs 'O' (letra) vs 'Q': Em campos hexadecimais (como MAC e a parte final de GPONs), o correto é sempre usar o número '0' (Zero).
+  - '1' vs 'I' vs 'L' vs 'T': Verifique se há serifa ou se o traço é 100% vertical.
+  - '5' vs 'S': Dobre a atenção nas curvas de cantos.
+  - '2' vs 'Z': Analise se a base é reta ou curvada.
+  - 'U' vs 'V': Verifique se o fundo da letra é arredondado ou pontiagudo.
+* Validação por Contexto Cruzado:
+  - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 dígitos hexadecimais (ex: '95C8'), compare com os últimos 4 dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
 
     let response;
     const maxAttempts = 2;
