@@ -1767,7 +1767,7 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco de dados offline.' });
 
-    const { modelId, printerId, fieldsData } = req.body;
+    const { modelId, printerId, fieldsData, printSpeed, printDarkness } = req.body;
     if (!modelId || !printerId || !fieldsData) {
       return res.status(400).json({ error: 'Dados incompletos para impressão.' });
     }
@@ -1784,6 +1784,15 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
 
     // 3. Substituir variáveis no código ZPL
     let zpl = model.codigo_zpl;
+
+    // Substituir velocidade e escuridão se enviados pelo client
+    if (printSpeed) {
+      zpl = zpl.replace(/\^PR\d+,\d+/g, `^PR${printSpeed},${printSpeed}`);
+    }
+    if (printDarkness) {
+      zpl = zpl.replace(/~SD\d+/g, `~SD${printDarkness}`);
+    }
+
     for (const key of Object.keys(model.campos_config)) {
       const val = fieldsData[key] || '';
       // Substituir a chave no formato ${chave} ou \${chave\}

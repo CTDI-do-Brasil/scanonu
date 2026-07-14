@@ -252,7 +252,8 @@ export default function App() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [iptvTab, setIptvTab] = useState<'print' | 'models'>('print');
   const [previewZpl, setPreviewZpl] = useState('');
-
+  const [printSpeed, setPrintSpeed] = useState('6');
+  const [printDarkness, setPrintDarkness] = useState('15');
   useEffect(() => {
     if (!selectedModel) {
       setPreviewZpl('');
@@ -2003,7 +2004,6 @@ export default function App() {
       setFieldsData({ ...fieldsData, [key]: sanitized.trim() });
     };
 
-
     const handlePrint = async () => {
       if (!selectedModel || !selectedPrinter) {
         alert('Selecione um modelo e uma impressora!');
@@ -2025,20 +2025,30 @@ export default function App() {
 
       setIsPrinting(true);
       try {
+        // GERAR O ZPL COMPLETO PARA IMPRESSÃO (SEM REMOVER GRÁFICOS)
+        let fullZpl = selectedModel.codigo_zpl;
+        
+        // Substituir velocidade e escuridão
+        fullZpl = fullZpl.replace(/\^PR\d+,\d+/g, `^PR${printSpeed},${printSpeed}`);
+        fullZpl = fullZpl.replace(/~SD\d+/g, `~SD${printDarkness}`);
+
+        // Substituir as variáveis normais e _clean
+        Object.keys(selectedModel.campos_config || {}).forEach((key) => {
+          const val = fieldsData[key] || '';
+          const regex = new RegExp('\\$\\{\\s*' + key + '\\s*\\}', 'g');
+          fullZpl = fullZpl.replace(regex, val);
+
+          const valClean = val.replace(/[^A-Za-z0-9]/g, '');
+          const regexClean = new RegExp('\\$\\{\\s*' + key + '_clean\\s*\\}', 'g');
+          fullZpl = fullZpl.replace(regexClean, valClean);
+        });
+
         if (selectedPrinter === 'usb_local') {
-          // HACK ABSOLUTO: Bypass do Chrome 149 usando window.open para escapar do CORS/PNA
-          // Isso vai abrir uma nova aba rapidamente chamando nosso Proxy Local, que vai imprimir e fechar.
           try {
-            // Encode the ZPL to pass in URL
-            const encodedZpl = encodeURIComponent(previewZpl);
-            
-            // Abre o nosso proxy em uma nova janela temporária
-            // A navegação top-level é IMUNE ao bloqueio PNA de CORS
+            const encodedZpl = encodeURIComponent(fullZpl);
             window.open('http://127.0.0.1:9105/print?zpl=' + encodedZpl, 'ZebraPrint', 'width=300,height=200,left=-1000,top=-1000');
-            
             alert('Etiqueta enviada para a impressora USB local com sucesso!');
             setFieldsData({});
-            
           } catch (error: any) {
             throw new Error(`Erro ao tentar abrir janela de impressão: ${error.message}`);
           }
@@ -2054,15 +2064,16 @@ export default function App() {
           body: JSON.stringify({
             modelId: selectedModel.id,
             printerId: selectedPrinter,
-            fieldsData
+            fieldsData,
+            printSpeed,
+            printDarkness
           })
         });
+
         const result = await response.json();
         if (response.ok && result.success) {
           alert('Etiqueta enviada para impressão com sucesso!');
           setFieldsData({}); // Limpar os campos após imprimir
-        } else {
-          alert(result.error || 'Erro ao imprimir.');
         }
       } catch (err: any) {
         console.error(err);
@@ -2145,6 +2156,41 @@ export default function App() {
                   <option value="" disabled>Selecione uma impressora...</option>
                   <option value="usb_local">🔌 USB LOCAL (Zebra Browser Print)</option>
                   {printers.map(p => <option key={p.id} value={p.id}>{p.nome} ({p.ip})</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Controles de velocidade e escuridão da Zebra */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Velocidade de Impressão</label>
+                <select
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  value={printSpeed}
+                  onChange={(e) => setPrintSpeed(e.target.value)}
+                >
+                  <option value="2">2" por segundo (Mais lenta / Melhor qualidade)</option>
+                  <option value="3">3" por segundo</option>
+                  <option value="4">4" por segundo</option>
+                  <option value="5">5" por segundo</option>
+                  <option value="6">6" por segundo (Padrão)</option>
+                  <option value="8">8" por segundo (Mais rápida)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Temperatura (Escuridão)</label>
+                <select
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  value={printDarkness}
+                  onChange={(e) => setPrintDarkness(e.target.value)}
+                >
+                  <option value="5">5 (Mais claro)</option>
+                  <option value="10">10</option>
+                  <option value="15">15 (Padrão)</option>
+                  <option value="20">20 (Escuro)</option>
+                  <option value="25">25 (Muito Escuro)</option>
+                  <option value="30">30 (Máximo / Maior contraste)</option>
                 </select>
               </div>
             </div>
