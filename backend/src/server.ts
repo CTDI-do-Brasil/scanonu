@@ -123,6 +123,70 @@ const authenticateSession = async (req: any, res: any, next: any) => {
 // O Dockerfile irá compilar o frontend dentro do diretório public/dist
 app.use(express.static('public'));
 
+// Print Queue Memory Store
+const printJobs: { id: string; zpl: string; targetStation: string; timestamp: number }[] = [];
+// Active Printers Registry
+const activePrinters: { [id: string]: { name: string; lastSeen: number } } = {};
+
+// Clean up inactive printers every minute (timeout after 30s)
+setInterval(() => {
+  const now = Date.now();
+  for (const id in activePrinters) {
+    if (now - activePrinters[id].lastSeen > 30000) {
+      delete activePrinters[id];
+    }
+  }
+}, 60000);
+
+// Endpoint for the local proxy to register itself (heartbeat)
+app.post('/api/active-printers', (req, res) => {
+  const { id, name } = req.body;
+  if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
+  activePrinters[id] = { name, lastSeen: Date.now() };
+  res.json({ success: true });
+});
+
+// Endpoint for frontend to fetch active printers
+app.get('/api/active-printers', (req, res) => {
+  const printers = Object.keys(activePrinters).map(id => ({
+    id,
+    name: activePrinters[id].name
+  }));
+  res.json({ printers });
+});
+
+// Endpoint to receive a print job from the frontend
+app.post('/api/print-jobs', (req, res) => {
+  const { zpl, targetStation } = req.body;
+  if (!zpl || !targetStation) {
+    return res.status(400).json({ error: 'Missing zpl or targetStation' });
+  }
+  const id = Math.random().toString(36).substring(2, 15);
+  printJobs.push({ id, zpl, targetStation, timestamp: Date.now() });
+  // Keep only the last 100 jobs to avoid memory leaks
+  if (printJobs.length > 100) printJobs.shift();
+  res.json({ success: true, id });
+});
+
+// Endpoint for the local proxy to poll its jobs
+app.get('/api/print-jobs', (req, res) => {
+  const station = req.query.station as string;
+  if (!station) return res.status(400).json({ error: 'Missing station parameter' });
+  
+  // Return only jobs targeted to this station
+  const stationJobs = printJobs.filter(j => j.targetStation === station);
+  res.json({ jobs: stationJobs });
+});
+
+// Endpoint for the local proxy to mark a job as done
+app.delete('/api/print-jobs/:id', (req, res) => {
+  const index = printJobs.findIndex(j => j.id === req.params.id);
+  if (index !== -1) {
+    printJobs.splice(index, 1);
+  }
+  res.json({ success: true });
+});
+
 const pools: { [dbName: string]: Pool } = {};
 const initializedDatabases = new Set<string>();
 

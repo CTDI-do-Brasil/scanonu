@@ -248,6 +248,7 @@ export default function App() {
   // Estados para Módulo IPTV (declarados no topo para seguir as regras do React)
   const [selectedModel, setSelectedModel] = useState<any>(null);
   const [selectedPrinter, setSelectedPrinter] = useState('');
+  const [activeCloudPrinters, setActiveCloudPrinters] = useState<any[]>([]);
   const [fieldsData, setFieldsData] = useState<any>({});
   const [isPrinting, setIsPrinting] = useState(false);
   const [iptvTab, setIptvTab] = useState<'print' | 'models'>('print');
@@ -398,6 +399,24 @@ export default function App() {
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Carrega estado de autenticação do localStorage ao iniciar
+  useEffect(() => {
+    let interval: any;
+    if (activeModule === 'iptv' && iptvTab === 'print') {
+      const fetchPrinters = async () => {
+        try {
+          const res = await fetch('/api/active-printers');
+          const data = await res.json();
+          if (res.ok) setActiveCloudPrinters(data.printers || []);
+        } catch (e) {
+          console.error('Error fetching active cloud printers:', e);
+        }
+      };
+      fetchPrinters();
+      interval = setInterval(fetchPrinters, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [activeModule, iptvTab]);
+
   useEffect(() => {
     const storedUser = localStorage.getItem('scanonu_user');
     if (storedUser) {
@@ -2043,14 +2062,24 @@ export default function App() {
           fullZpl = fullZpl.replace(regexClean, valClean);
         });
 
-        if (selectedPrinter === 'usb_local') {
+        if (selectedPrinter.startsWith('cloud_')) {
+          const stationId = selectedPrinter.replace('cloud_', '');
           try {
-            const encodedZpl = encodeURIComponent(fullZpl);
-            window.open('http://127.0.0.1:9105/print?zpl=' + encodedZpl, 'ZebraPrint', 'width=300,height=200,left=-1000,top=-1000');
-            alert('Etiqueta enviada para a impressora USB local com sucesso!');
-            setFieldsData({});
+            const proxyRes = await fetch('/api/print-jobs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ zpl: fullZpl, targetStation: stationId })
+            });
+            const proxyData = await proxyRes.json();
+            
+            if (proxyRes.ok && proxyData.success) {
+              alert('Etiqueta enviada para a fila de impressão! A Zebra vai puxar a etiqueta em até 3 segundos.');
+              setFieldsData({});
+            } else {
+              throw new Error(proxyData.error || 'Erro ao enviar etiqueta para a fila do CapRover.');
+            }
           } catch (error: any) {
-            throw new Error(`Erro ao tentar abrir janela de impressão: ${error.message}`);
+            throw new Error(`Erro ao conectar com a Fila na Nuvem: ${error.message}`);
           }
           return;
         }
@@ -2154,7 +2183,8 @@ export default function App() {
                   defaultValue=""
                 >
                   <option value="" disabled>Selecione uma impressora...</option>
-                  <option value="usb_local">🔌 USB LOCAL (Zebra Browser Print)</option>
+                  {activeCloudPrinters.map(p => <option key={p.id} value={`cloud_${p.id}`}>🔌 Zebra USB - {p.name}</option>)}
+                  <option value="usb_local" disabled>🔌 USB Local (Legado - Use a Fila na Nuvem)</option>
                   {printers.map(p => <option key={p.id} value={p.id}>{p.nome} ({p.ip})</option>)}
                 </select>
               </div>
@@ -2730,52 +2760,48 @@ export default function App() {
 
           // PAINEL ADMINISTRATIVO COM SUB-TABS
           <div className="space-y-6 animate-fadeIn">
-            {/* Sub-navegação do Painel Admin */}
-            <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-              {user?.role !== 'admin' && (
-              <button
-                onClick={() => setAdminSubTab('metrics')}
-                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
-                  adminSubTab === 'metrics'
-                    ? 'bg-white text-[#003865] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Métricas
-              </button>
-            )}
-              <button
-                onClick={() => setAdminSubTab('export')}
-                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
-                  adminSubTab === 'export'
-                    ? 'bg-white text-[#003865] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Consulta
-              </button>
-              <button
-                onClick={() => setAdminSubTab('users')}
-                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
-                  adminSubTab === 'users'
-                    ? 'bg-white text-[#003865] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Usuários
-              </button>
-              {user?.role !== 'admin' && (
-              <button
-                onClick={() => setAdminSubTab('printers')}
-                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
-                  adminSubTab === 'printers'
-                    ? 'bg-white text-[#003865] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Impressoras
-              </button>
-            )}
+            {/* Cabeçalho Dinâmico do Painel Admin */}
+            <div className="border-b border-slate-200/80 pb-5 mb-4">
+              {adminSubTab === 'metrics' && (
+                <div>
+                  <h2 className="text-xl font-bold text-[#003865] flex items-center gap-2">
+                    <BarChart3 className="w-5.5 h-5.5" /> Painel de Métricas & Indicadores
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">Visualize estatísticas gerais de leituras, produtividade dos operadores e fabricantes.</p>
+                </div>
+              )}
+              {adminSubTab === 'export' && (
+                <div>
+                  <h2 className="text-xl font-bold text-[#003865] flex items-center gap-2">
+                    <Search className="w-5.5 h-5.5" /> Consulta & Exportação de Dados
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">Busque registros de equipamentos por serial, MAC, lote, operador ou data e exporte relatórios.</p>
+                </div>
+              )}
+              {adminSubTab === 'users' && (
+                <div>
+                  <h2 className="text-xl font-bold text-[#003865] flex items-center gap-2">
+                    <Users className="w-5.5 h-5.5" /> Gerenciamento de Usuários
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">Controle as permissões de acesso, cadastre novos operadores ou gerencie usuários existentes.</p>
+                </div>
+              )}
+              {adminSubTab === 'printers' && (
+                <div>
+                  <h2 className="text-xl font-bold text-[#003865] flex items-center gap-2">
+                    <Printer className="w-5.5 h-5.5" /> Gerenciamento de Impressoras
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">Configure e gerencie as impressoras térmicas Zebra locais e os canais de impressão.</p>
+                </div>
+              )}
+              {adminSubTab === 'iptv-models' && (
+                <div>
+                  <h2 className="text-xl font-bold text-[#003865] flex items-center gap-2">
+                    <MonitorPlay className="w-5.5 h-5.5" /> Modelos de Etiquetas IPTV
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">Gerencie os layouts, parâmetros e comandos ZPL das etiquetas de equipamentos de IPTV.</p>
+                </div>
+              )}
             </div>
 
             {/* Sub-tab 1: Métricas / Dashboard */}
@@ -3334,6 +3360,91 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* Sub-tab 5: Modelos IPTV */}
+            {adminSubTab === 'iptv-models' && user?.role === 'master' && (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 animate-fadeIn">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-[#003865] flex items-center gap-2">
+                      <MonitorPlay className="w-5 h-5" /> Modelos IPTV (ZPL)
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">Gerencie os modelos e códigos de impressão</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingIptvModel(null);
+                      setIptvModelForm({
+                        nome_modelo: '',
+                        codigo_zpl: '',
+                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 15, "maxLength": 15 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
+                      });
+                      setShowIptvModelModal(true);
+                    }}
+                    className="bg-[#003865] hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-colors text-xs"
+                  >
+                    <Plus className="w-4 h-4" /> Novo Modelo
+                  </button>
+                </div>
+
+                {isLoadingIptvModels ? (
+                  <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-[#003865] animate-spin" /></div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-slate-500 uppercase bg-slate-50">
+                        <tr>
+                          <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
+                          <th className="px-4 py-3 font-bold">Modelo</th>
+                          <th className="px-4 py-3 font-bold text-center">Campos</th>
+                          <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {iptvModels.map((model: any) => (
+                          <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                                {Object.keys(model.campos_config || {}).length} campos
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => {
+                                  setEditingIptvModel(model);
+                                  setIptvModelForm({
+                                    nome_modelo: model.nome_modelo,
+                                    codigo_zpl: model.codigo_zpl,
+                                    campos_config: JSON.stringify(model.campos_config, null, 2)
+                                  });
+                                  setShowIptvModelModal(true);
+                                }}
+                                className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors mr-2"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteIptvModel(model.id)}
+                                className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                title="Deletar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {iptvModels.length === 0 && (
+                          <tr><td colSpan={4} className="text-center py-6 text-slate-500 font-medium">Nenhum modelo cadastrado.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : isBatchMode ? (
           // TELA DE PROCESSAMENTO EM LOTE (BATCH)
@@ -3880,92 +3991,6 @@ export default function App() {
           </>
         )}
       </main>
-
-      
-            {/* --- ABA MODELOS IPTV --- */}
-            {adminSubTab === 'iptv-models' && user?.role === 'master' && (
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/60 animate-fadeIn">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-xl font-bold text-[#003865] flex items-center gap-2">
-                      <MonitorPlay className="w-5 h-5" /> Modelos IPTV (ZPL)
-                    </h3>
-                    <p className="text-sm text-slate-500 font-medium">Gerencie os modelos e códigos de impressão</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditingIptvModel(null);
-                      setIptvModelForm({
-                        nome_modelo: '',
-                        codigo_zpl: '',
-                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 15, "maxLength": 15 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
-                      });
-                      setShowIptvModelModal(true);
-                    }}
-                    className="bg-[#003865] hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-colors text-sm"
-                  >
-                    <Plus className="w-4 h-4" /> Novo Modelo
-                  </button>
-                </div>
-
-                {isLoadingIptvModels ? (
-                  <div className="flex justify-center py-10"><RefreshCw className="w-8 h-8 text-[#003865] animate-spin" /></div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs text-slate-500 uppercase bg-slate-50">
-                        <tr>
-                          <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
-                          <th className="px-4 py-3 font-bold">Modelo</th>
-                          <th className="px-4 py-3 font-bold text-center">Campos</th>
-                          <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {iptvModels.map((model: any) => (
-                          <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
-                            <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                                {Object.keys(model.campos_config || {}).length} campos
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                onClick={() => {
-                                  setEditingIptvModel(model);
-                                  setIptvModelForm({
-                                    nome_modelo: model.nome_modelo,
-                                    codigo_zpl: model.codigo_zpl,
-                                    campos_config: JSON.stringify(model.campos_config, null, 2)
-                                  });
-                                  setShowIptvModelModal(true);
-                                }}
-                                className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors mr-2"
-                                title="Editar"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteIptvModel(model.id)}
-                                className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
-                                title="Deletar"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                        {iptvModels.length === 0 && (
-                          <tr><td colSpan={4} className="text-center py-6 text-slate-500 font-medium">Nenhum modelo cadastrado.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
 
 
       
