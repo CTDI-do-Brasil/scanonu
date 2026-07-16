@@ -1979,21 +1979,7 @@ export default function App() {
               </button>
             </form>
 
-            <div className="border-t border-slate-100 my-4 pt-4 w-full">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPublicQueryMode(true);
-                  setPublicQueryInput('');
-                  setPublicQueryResult(null);
-                  setPublicQueryError(null);
-                }}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all text-sm border border-slate-200 shadow-sm"
-              >
-                <Search className="w-4 h-4 text-slate-500" />
-                <span>Consulta Rápida</span>
-              </button>
-            </div>
+
           </div>
         </div>
 
