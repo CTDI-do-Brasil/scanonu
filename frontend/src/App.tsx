@@ -2300,7 +2300,7 @@ export default function App() {
                     .map(([key, config]: [string, any]) => (
                       <div key={key}>
                         <label className="block text-sm font-bold text-slate-700 mb-1">
-                          {config.label} {config.minLength ? `(${config.minLength} chars)` : ''}
+                          {config.label}
                         </label>
                         <input
                           type="text"
