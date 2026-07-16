@@ -29,8 +29,14 @@ import {
   Printer,
   Monitor,
   MapPin,
-  Trash2
-, MonitorPlay, Edit, Plus, User, Lock } from 'lucide-react';
+  Trash2,
+  MonitorPlay,
+  Edit,
+  Plus,
+  User,
+  Lock,
+  Sparkles
+} from 'lucide-react';
 
 
 interface ScanData {
@@ -604,6 +610,39 @@ export default function App() {
       codigo_zpl: zpl,
       campos_config: JSON.stringify(newConfig, null, 2)
     });
+  };
+
+  const [isImportingSmart, setIsImportingSmart] = useState(false);
+
+  const handleSmartImport = async () => {
+    if (!iptvModelForm.codigo_zpl.trim()) return;
+    setIsImportingSmart(true);
+    try {
+      const response = await fetch('/api/admin/smart-import-zpl', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        },
+        body: iptvModelForm.codigo_zpl
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setIptvModelForm({
+          ...iptvModelForm,
+          codigo_zpl: result.codigo_zpl,
+          campos_config: JSON.stringify(result.campos_config, null, 2)
+        });
+        alert('Código ZPL e variáveis geradas com sucesso pela IA!');
+      } else {
+        alert(result.error || 'Erro ao processar ZPL com IA.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao se conectar com o servidor para processamento da IA.');
+    } finally {
+      setIsImportingSmart(false);
+    }
   };
 
   const handleSaveIptvModel = async (e: React.FormEvent) => {
@@ -4306,14 +4345,34 @@ export default function App() {
               </div>
               
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Código ZPL</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-bold text-slate-700">Código ZPL</label>
+                  <button
+                    type="button"
+                    onClick={handleSmartImport}
+                    disabled={isImportingSmart || !iptvModelForm.codigo_zpl.trim()}
+                    className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isImportingSmart ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin text-purple-600" />
+                        <span>Processando IA...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 text-purple-500" />
+                        <span>Importação Inteligente (IA)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
                 <p className="text-[10px] text-slate-500 mb-2 leading-tight">
-                  Insira as variáveis entre chaves com cifrão, ex: <code>{"$"+"{sn}"}</code>, <code>{"$"+"{mac}"}</code>.
+                  Insira o código ZPL bruto (com valores fixos) e clique no botão acima para converter usando IA, ou configure manualmente:
                 </p>
                 <textarea 
                   required rows={6}
                   value={iptvModelForm.codigo_zpl}
-                  onChange={(e) => handleZplChange(e.target.value)}
+                  onChange={(e) => setIptvModelForm({...iptvModelForm, codigo_zpl: e.target.value})}
                   className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono text-xs focus:border-[#003865] focus:ring-0 transition-colors"
                   placeholder="^XA...^FD${sn}^FS...^XZ"
                 ></textarea>

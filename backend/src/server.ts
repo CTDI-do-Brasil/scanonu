@@ -181,6 +181,85 @@ app.post('/api/render-zpl', express.text({ type: '*/*', limit: '10mb' }), async 
   }
 });
 
+// Endpoint para importação inteligente de código ZPL bruto usando o Gemini
+app.post('/api/admin/smart-import-zpl', authenticateSession, express.text({ type: '*/*', limit: '5mb' }), async (req: any, res: any) => {
+  try {
+    if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
+    if (!ai) return res.status(503).json({ error: 'Serviço de IA Gemini não configurado ou offline.' });
+
+    const rawZpl = req.body || '';
+    if (!rawZpl.trim()) {
+      return res.status(400).json({ error: 'O código ZPL não pode estar vazio.' });
+    }
+
+    const prompt = `Analise o código ZPL de etiqueta a seguir. 
+O ZPL contém valores de dados estáticos e fixos que representam informações de equipamentos, como números de série, endereços MAC, senhas de Wi-Fi, SSIDs de Wi-Fi, IDs de chip (CA ID, SC ID), senhas de administração, etc.
+Sua tarefa é converter este ZPL estático em um template ZPL dinâmico e gerar a configuração de campos correspondente.
+
+Regras de Conversão:
+1. Identifique todos os dados variáveis e substitua-os por variáveis dinâmicas no ZPL no formato \${nome_da_variavel}.
+   Use nomes de variáveis padrão e limpos, preferencialmente:
+   - Para Serial Number / número de série: use "sn" (e "sn_clean" se estiver em código de barras).
+   - Para MAC Address: use "mac" (e "mac_clean" sem pontuação se estiver em código de barras).
+   - Para PON ID: use "pon" (e "pon_clean" sem pontuação se estiver em código de barras).
+   - Para D-SN: use "d_sn" (e "d_sn_clean" sem pontuação se estiver em código de barras).
+   - Para CA ID: use "ca_id" (e "ca_id_clean" sem pontuação se estiver em código de barras).
+   - Para SC ID: use "sc_id" (e "sc_id_clean" sem pontuação se estiver em código de barras).
+   - Para SSID de Wi-Fi: use "ssid".
+   - Para Senha de Wi-Fi: use "senha_wifi".
+   - Para Senha de Admin/Acesso: use "senha_admin".
+   - Para Usuário de Admin/Acesso: use "usuario".
+   - Se houver outros campos, crie variáveis explicativas (ex: "modelo", "versao").
+2. IMPORTANTE: Se o ZPL contiver IPs fixos como "192.168.0.1", "192.168.1.1", "192.168.100.1", ou textos genéricos como "Produto: GPON ONT", "Alimentação: 12V", "Modelo: ZXHN F689", etc., NÃO os substitua por variáveis. Deixe-os fixos no ZPL!
+3. Correção de Código de Barras: Se o ZPL utilizar comandos de código de barras (^BC ou ^B3) com desvios complexos (ex: >;8493>6B2E4C7DB ou >;ZTEGP7>5300225), simplifique-os substituindo por codificação do subconjunto B do Code 128 que inicia com >: (ex: >:\${sn} ou >:\${mac_clean}). Isso garante leitura universal sem cortes de dígitos.
+4. Monte a configuração de campos (campos_config) que descreve cada variável que você introduziu.
+   - Cada campo deve ter um "label" amigável (ex: "S/N:", "MAC ETHERNET:", "SSID Wi-Fi:").
+   - Defina comprimentos mínimos (minLength) e máximos (maxLength) sugeridos com base nos valores típicos (ex: MAC tem minLength 12 e maxLength 17; S/N de ONT geralmente tem minLength 12 e maxLength 20).
+   - A ordem dos campos na configuração JSON deve ser exatamente a ordem de aparição de cima para baixo na etiqueta ZPL (ex: sn primeiro, depois mac, etc.).
+
+ZPL Bruto:
+${rawZpl}`;
+
+    let response;
+    // Tentar rodar com o modelo padrão disponível
+    for (const modelName of ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']) {
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                codigo_zpl: { type: Type.STRING },
+                campos_config: {
+                  type: Type.OBJECT,
+                  description: "Objeto com as chaves das variáveis. Os valores de cada chave são objetos contendo: label (string), minLength (inteiro), maxLength (inteiro)"
+                }
+              },
+              required: ['codigo_zpl', 'campos_config']
+            }
+          }
+        });
+        if (response && response.text) break;
+      } catch (err: any) {
+        console.error(`Erro ao rodar Smart Import com ${modelName}:`, err.message);
+      }
+    }
+
+    if (!response || !response.text) {
+      throw new Error('Não foi possível obter resposta do Gemini Vision API.');
+    }
+
+    const data = JSON.parse(response.text);
+    return res.json({ success: true, ...data });
+  } catch (error: any) {
+    console.error('Erro na rota de Smart Import:', error);
+    res.status(500).json({ error: error.message || 'Erro ao processar importação inteligente.' });
+  }
+});
+
 // Endpoint to receive a print job from the frontend
 app.post('/api/print-jobs', (req, res) => {
   const { zpl, targetStation } = req.body;
