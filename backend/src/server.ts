@@ -2211,6 +2211,81 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
   }
 });
 
+// Rota para consultar as etiquetas do banco de dados em JSON (Preview de Tabela)
+app.get('/api/admin/query-labels', authenticateSession, async (req: any, res: any) => {
+  try {
+    const { search, startDate, endDate, modelo, targetDb } = req.query;
+
+    const pool = targetDb ? getPoolForDatabase(targetDb as string) : dbPool;
+    if (!dbConnected || !pool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    if (req.user.role !== 'master' && req.user.role !== 'admin' && req.user.role !== 'consulta') {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
+    let queryText = 'SELECT * FROM etiquetas_scan_onu WHERE 1=1';
+    const queryValues: any[] = [];
+    let paramCount = 1;
+
+    if (search) {
+      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      queryValues.push(`%${search}%`);
+      paramCount++;
+    }
+
+    if (modelo) {
+      queryText += ` AND modelo ILIKE $${paramCount}`;
+      queryValues.push(`%${modelo}%`);
+      paramCount++;
+    }
+
+    if (startDate) {
+      queryText += ` AND data_leitura >= $${paramCount}`;
+      queryValues.push(startDate);
+      paramCount++;
+    }
+
+    if (endDate) {
+      queryText += ` AND data_leitura <= $${paramCount}`;
+      queryValues.push(`${endDate} 23:59:59`);
+      paramCount++;
+    }
+
+    queryText += ' ORDER BY data_leitura DESC LIMIT 200';
+    const etiquetasRes = await pool.query(queryText, queryValues);
+
+    return res.json({ success: true, labels: etiquetasRes.rows });
+  } catch (err: any) {
+    console.error('Erro ao buscar etiquetas:', err);
+    return res.status(500).json({ error: 'Erro ao consultar banco de dados.' });
+  }
+});
+
+// Rota para deletar um registro de leitura de etiqueta
+app.delete('/api/admin/scans/:gpon_sn', authenticateSession, async (req: any, res: any) => {
+  try {
+    const { targetDb } = req.query;
+    const { gpon_sn } = req.params;
+
+    const pool = targetDb ? getPoolForDatabase(targetDb as string) : dbPool;
+    if (!dbConnected || !pool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem excluir registros.' });
+    }
+
+    await pool.query('DELETE FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    return res.json({ success: true, message: 'Leitura excluída com sucesso!' });
+  } catch (err: any) {
+    console.error('Erro ao excluir etiqueta:', err);
+    return res.status(500).json({ error: 'Erro ao excluir registro.' });
+  }
+});
+
 // Rota para importar etiquetas a partir de uma planilha Excel (somente Admin)
 app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: any) => {
   try {

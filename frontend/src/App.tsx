@@ -249,6 +249,9 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState<any>(null);
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [activeCloudPrinters, setActiveCloudPrinters] = useState<any[]>([]);
+  const [queryResults, setQueryResults] = useState<any[]>([]);
+  const [isQuerying, setIsQuerying] = useState(false);
+  const [searchTriggered, setSearchTriggered] = useState(false);
   const [fieldsData, setFieldsData] = useState<any>({});
   const [isPrinting, setIsPrinting] = useState(false);
   const [iptvTab, setIptvTab] = useState<'print' | 'models'>('print');
@@ -862,6 +865,57 @@ export default function App() {
       }
     } catch (err) {
       console.error('Erro ao remover impressora:', err);
+    }
+  };
+
+  const handleSearchLabels = async () => {
+    if (!user || (user.role !== 'master' && user.role !== 'admin' && user.role !== 'consulta')) return;
+    setIsQuerying(true);
+    setSearchTriggered(true);
+    try {
+      const response = await fetch(
+        `/api/admin/query-labels?search=${encodeURIComponent(filterSearch)}` +
+        `&startDate=${encodeURIComponent(filterStartDate)}` +
+        `&endDate=${encodeURIComponent(filterEndDate)}` +
+        `&modelo=${encodeURIComponent(filterModel)}` +
+        `&targetDb=${targetDatabase}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+          }
+        }
+      );
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setQueryResults(result.labels || []);
+      } else {
+        throw new Error(result.error || 'Erro ao buscar dados.');
+      }
+    } catch (err: any) {
+      alert('Erro ao buscar dados: ' + (err.message || err));
+    } finally {
+      setIsQuerying(false);
+    }
+  };
+
+  const handleDeleteScan = async (gpon_sn: string) => {
+    if (!confirm(`Tem certeza que deseja excluir permanentemente a leitura da ONU com GPON Serial ${gpon_sn}?`)) return;
+    try {
+      const response = await fetch(`/api/admin/scans/${encodeURIComponent(gpon_sn)}?targetDb=${targetDatabase}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        alert(result.message || 'Leitura excluída com sucesso!');
+        handleSearchLabels();
+      } else {
+        alert(result.error || 'Erro ao excluir registro.');
+      }
+    } catch (err: any) {
+      alert('Erro ao excluir registro: ' + (err.message || err));
     }
   };
 
@@ -2950,20 +3004,141 @@ export default function App() {
                       setFilterStartDate('');
                       setFilterEndDate('');
                       setFilterModel('');
+                      setQueryResults([]);
+                      setSearchTriggered(false);
                     }}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all"
                   >
                     Limpar
                   </button>
                   <button
+                    onClick={handleSearchLabels}
+                    disabled={isQuerying}
+                    className="flex-1 bg-[#003865] hover:bg-[#002a4d] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs disabled:opacity-50"
+                  >
+                    {isQuerying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    <span>Buscar no Banco</span>
+                  </button>
+                  <button
                     onClick={handleExportExcel}
-                    className="flex-1 bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-750 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
                   >
                     <Download className="w-4 h-4" />
                     <span>Baixar Planilha Excel (XLSX)</span>
                   </button>
                 </div>
               </div>
+
+              {/* Resultados da Busca */}
+              {searchTriggered && (
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4.5 h-4.5 text-[#003865]" />
+                      <h4 className="font-bold text-sm text-slate-800">Resultados da Consulta</h4>
+                    </div>
+                    <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                      {queryResults.length} registros encontrados (máx. 200)
+                    </span>
+                  </div>
+
+                  {isQuerying ? (
+                    <div className="flex justify-center py-10">
+                      <RefreshCw className="w-8 h-8 text-[#003865] animate-spin" />
+                    </div>
+                  ) : queryResults.length === 0 ? (
+                    <div className="text-center py-10 text-slate-400 text-sm font-medium">
+                      Nenhum registro encontrado para os filtros selecionados.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-150">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead className="text-[10px] text-slate-500 uppercase bg-slate-50 border-b border-slate-150">
+                          <tr>
+                            <th className="px-4 py-3 font-bold">Equipamento</th>
+                            <th className="px-4 py-3 font-bold">GPON Serial / MAC</th>
+                            <th className="px-4 py-3 font-bold">Wi-Fi (SSID / Senha)</th>
+                            <th className="px-4 py-3 font-bold">Web Key</th>
+                            <th className="px-4 py-3 font-bold">Operador / Data</th>
+                            {['master', 'admin'].includes(user?.role || '') && (
+                              <th className="px-4 py-3 font-bold text-right">Ações</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {queryResults.map((item: any, idx: number) => (
+                            <tr key={item.gpon_sn || idx} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors last:border-b-0">
+                              <td className="px-4 py-3.5 space-y-1">
+                                <div className="font-bold text-slate-800">{item.modelo || 'Modelo Desconhecido'}</div>
+                                <div className="text-[10px] text-slate-400 font-medium capitalize">{item.fabricante || 'Fabricante'}</div>
+                              </td>
+                              <td className="px-4 py-3.5 space-y-1 font-mono">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-slate-700">{item.gpon_sn}</span>
+                                  <button 
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(item.gpon_sn);
+                                      setCopiedField(`gpon_${idx}`);
+                                      setTimeout(() => setCopiedField(null), 1500);
+                                    }}
+                                    className="text-slate-400 hover:text-[#003865] flex"
+                                    title="Copiar GPON"
+                                  >
+                                    {copiedField === `gpon_${idx}` ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                                {item.mac && (
+                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                                    <span>MAC: {item.mac}</span>
+                                    <button 
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(item.mac);
+                                        setCopiedField(`mac_${idx}`);
+                                        setTimeout(() => setCopiedField(null), 1500);
+                                      }}
+                                      className="text-slate-400 hover:text-[#003865] flex"
+                                      title="Copiar MAC"
+                                    >
+                                      {copiedField === `mac_${idx}` ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 space-y-1">
+                                {item.wifi_ssid && (
+                                  <div className="text-slate-600 font-medium">SSID: <span className="font-mono">{item.wifi_ssid}</span></div>
+                                )}
+                                {item.wifi_key && (
+                                  <div className="text-[10px] text-slate-400">Senha: <span className="font-mono text-slate-500">{item.wifi_key}</span></div>
+                                )}
+                                {item.wifi_ssid_5g && (
+                                  <div className="text-[10px] text-slate-450 font-medium">5G: <span className="font-mono">{item.wifi_ssid_5g}</span></div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 font-mono text-slate-600">{item.web_key || '-'}</td>
+                              <td className="px-4 py-3.5 space-y-0.5">
+                                <div className="text-slate-600 truncate max-w-[120px] font-medium" title={item.operador_email}>{item.operador_email?.split('@')[0]}</div>
+                                <div className="text-[9px] text-slate-400">{item.data_leitura ? new Date(item.data_leitura).toLocaleString('pt-BR') : '-'}</div>
+                              </td>
+                              {['master', 'admin'].includes(user?.role || '') && (
+                                <td className="px-4 py-3.5 text-right">
+                                  <button
+                                    onClick={() => handleDeleteScan(item.gpon_sn)}
+                                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Excluir Registro"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Importar Planilha Excel */}
               {user?.role === 'master' && (
@@ -3043,9 +3218,12 @@ export default function App() {
                     )}
                     <span>{isImportingExcel ? 'Processando importação...' : 'Selecionar e Importar Planilha (.XLSX)'}</span>
                   </button>
-                  <p className="text-[10px] text-slate-400 mt-2 text-center leading-relaxed">
-                    A planilha deve conter uma coluna com <b>GPON Serial Number</b> (ou GPON Serial, gpon_sn, Serial, S/N) e, opcionalmente, Fabricante, Modelo, Endereço MAC, Usuário e Senha. Registros com o mesmo GPON Serial serão atualizados automaticamente.
-                  </p>
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 text-[10px] text-blue-900 flex items-start gap-2.5 leading-relaxed mt-2 text-left w-full">
+                    <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Formato da Planilha:</span> A planilha deve conter uma coluna com <span className="font-semibold">GPON Serial Number</span> (ou GPON Serial, gpon_sn, Serial, S/N) e, opcionalmente, Fabricante, Modelo, Endereço MAC, Usuário e Senha. Registros com o mesmo GPON Serial serão atualizados automaticamente.
+                    </div>
+                  </div>
                 </div>
               </div>
               )}
