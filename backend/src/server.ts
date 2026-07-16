@@ -234,12 +234,21 @@ ${rawZpl}`;
               type: Type.OBJECT,
               properties: {
                 codigo_zpl: { type: Type.STRING },
-                campos_config: {
-                  type: Type.OBJECT,
-                  description: "Objeto com as chaves das variáveis. Os valores de cada chave são objetos contendo: label (string), minLength (inteiro), maxLength (inteiro)"
+                campos: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      key: { type: Type.STRING, description: "Nome curto da variável usada no ZPL (sem chaves e sem cifrão). Ex: 'sn', 'mac', 'caid'" },
+                      label: { type: Type.STRING, description: "Label legível de exibição. Ex: 'S/N:', 'MAC:', 'CAID:'" },
+                      minLength: { type: Type.INTEGER, description: "Comprimento mínimo do campo" },
+                      maxLength: { type: Type.INTEGER, description: "Comprimento máximo do campo" }
+                    },
+                    required: ['key', 'label', 'minLength', 'maxLength']
+                  }
                 }
               },
-              required: ['codigo_zpl', 'campos_config']
+              required: ['codigo_zpl', 'campos']
             }
           }
         });
@@ -254,7 +263,26 @@ ${rawZpl}`;
     }
 
     const data = JSON.parse(response.text);
-    return res.json({ success: true, ...data });
+    
+    // Converter de array estruturado para dicionário chave-valor esperado pelo frontend
+    const campos_config: any = {};
+    if (Array.isArray(data.campos)) {
+      for (const item of data.campos) {
+        if (item.key) {
+          campos_config[item.key] = {
+            label: item.label,
+            minLength: item.minLength,
+            maxLength: item.maxLength
+          };
+        }
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      codigo_zpl: data.codigo_zpl, 
+      campos_config 
+    });
   } catch (error: any) {
     console.error('Erro na rota de Smart Import:', error);
     res.status(500).json({ error: error.message || 'Erro ao processar importação inteligente.' });
