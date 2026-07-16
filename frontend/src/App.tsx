@@ -2360,7 +2360,7 @@ export default function App() {
                     setIptvModelForm({
                       nome_modelo: '',
                       codigo_zpl: '',
-                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 15, "maxLength": 15 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
+                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
                     });
                     setShowIptvModelModal(true);
                   }}
@@ -3548,7 +3548,7 @@ export default function App() {
                       setIptvModelForm({
                         nome_modelo: '',
                         codigo_zpl: '',
-                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 15, "maxLength": 15 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
+                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
                       });
                       setShowIptvModelModal(true);
                     }}
