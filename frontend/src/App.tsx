@@ -2272,12 +2272,11 @@ export default function App() {
                   value={printDarkness}
                   onChange={(e) => setPrintDarkness(e.target.value)}
                 >
-                  <option value="5">5 (Mais claro)</option>
-                  <option value="10">10</option>
-                  <option value="15">15 (Padrão)</option>
-                  <option value="20">20 (Escuro)</option>
-                  <option value="25">25 (Muito Escuro)</option>
-                  <option value="30">30 (Máximo / Maior contraste)</option>
+                  {Array.from({ length: 30 }, (_, i) => i + 1).map((val) => (
+                    <option key={val} value={val.toString()}>
+                      {val} {val === 15 ? '(Padrão)' : val === 25 ? '(Muito Escuro / Recomendado)' : val === 30 ? '(Máximo)' : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
