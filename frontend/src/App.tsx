@@ -256,6 +256,8 @@ export default function App() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [iptvTab, setIptvTab] = useState<'print' | 'models'>('print');
   const [previewZpl, setPreviewZpl] = useState('');
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [printSpeed, setPrintSpeed] = useState('2');
   const [printDarkness, setPrintDarkness] = useState('25');
   useEffect(() => {
@@ -265,9 +267,6 @@ export default function App() {
     }
     const timer = setTimeout(() => {
       let tempZpl = selectedModel.codigo_zpl;
-      
-      // Remover dados gráficos pesados para evitar erro 414 (URL Too Large) no Labelary
-      tempZpl = tempZpl.replace(/\^GF[^~^]*/gi, '');
 
       Object.keys(selectedModel.campos_config || {}).forEach((key) => {
         const val = fieldsData[key] || `[${key.toUpperCase()}]`;
@@ -283,6 +282,52 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, [selectedModel, fieldsData]);
+
+  useEffect(() => {
+    if (!previewZpl) {
+      setPreviewImageUrl(null);
+      return;
+    }
+    
+    let active = true;
+    setIsPreviewLoading(true);
+    
+    fetch('https://api.labelary.com/v1/printers/8dpmm/labels/4x3.5/0/', {
+      method: 'POST',
+      body: previewZpl,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Erro ao carregar visualização');
+        return res.blob();
+      })
+      .then((blob) => {
+        if (active) {
+          setPreviewImageUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(blob);
+          });
+          setIsPreviewLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (active) {
+          setIsPreviewLoading(false);
+        }
+      });
+      
+    return () => {
+      active = false;
+    };
+  }, [previewZpl]);
+
+  useEffect(() => {
+    return () => {
+      if (previewImageUrl) {
+        URL.revokeObjectURL(previewImageUrl);
+      }
+    };
+  }, [previewImageUrl]);
 
   useEffect(() => {
     if (activeModule === 'iptv') {
@@ -2335,17 +2380,22 @@ export default function App() {
                   <h3 className="text-lg font-bold text-[#003865] mb-4 border-b border-slate-100 pb-2 w-full text-center flex items-center justify-center gap-2">
                     <MonitorPlay className="w-4 h-4" /> Layout da Etiqueta
                   </h3>
-                  {previewZpl ? (
+                  {isPreviewLoading ? (
+                    <div className="flex flex-col items-center justify-center min-h-[300px] w-full text-slate-400 font-medium">
+                      <RefreshCw className="w-8 h-8 animate-spin text-[#003865] mb-2" />
+                      <span>Carregando visualização...</span>
+                    </div>
+                  ) : previewImageUrl ? (
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-center min-h-[300px] w-full">
                       <img 
-                        src={`https://api.labelary.com/v1/printers/8dpmm/labels/4x3.5/0/${encodeURIComponent(previewZpl)}`} 
+                        src={previewImageUrl} 
                         alt="Visualização da Etiqueta" 
                         className="max-w-full rounded-lg border border-slate-200/80 shadow-sm"
                       />
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center min-h-[300px] w-full text-slate-400 font-medium animate-pulse">
-                      Carregando visualização...
+                    <div className="flex items-center justify-center min-h-[300px] w-full text-slate-400 font-medium">
+                      Preencha os campos para ver o layout.
                     </div>
                   )}
                   <p className="text-[10px] text-slate-400 mt-4 text-center leading-relaxed">
