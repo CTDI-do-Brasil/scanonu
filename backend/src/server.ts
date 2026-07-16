@@ -216,6 +216,7 @@ Regras de Conversão:
    - Cada campo deve ter um "label" amigável (ex: "S/N:", "MAC ETHERNET:", "SSID Wi-Fi:").
    - Defina comprimentos mínimos (minLength) e máximos (maxLength) sugeridos com base nos valores típicos (ex: MAC tem minLength 12 e maxLength 17; S/N de ONT geralmente tem minLength 12 e maxLength 20).
    - A ordem dos campos na configuração JSON deve ser exatamente a ordem de aparição de cima para baixo na etiqueta ZPL (ex: sn primeiro, depois mac, etc.).
+   - IMPORTANTE: NÃO inclua na lista de campos nenhuma variável terminada em "_clean" (como "sn_clean", "mac_clean"). Essas variáveis derivadas limpas não devem ter campos JSON correspondentes, pois o frontend as calcula automaticamente no momento da impressão a partir de sua variável base.
 5. Dados Gráficos e Imagens: Mantenha todos os blocos de dados gráficos e comandos de imagem (como ^GF, ^GFA e dados de compressão Z64 ou hexadecimais) 100% idênticos, completos e intactos. NÃO encurte nem modifique nenhuma letra ou número desse bloco.
 
 ZPL Bruto:

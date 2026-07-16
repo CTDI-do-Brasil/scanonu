@@ -2128,6 +2128,7 @@ export default function App() {
 
       // Validar travas de caracteres
       for (const [key, config] of Object.entries(selectedModel.campos_config) as any) {
+        if (key.endsWith('_clean')) continue; // Ignorar validação de campos automáticos de limpeza
         const val = fieldsData[key] || '';
         if (config.minLength && val.length < config.minLength) {
           alert(`O campo ${config.label} precisa ter no mínimo ${config.minLength} caracteres. (Atual: ${val.length})`);
