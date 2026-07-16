@@ -565,52 +565,6 @@ export default function App() {
     }
   };
 
-  const handleZplChange = (zpl: string) => {
-    // Extrair todas as variáveis do tipo ${variavel}
-    const regex = /\${([^}]+)}/g;
-    let match;
-    const detectedVariables: string[] = [];
-    while ((match = regex.exec(zpl)) !== null) {
-      const varName = match[1].trim();
-      if (varName.endsWith('_clean')) {
-        continue;
-      }
-      if (!detectedVariables.includes(varName)) {
-        detectedVariables.push(varName);
-      }
-    }
-
-    // Tentar fazer parse do JSON atual
-    let currentConfig: any = {};
-    try {
-      currentConfig = JSON.parse(iptvModelForm.campos_config);
-    } catch (e) {
-      currentConfig = {};
-    }
-
-    // Montar nova configuração preservando TODOS os campos existentes
-    const newConfig: any = { ...currentConfig };
-    
-    // Apenas adicionar novos campos que foram detectados no ZPL
-    detectedVariables.forEach(v => {
-      if (!newConfig[v]) {
-        const lower = v.toLowerCase();
-        if (lower === 'sn' || lower === 'serial' || lower === 'cpe_sn' || lower === 'gpon_sn') {
-          newConfig[v] = { label: 'S/N:', minLength: 15, maxLength: 15 };
-        } else if (lower === 'mac') {
-          newConfig[v] = { label: 'MAC ETHERNET:', minLength: 17, maxLength: 17 };
-        } else {
-          newConfig[v] = { label: `${v.toUpperCase()}:`, minLength: 0, maxLength: 50 };
-        }
-      }
-    });
-
-    setIptvModelForm({
-      ...iptvModelForm,
-      codigo_zpl: zpl,
-      campos_config: JSON.stringify(newConfig, null, 2)
-    });
-  };
 
   const [isImportingSmart, setIsImportingSmart] = useState(false);
 
@@ -2585,16 +2539,50 @@ export default function App() {
                       placeholder="Ex: S4KW3"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Tecnologia</label>
+                    <select
+                      value={iptvModelForm.tecnologia}
+                      onChange={(e) => setIptvModelForm({...iptvModelForm, tecnologia: e.target.value})}
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                    >
+                      <option value="IPTV">IPTV</option>
+                      <option value="GPON">GPON</option>
+                      <option value="EMTA">EMTA</option>
+                      <option value="STB">STB</option>
+                    </select>
+                  </div>
                   
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Código ZPL</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-bold text-slate-700">Código ZPL</label>
+                      <button
+                        type="button"
+                        onClick={handleSmartImport}
+                        disabled={isImportingSmart || !iptvModelForm.codigo_zpl.trim()}
+                        className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isImportingSmart ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin text-purple-600" />
+                            <span>Processando IA...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-purple-500" />
+                            <span>Importação Inteligente (IA)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <p className="text-[10px] text-slate-500 mb-2 leading-tight">
-                      Insira as variáveis entre chaves com cifrão, ex: <code>{"$"+"{sn}"}</code>, <code>{"$"+"{mac}"}</code>.
+                      Insira o código ZPL bruto (com valores fixos) e clique no botão acima para converter usando IA, ou configure manualmente:
                     </p>
                     <textarea 
                       required rows={6}
                       value={iptvModelForm.codigo_zpl}
-                      onChange={(e) => handleZplChange(e.target.value)}
+                      onChange={(e) => setIptvModelForm({...iptvModelForm, codigo_zpl: e.target.value})}
                       className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono text-xs focus:border-[#003865] focus:ring-0 transition-colors"
                       placeholder="^XA...^FD${sn}^FS...^XZ"
                     ></textarea>
