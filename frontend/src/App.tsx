@@ -2041,11 +2041,11 @@ export default function App() {
             className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-blue-500/20"
           >
             <div className="bg-blue-500/10 p-4 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
-              <MonitorPlay className="w-12 h-12 text-blue-600" />
+              <Printer className="w-12 h-12 text-blue-600" />
             </div>
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo IPTV</h2>
-              <p className="text-sm text-slate-500 font-medium">Reimpressão e Setup Box</p>
+              <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo Reimpressão</h2>
+              <p className="text-sm text-slate-500 font-medium">IPTV e Setup Box</p>
             </div>
           </button>
         </div>
@@ -2166,8 +2166,8 @@ export default function App() {
             <button onClick={handleGoBackToModules} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <MonitorPlay className="w-6 h-6 text-blue-300" />
-            <h1 className="text-xl font-bold tracking-tight">Módulo IPTV <span className="text-sm font-normal text-blue-200 ml-2">Reimpressão</span></h1>
+            <Printer className="w-6 h-6 text-blue-300" />
+            <h1 className="text-xl font-bold tracking-tight">Módulo Reimpressão <span className="text-sm font-normal text-blue-200 ml-2">IPTV</span></h1>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
@@ -2350,7 +2350,7 @@ export default function App() {
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-[#003865] flex items-center gap-2">
-                    <MonitorPlay className="w-5 h-5" /> Modelos IPTV (ZPL)
+                    <Printer className="w-5 h-5" /> Modelos IPTV (ZPL)
                   </h3>
                   <p className="text-sm text-slate-500 font-medium">Gerencie os modelos e códigos de impressão</p>
                 </div>
@@ -2685,7 +2685,7 @@ export default function App() {
                     : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <MonitorPlay className="w-4 h-4" />
+                <Printer className="w-4 h-4" />
                 Modelos IPTV
               </button>
               )}
@@ -2844,7 +2844,7 @@ export default function App() {
               {adminSubTab === 'iptv-models' && (
                 <div>
                   <h2 className="text-xl font-bold text-[#003865] flex items-center gap-2">
-                    <MonitorPlay className="w-5.5 h-5.5" /> Modelos de Etiquetas IPTV
+                    <Printer className="w-5.5 h-5.5" /> Modelos de Etiquetas IPTV
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">Gerencie os layouts, parâmetros e comandos ZPL das etiquetas de equipamentos de IPTV.</p>
                 </div>
@@ -3538,7 +3538,7 @@ export default function App() {
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h3 className="text-lg font-bold text-[#003865] flex items-center gap-2">
-                      <MonitorPlay className="w-5 h-5" /> Modelos IPTV (ZPL)
+                      <Printer className="w-5 h-5" /> Modelos IPTV (ZPL)
                     </h3>
                     <p className="text-xs text-slate-500 font-medium">Gerencie os modelos e códigos de impressão</p>
                   </div>
