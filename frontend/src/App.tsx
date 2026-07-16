@@ -236,7 +236,7 @@ export default function App() {
   const [isLoadingIptvModels, setIsLoadingIptvModels] = useState(false);
   const [editingIptvModel, setEditingIptvModel] = useState<any>(null);
   const [showIptvModelModal, setShowIptvModelModal] = useState(false);
-  const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '' });
+  const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '', tecnologia: 'IPTV' });
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<any>(null);
   const [printerFormData, setPrinterFormData] = useState({
@@ -260,6 +260,7 @@ export default function App() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [printSpeed, setPrintSpeed] = useState('2');
   const [printDarkness, setPrintDarkness] = useState('25');
+  const [selectedTecnologia, setSelectedTecnologia] = useState<'IPTV' | 'GPON' | 'EMTA' | 'STB'>('IPTV');
   useEffect(() => {
     if (!selectedModel) {
       setPreviewZpl('');
@@ -627,7 +628,8 @@ export default function App() {
         body: JSON.stringify({
           nome_modelo: iptvModelForm.nome_modelo,
           codigo_zpl: iptvModelForm.codigo_zpl,
-          campos_config: parsedCampos
+          campos_config: parsedCampos,
+          tecnologia: iptvModelForm.tecnologia
         })
       });
       const result = await response.json();
@@ -2259,21 +2261,45 @@ export default function App() {
             <div className={`w-full grid grid-cols-1 ${selectedModel ? 'max-w-5xl lg:grid-cols-12 gap-8' : 'max-w-2xl'}`}>
               <div className={`bg-white rounded-3xl shadow-sm border border-slate-200/60 p-8 ${selectedModel ? 'lg:col-span-7' : ''}`}>
                 <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4">Configuração da Etiqueta</h2>
+                
+                {/* Filtro de Tecnologia (Abas) */}
+                <div className="flex border-b border-slate-200 mb-6 bg-slate-50 rounded-xl p-1">
+                  {(['IPTV', 'GPON', 'EMTA', 'STB'] as const).map((tech) => (
+                    <button
+                      key={tech}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTecnologia(tech);
+                        setSelectedModel(null);
+                        setFieldsData({});
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all uppercase ${
+                        selectedTecnologia === tech
+                          ? 'bg-[#003865] text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80'
+                      }`}
+                    >
+                      {tech}
+                    </button>
+                  ))}
+                </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Modelo do Equipamento</label>
                 <select
                   className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  value={selectedModel ? selectedModel.id.toString() : ""}
                   onChange={(e) => {
                     const model = iptvModels.find(m => m.id === parseInt(e.target.value));
                     setSelectedModel(model || null);
                     setFieldsData({});
                   }}
-                  defaultValue=""
                 >
                   <option value="" disabled>Selecione um modelo...</option>
-                  {iptvModels.map(m => <option key={m.id} value={m.id}>{m.nome_modelo}</option>)}
+                  {iptvModels
+                    .filter(m => (m.tecnologia || 'IPTV') === selectedTecnologia)
+                    .map(m => <option key={m.id} value={m.id.toString()}>{m.nome_modelo}</option>)}
                 </select>
               </div>
 
@@ -2419,7 +2445,8 @@ export default function App() {
                     setIptvModelForm({
                       nome_modelo: '',
                       codigo_zpl: '',
-                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}'
+                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}',
+                      tecnologia: 'IPTV'
                     });
                     setShowIptvModelModal(true);
                   }}
@@ -2438,6 +2465,7 @@ export default function App() {
                       <tr>
                         <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
                         <th className="px-4 py-3 font-bold">Modelo</th>
+                        <th className="px-4 py-3 font-bold">Tecnologia</th>
                         <th className="px-4 py-3 font-bold text-center">Campos</th>
                         <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
                       </tr>
@@ -2447,6 +2475,11 @@ export default function App() {
                         <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                           <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
                           <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
+                          <td className="px-4 py-3">
+                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-bold uppercase">
+                              {model.tecnologia || 'IPTV'}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-center">
                             <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">
                               {Object.keys(model.campos_config || {}).length} campos
@@ -2459,7 +2492,8 @@ export default function App() {
                                 setIptvModelForm({
                                   nome_modelo: model.nome_modelo,
                                   codigo_zpl: model.codigo_zpl,
-                                  campos_config: JSON.stringify(model.campos_config, null, 2)
+                                  campos_config: JSON.stringify(model.campos_config, null, 2),
+                                  tecnologia: model.tecnologia || 'IPTV'
                                 });
                                 setShowIptvModelModal(true);
                               }}
@@ -2479,7 +2513,7 @@ export default function App() {
                         </tr>
                       ))}
                       {iptvModels.length === 0 && (
-                        <tr><td colSpan={4} className="text-center py-6 text-slate-500 font-medium">Nenhum modelo cadastrado.</td></tr>
+                        <tr><td colSpan={5} className="text-center py-6 text-slate-500 font-medium">Nenhum modelo cadastrado.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -3607,7 +3641,8 @@ export default function App() {
                       setIptvModelForm({
                         nome_modelo: '',
                         codigo_zpl: '',
-                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}'
+                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}',
+                        tecnologia: 'IPTV'
                       });
                       setShowIptvModelModal(true);
                     }}
@@ -3626,6 +3661,7 @@ export default function App() {
                         <tr>
                           <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
                           <th className="px-4 py-3 font-bold">Modelo</th>
+                          <th className="px-4 py-3 font-bold">Tecnologia</th>
                           <th className="px-4 py-3 font-bold text-center">Campos</th>
                           <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
                         </tr>
@@ -3635,6 +3671,11 @@ export default function App() {
                           <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
                             <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
+                            <td className="px-4 py-3">
+                              <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">
+                                {model.tecnologia || 'IPTV'}
+                              </span>
+                            </td>
                             <td className="px-4 py-3 text-center">
                               <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                                 {Object.keys(model.campos_config || {}).length} campos
@@ -3647,7 +3688,8 @@ export default function App() {
                                   setIptvModelForm({
                                     nome_modelo: model.nome_modelo,
                                     codigo_zpl: model.codigo_zpl,
-                                    campos_config: JSON.stringify(model.campos_config, null, 2)
+                                    campos_config: JSON.stringify(model.campos_config, null, 2),
+                                    tecnologia: model.tecnologia || 'IPTV'
                                   });
                                   setShowIptvModelModal(true);
                                 }}
@@ -4247,6 +4289,20 @@ export default function App() {
                   className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
                   placeholder="Ex: S4KW3"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Tecnologia</label>
+                <select
+                  value={iptvModelForm.tecnologia}
+                  onChange={(e) => setIptvModelForm({...iptvModelForm, tecnologia: e.target.value})}
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                >
+                  <option value="IPTV">IPTV</option>
+                  <option value="GPON">GPON</option>
+                  <option value="EMTA">EMTA</option>
+                  <option value="STB">STB</option>
+                </select>
               </div>
               
               <div>

@@ -352,10 +352,24 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       nome_modelo VARCHAR(150) NOT NULL,
       codigo_zpl TEXT NOT NULL,
       campos_config JSONB NOT NULL,
+      tecnologia VARCHAR(50) NOT NULL DEFAULT 'IPTV',
       data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `;
   await pool.query(createIptvModelsTableQuery);
+
+  // Migração para adicionar a coluna tecnologia na tabela modelos_zpl_iptv se não existir
+  try {
+    const checkColumn = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_name='modelos_zpl_iptv' AND column_name='tecnologia'"
+    );
+    if (checkColumn.rowCount === 0) {
+      await pool.query("ALTER TABLE modelos_zpl_iptv ADD COLUMN tecnologia VARCHAR(50) NOT NULL DEFAULT 'IPTV'");
+      console.log("Coluna 'tecnologia' adicionada com sucesso à tabela modelos_zpl_iptv.");
+    }
+  } catch (err: any) {
+    console.error("Erro ao rodar migração de tecnologia em modelos_zpl_iptv:", err.message);
+  }
 
 
   // Migração para remover a coluna ID caso ela já exista
@@ -549,10 +563,24 @@ async function connectToDatabase() {
           nome_modelo VARCHAR(150) NOT NULL,
           codigo_zpl TEXT NOT NULL,
           campos_config JSONB NOT NULL,
+          tecnologia VARCHAR(50) NOT NULL DEFAULT 'IPTV',
           data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `;
       await dbPool.query(createIptvModelsTableQuery);
+
+      // Migração para adicionar a coluna tecnologia na tabela modelos_zpl_iptv se não existir
+      try {
+        const checkColumn = await dbPool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='modelos_zpl_iptv' AND column_name='tecnologia'"
+        );
+        if (checkColumn.rowCount === 0) {
+          await dbPool.query("ALTER TABLE modelos_zpl_iptv ADD COLUMN tecnologia VARCHAR(50) NOT NULL DEFAULT 'IPTV'");
+          console.log("Coluna 'tecnologia' adicionada com sucesso à tabela modelos_zpl_iptv (dbPool).");
+        }
+      } catch (err: any) {
+        console.error("Erro ao rodar migração de tecnologia em modelos_zpl_iptv (dbPool):", err.message);
+      }
 
 
       // Migração para remover a coluna ID das etiquetas caso ela já exista
@@ -1943,14 +1971,14 @@ app.post('/api/admin/iptv-models', authenticateSession, async (req: any, res: an
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
     if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
-    const { nome_modelo, codigo_zpl, campos_config } = req.body;
+    const { nome_modelo, codigo_zpl, campos_config, tecnologia } = req.body;
     if (!nome_modelo || !codigo_zpl || !campos_config) return res.status(400).json({ error: 'Preencha todos os campos.' });
 
     const insertQuery = `
-      INSERT INTO modelos_zpl_iptv (nome_modelo, codigo_zpl, campos_config)
-      VALUES ($1, $2, $3) RETURNING *
+      INSERT INTO modelos_zpl_iptv (nome_modelo, codigo_zpl, campos_config, tecnologia)
+      VALUES ($1, $2, $3, $4) RETURNING *
     `;
-    const result = await dbPool.query(insertQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config)]);
+    const result = await dbPool.query(insertQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), tecnologia || 'IPTV']);
     return res.json({ success: true, model: result.rows[0] });
   } catch (err: any) {
     console.error(err);
@@ -1963,14 +1991,14 @@ app.put('/api/admin/iptv-models/:id', authenticateSession, async (req: any, res:
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
     if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
-    const { nome_modelo, codigo_zpl, campos_config } = req.body;
+    const { nome_modelo, codigo_zpl, campos_config, tecnologia } = req.body;
     
     const updateQuery = `
       UPDATE modelos_zpl_iptv 
-      SET nome_modelo = $1, codigo_zpl = $2, campos_config = $3
-      WHERE id = $4 RETURNING *
+      SET nome_modelo = $1, codigo_zpl = $2, campos_config = $3, tecnologia = $4
+      WHERE id = $5 RETURNING *
     `;
-    const result = await dbPool.query(updateQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), req.params.id]);
+    const result = await dbPool.query(updateQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), tecnologia || 'IPTV', req.params.id]);
     return res.json({ success: true, model: result.rows[0] });
   } catch (err: any) {
     console.error(err);
