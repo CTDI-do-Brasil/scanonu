@@ -2066,8 +2066,18 @@ export default function App() {
     
     const handleFieldChange = (key: string, value: string) => {
       // Automagicamente troca ! por I para corrigir bugs de scanner no mobile
-      const sanitized = value.replace(/!/g, 'I');
-      setFieldsData({ ...fieldsData, [key]: sanitized.trim() });
+      let sanitized = value.replace(/!/g, 'I').trim();
+      
+      // Se for o campo de MAC (independente da capitalização) e o valor for exatamente 12 caracteres hexadecimais sem pontuação,
+      // formata automaticamente adicionando os dois-pontos
+      if (key.toLowerCase() === 'mac') {
+        const cleanMac = sanitized.replace(/[^A-Fa-f0-9]/g, '');
+        if (cleanMac.length === 12 && !sanitized.includes(':')) {
+          sanitized = cleanMac.match(/.{1,2}/g)!.join(':').toUpperCase();
+        }
+      }
+      
+      setFieldsData({ ...fieldsData, [key]: sanitized });
     };
 
     const handlePrint = async () => {
@@ -2360,7 +2370,7 @@ export default function App() {
                     setIptvModelForm({
                       nome_modelo: '',
                       codigo_zpl: '',
-                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
+                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}'
                     });
                     setShowIptvModelModal(true);
                   }}
@@ -3548,7 +3558,7 @@ export default function App() {
                       setIptvModelForm({
                         nome_modelo: '',
                         codigo_zpl: '',
-                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 17, "maxLength": 17 }\n}'
+                        campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}'
                       });
                       setShowIptvModelModal(true);
                     }}
