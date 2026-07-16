@@ -256,8 +256,8 @@ export default function App() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [iptvTab, setIptvTab] = useState<'print' | 'models'>('print');
   const [previewZpl, setPreviewZpl] = useState('');
-  const [printSpeed, setPrintSpeed] = useState('6');
-  const [printDarkness, setPrintDarkness] = useState('15');
+  const [printSpeed, setPrintSpeed] = useState('2');
+  const [printDarkness, setPrintDarkness] = useState('25');
   useEffect(() => {
     if (!selectedModel) {
       setPreviewZpl('');
