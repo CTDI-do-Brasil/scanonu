@@ -218,6 +218,13 @@ Regras de Conversão:
    - A ordem dos campos na configuração JSON deve ser exatamente a ordem de aparição de cima para baixo na etiqueta ZPL (ex: sn primeiro, depois mac, etc.).
    - IMPORTANTE: NÃO inclua na lista de campos nenhuma variável terminada em "_clean" (como "sn_clean", "mac_clean"). Essas variáveis derivadas limpas não devem ter campos JSON correspondentes, pois o frontend as calcula automaticamente no momento da impressão a partir de sua variável base.
 5. Dados Gráficos e Imagens: Mantenha todos os blocos de dados gráficos e comandos de imagem (como ^GF, ^GFA e dados de compressão Z64 ou hexadecimais) 100% idênticos, completos e intactos. NÃO encurte nem modifique nenhuma letra ou número desse bloco.
+6. Acentuação e Codificação de Caracteres Especiais: Para garantir que as letras com acentos (como ã, ç, é, á, ê, ú, à, í, õ, etc.) sejam impressas corretamente pela impressora física Zebra (sem gerar lacunas ou caracteres corrompidos), converta-os obrigatoriamente para códigos hexadecimais do padrão CP-1252/Latin-1 (ex: 'ã' ➔ '\\E3', 'ç' ➔ '\\E7', 'é' ➔ '\\E9', 'á' ➔ '\\E1', 'ê' ➔ '\\EA', 'ú' ➔ '\\FA', 'à' ➔ '\\E0', 'í' ➔ '\\ED', 'õ' ➔ '\\F5'). Certifique-se de ativar o comando '^FH\\' e '^CI27' correspondente para que a impressora interprete os escapes hexadecimais de forma adequada.
+7. Correção de Ortografia/Typas no ZPL original: Corrija os erros ortográficos comuns que vêm de digitação no ZPL original para manter o padrão profissional da etiqueta original. Exemplos comuns:
+   - 'aluguei' ➔ deve ser corrigido para 'aluguel'.
+   - 'devoivido' ➔ deve ser corrigido para 'devolvido'.
+   - 'Doiby' ➔ deve ser corrigido para 'Dolby'.
+   - Separação de palavras incorretas (ex: 'Audioe o' ➔ deve ser corrigido para 'Audio e o').
+8. Largura e Qualidade dos Códigos de Barras: Se o ZPL utilizar um comando '^BY1' (largura do código de barras de 1 ponto), isso o tornará ilegível para bipe de scanners industriais. Corrija-o para usar '^BY2' ou '^BY3' conforme o tamanho do campo, a fim de deixá-lo legível, proporcional e correspondente ao design da etiqueta física original.
 
 ZPL Bruto:
 ${rawZpl}`;
