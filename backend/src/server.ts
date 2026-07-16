@@ -197,25 +197,24 @@ O ZPL contém valores de dados estáticos e fixos que representam informações 
 Sua tarefa é converter este ZPL estático em um template ZPL dinâmico e gerar a configuração de campos correspondente.
 
 Regras de Conversão:
-1. Identifique todos os dados variáveis e substitua-os por variáveis dinâmicas no ZPL no formato \${nome_da_variavel}.
+1. Identifique apenas os dados variáveis individuais (bipados pelo operador por aparelho) e substitua-os por variáveis dinâmicas no ZPL no formato \${nome_da_variavel}.
    Use nomes de variáveis padrão e limpos, preferencialmente:
    - Para Serial Number / número de série: use "sn" (e "sn_clean" se estiver em código de barras).
    - Para MAC Address: use "mac" (e "mac_clean" sem pontuação se estiver em código de barras).
    - Para PON ID: use "pon" (e "pon_clean" sem pontuação se estiver em código de barras).
    - Para D-SN: use "d_sn" (e "d_sn_clean" sem pontuação se estiver em código de barras).
-   - Para CA ID: use "ca_id" (e "ca_id_clean" sem pontuação se estiver em código de barras).
-   - Para SC ID: use "sc_id" (e "sc_id_clean" sem pontuação se estiver em código de barras).
+   - Para CA ID: use "ca_id" (ou "caid", e "ca_id_clean" se estiver em código de barras).
+   - Para SC ID: use "sc_id" (ou "scid", e "sc_id_clean" se estiver em código de barras).
    - Para SSID de Wi-Fi: use "ssid".
    - Para Senha de Wi-Fi: use "senha_wifi".
    - Para Senha de Admin/Acesso: use "senha_admin".
    - Para Usuário de Admin/Acesso: use "usuario".
-   - Se houver outros campos, crie variáveis explicativas (ex: "modelo", "versao").
-2. IMPORTANTE: Se o ZPL contiver IPs fixos como "192.168.0.1", "192.168.1.1", "192.168.100.1", ou textos genéricos como "Produto: GPON ONT", "Alimentação: 12V", "Modelo: ZXHN F689", etc., NÃO os substitua por variáveis. Deixe-os fixos no ZPL!
+2. IMPORTANTE (O QUE NÃO DEVE SER VARIÁVEL): Textos fixos de homologação (como código Anatel "2156-23-08848", "04333-20-01647", etc.), o nome do Modelo do equipamento (como "K4KCW5", "ZXHN F689", "S4KW3"), IPs fixos (como "192.168.0.1"), CNPJs, nomes de fabricantes e avisos legais/comodato NUNCA devem ser transformados em variáveis. Deixe-os fixados como textos estáticos no ZPL!
 3. Correção de Código de Barras: Se o ZPL utilizar comandos de código de barras (^BC ou ^B3) com desvios complexos (ex: >;8493>6B2E4C7DB ou >;ZTEGP7>5300225), simplifique-os substituindo por codificação do subconjunto B do Code 128 que inicia com >: (ex: >:\${sn} ou >:\${mac_clean}). Isso garante leitura universal sem cortes de dígitos.
 4. Monte a configuração de campos (campos_config) que descreve cada variável que você introduziu.
    - Cada campo deve ter um "label" amigável (ex: "S/N:", "MAC ETHERNET:", "SSID Wi-Fi:").
    - Defina comprimentos mínimos (minLength) e máximos (maxLength) sugeridos com base nos valores típicos (ex: MAC tem minLength 12 e maxLength 17; S/N de ONT geralmente tem minLength 12 e maxLength 20).
-   - A ordem dos campos na configuração JSON deve ser exatamente a ordem de aparição de cima para baixo na etiqueta ZPL (ex: sn primeiro, depois mac, etc.).
+   - A ordem dos campos na lista 'campos' DEVE corresponder EXATAMENTE à ordem física vertical em que eles aparecem na etiqueta ZPL, de cima para baixo (ex: S/N primeiro, depois CAID, depois MAC).
    - IMPORTANTE: NÃO inclua na lista de campos nenhuma variável terminada em "_clean" (como "sn_clean", "mac_clean"). Essas variáveis derivadas limpas não devem ter campos JSON correspondentes, pois o frontend as calcula automaticamente no momento da impressão a partir de sua variável base.
 5. Dados Gráficos e Imagens: Mantenha todos os blocos de dados gráficos e comandos de imagem (como ^GF, ^GFA e dados de compressão Z64 ou hexadecimais) 100% idênticos, completos e intactos. NÃO encurte nem modifique nenhuma letra ou número desse bloco.
 6. Acentuação e Codificação de Caracteres Especiais: Para garantir que as letras com acentos (como ã, ç, é, á, ê, ú, à, í, õ, etc.) sejam impressas corretamente pela impressora física Zebra (sem gerar lacunas ou caracteres corrompidos), converta-os obrigatoriamente para códigos hexadecimais do padrão CP-1252/Latin-1 (ex: 'ã' ➔ '\\E3', 'ç' ➔ '\\E7', 'é' ➔ '\\E9', 'á' ➔ '\\E1', 'ê' ➔ '\\EA', 'ú' ➔ '\\FA', 'à' ➔ '\\E0', 'í' ➔ '\\ED', 'õ' ➔ '\\F5'). Certifique-se de ativar o comando '^FH\\' e '^CI27' correspondente para que a impressora interprete os escapes hexadecimais de forma adequada.
