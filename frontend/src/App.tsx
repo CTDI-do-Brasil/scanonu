@@ -1906,7 +1906,7 @@ export default function App() {
           <div className="bg-white/95 backdrop-blur-md rounded-[2.5rem] px-8 py-10 shadow-2xl shadow-blue-950/40 border border-white/20 w-full max-w-sm flex flex-col items-center">
             {/* Logo CTDI */}
             <div className="mb-6 flex flex-col items-center">
-              <img src={logoCtdi} alt="Logo CTDI" className="w-48 h-auto object-contain mb-1" />
+              <img src={logoCtdi} alt="Logo CTDI" className="w-48 h-auto object-contain mb-1 mix-blend-multiply" />
             </div>
 
             {/* Portal Tag & title */}
