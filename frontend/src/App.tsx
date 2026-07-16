@@ -292,7 +292,7 @@ export default function App() {
     let active = true;
     setIsPreviewLoading(true);
     
-    fetch('https://api.labelary.com/v1/printers/8dpmm/labels/4x3.5/0/', {
+    fetch('/api/render-zpl', {
       method: 'POST',
       body: previewZpl,
     })

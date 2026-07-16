@@ -155,6 +155,32 @@ app.get('/api/active-printers', (req, res) => {
   res.json({ printers });
 });
 
+// Proxy endpoint to render ZPL using Labelary via POST (bypasses CORS in browser)
+app.post('/api/render-zpl', express.text({ type: '*/*', limit: '10mb' }), async (req, res) => {
+  try {
+    const zpl = req.body || '';
+    const response = await fetch('https://api.labelary.com/v1/printers/8dpmm/labels/4x3.5/0/', {
+      method: 'POST',
+      body: zpl,
+      headers: {
+        'Accept': 'image/png'
+      }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).send(errText);
+    }
+
+    const buffer = await response.arrayBuffer();
+    res.setHeader('Content-Type', 'image/png');
+    res.send(Buffer.from(buffer));
+  } catch (error: any) {
+    console.error('Error proxying to Labelary:', error);
+    res.status(500).send(error.message || 'Error rendering ZPL');
+  }
+});
+
 // Endpoint to receive a print job from the frontend
 app.post('/api/print-jobs', (req, res) => {
   const { zpl, targetStation } = req.body;
