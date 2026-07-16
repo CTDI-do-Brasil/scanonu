@@ -30,7 +30,7 @@ import {
   Monitor,
   MapPin,
   Trash2
-, MonitorPlay, Edit, Plus } from 'lucide-react';
+, MonitorPlay, Edit, Plus, User, Lock } from 'lucide-react';
 
 
 interface ScanData {
@@ -1896,23 +1896,28 @@ export default function App() {
     }
 
     return (
-      <div className="min-h-screen flex flex-col justify-between bg-[#002f56] text-slate-800 font-sans p-6">
-        <div className="flex-1 flex flex-col justify-center items-center w-full">
+      <div className="min-h-screen flex flex-col justify-between bg-gradient-to-tr from-[#00172e] via-[#002f56] to-[#004b80] text-slate-800 font-sans p-6 relative overflow-hidden">
+        {/* Glow ambient background circles */}
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-blue-400/10 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-400/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+        <div className="flex-1 flex flex-col justify-center items-center w-full z-10 animate-fadeIn">
           {/* Card de Login */}
-          <div className="bg-white rounded-[2.5rem] px-8 py-10 shadow-2xl w-full max-w-sm flex flex-col items-center">
+          <div className="bg-white/95 backdrop-blur-md rounded-[2.5rem] px-8 py-10 shadow-2xl shadow-blue-950/40 border border-white/20 w-full max-w-sm flex flex-col items-center">
             {/* Logo CTDI */}
-            <div className="mb-4 flex flex-col items-center">
+            <div className="mb-6 flex flex-col items-center">
               <img src={logoCtdi} alt="Logo CTDI" className="w-48 h-auto object-contain mb-1" />
             </div>
 
-            {/* Logo ScanONU */}
-            <div className="mb-6 flex flex-col items-center border-t border-slate-100 w-full pt-4">
-              <div className="flex items-center gap-2">
-                <div className="bg-[#003865] text-white p-1.5 rounded-lg">
-                  <Cpu className="w-5 h-5" />
-                </div>
-                <span className="font-extrabold text-lg text-slate-800 tracking-tight">SMART SCAN</span>
-              </div>
+            {/* Portal Tag & title */}
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+              <span className="text-[10px] font-bold text-blue-800 tracking-wider uppercase">Acesso Restrito</span>
+            </div>
+
+            <div className="mb-6 text-center">
+              <h1 className="text-xl font-extrabold text-[#003865] tracking-tight">SMART SCAN</h1>
+              <p className="text-[10px] text-slate-400 font-medium mt-0.5">Assistente de Campo & Leitor de Etiquetas</p>
             </div>
 
             {loginError && (
@@ -1922,45 +1927,49 @@ export default function App() {
               </div>
             )}
 
-            <form onSubmit={handleLogin} className="w-full space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-sm font-bold text-[#002f56] block">E-mail ou Usuário</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="ex: seu.email@ctdibrasil.com.br"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-white border border-slate-300 focus:border-[#002f56] focus:ring-1 focus:ring-[#002f56] rounded-2xl px-4 py-3.5 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400"
-                />
+            <form onSubmit={handleLogin} className="w-full space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">E-mail ou Usuário</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="ex: seu.email@ctdibrasil.com.br"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-2xl pl-11 pr-4 py-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400/80 font-medium"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1.5 relative">
-                <label className="text-sm font-bold text-[#002f56] block">Senha</label>
+              <div className="space-y-1 relative">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Senha</label>
                 <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
                     type={showPassword ? "text" : "password"} 
                     required
                     placeholder="••••••••"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full bg-white border border-slate-300 focus:border-[#002f56] focus:ring-1 focus:ring-[#002f56] rounded-2xl pl-4 pr-12 py-3.5 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400"
+                    className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-2xl pl-11 pr-12 py-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400/80 font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors flex"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              <div className="text-left w-full">
+              <div className="text-right w-full">
                 <button
                   type="button"
                   onClick={() => alert("Por favor, entre em contato com o suporte ou administrador do sistema para recuperar sua senha.")}
-                  className="text-xs font-bold text-[#002f56] hover:underline"
+                  className="text-[11px] font-bold text-[#003865] hover:underline"
                 >
                   Esqueceu a senha?
                 </button>
@@ -1969,7 +1978,7 @@ export default function App() {
               <button 
                 type="submit"
                 disabled={isLoggingIn}
-                className="w-full bg-[#002f56] hover:bg-[#004075] active:bg-[#001d36] disabled:bg-[#002f56]/60 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all text-base mt-2"
+                className="w-full bg-[#003865] hover:bg-[#002a4d] active:scale-[0.98] disabled:opacity-75 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10 transition-all text-sm mt-3"
               >
                 {isLoggingIn ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -1978,13 +1987,11 @@ export default function App() {
                 )}
               </button>
             </form>
-
-
           </div>
         </div>
 
         {/* Footer Login */}
-        <footer className="py-2 text-center text-[10px] text-blue-200/50">
+        <footer className="py-2 text-center text-[10px] text-blue-200/50 z-10">
           SMART SCAN &copy; {new Date().getFullYear()} - Assistente de Campo
         </footer>
       </div>
