@@ -533,12 +533,12 @@ export default function App() {
       currentConfig = {};
     }
 
-    // Montar nova configuração preservando configurações existentes
-    const newConfig: any = {};
+    // Montar nova configuração preservando TODOS os campos existentes
+    const newConfig: any = { ...currentConfig };
+    
+    // Apenas adicionar novos campos que foram detectados no ZPL
     detectedVariables.forEach(v => {
-      if (currentConfig[v]) {
-        newConfig[v] = currentConfig[v];
-      } else {
+      if (!newConfig[v]) {
         const lower = v.toLowerCase();
         if (lower === 'sn' || lower === 'serial' || lower === 'cpe_sn' || lower === 'gpon_sn') {
           newConfig[v] = { label: 'S/N:', minLength: 15, maxLength: 15 };
