@@ -804,6 +804,7 @@ async function connectToDatabase() {
         await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Nokia' WHERE fabricante ILIKE '%Nokia%' AND fabricante != 'Nokia'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Alcatel' WHERE fabricante ILIKE '%Alcatel%' AND fabricante != 'Alcatel'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'SagemCOM' WHERE (fabricante ILIKE '%Sagem%' OR fabricante ILIKE '%SMBS%' OR fabricante ILIKE '%SMB8%') AND fabricante != 'SagemCOM'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Kaon' WHERE (fabricante ILIKE '%Kaon%' OR fabricante = 'KAO') AND fabricante != 'Kaon'");
 
         // Normalizar modelos Sagemcom
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F@ST 5655V2' WHERE (fabricante = 'SagemCOM' OR fabricante ILIKE '%Sagem%') AND (modelo ILIKE '%5655%' OR modelo ILIKE '%FAST5655%') AND modelo != 'F@ST 5655V2'");
@@ -934,6 +935,10 @@ function normalizeFabricante(fabricante: string, modelo: string): string {
   const modelUpper = (modelo || '').toUpperCase().trim();
   if (modelUpper.includes('FGA2232TIB')) {
     return 'VANTIVA';
+  }
+  const mfgUpper = (fabricante || '').toUpperCase().trim();
+  if (mfgUpper.includes('KAON') || mfgUpper === 'KAO') {
+    return 'Kaon';
   }
   return fabricante || 'N/A';
 }
@@ -1185,6 +1190,7 @@ DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
     else if (upperMfg.includes('ALCATEL')) fabricanteNorm = 'Alcatel';
     else if (upperMfg.includes('SAGEMCOM') || upperMfg.includes('SAGEM') || upperMfg.includes('SMBS') || upperMfg.includes('SMB8')) fabricanteNorm = 'SagemCOM';
     else if (upperMfg.includes('BLU') || upperMfg.includes('CASTLE')) fabricanteNorm = 'Blu-Castle';
+    else if (upperMfg.includes('KAON') || upperMfg === 'KAO') fabricanteNorm = 'Kaon';
 
     let gponNorm = (geminiData.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
     if (gponNorm.startsWith('SMB8')) {
@@ -1398,6 +1404,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
   try {
     let { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url } = req.body;
 
+    fabricante = normalizeFabricante(fabricante || 'N/A', modelo || '');
     // Gerar um GPON SN único se vier como N/A para não violar a UNIQUE constraint no PostgreSQL
     const normalizedModelo = normalizeModel(modelo, fabricante);
     const isFast5670 = normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
