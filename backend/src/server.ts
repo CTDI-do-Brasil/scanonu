@@ -100,14 +100,15 @@ const authenticateSession = async (req: any, res: any, next: any) => {
     }
 
     const sessionRes = await dbPool.query(
-      'SELECT email, role FROM sessoes_scan_onu WHERE token = $1 AND data_expiracao > NOW()',
+      'SELECT email, role, operacao FROM sessoes_scan_onu WHERE token = $1 AND data_expiracao > NOW()',
       [token]
     );
 
     if (sessionRes.rowCount && sessionRes.rowCount > 0) {
       req.user = {
         email: sessionRes.rows[0].email,
-        role: sessionRes.rows[0].role
+        role: sessionRes.rows[0].role,
+        operacao: sessionRes.rows[0].operacao || 'CTDI MATRIZ'
       };
       return next();
     } else {
@@ -418,7 +419,10 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       email VARCHAR(150) UNIQUE NOT NULL,
       senha VARCHAR(100) NOT NULL,
       role VARCHAR(50) DEFAULT 'operador',
-      operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'
+      operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ',
+      permitir_gpon BOOLEAN DEFAULT TRUE,
+      permitir_reimpressao BOOLEAN DEFAULT TRUE,
+      tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'
     );
   `;
   await pool.query(createUsersTableQuery);
@@ -429,9 +433,12 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   } catch(err) { console.error('Erro ao migrar admins:', err); }
 
 
-  // Garantir coluna operacao se não existir
+  // Garantir coluna operacao se não existir e colunas de permissão
   try {
     await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS permitir_gpon BOOLEAN DEFAULT TRUE");
+    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS permitir_reimpressao BOOLEAN DEFAULT TRUE");
+    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'");
   } catch (e) {}
 
   // Criar tabela de sessões
@@ -440,11 +447,18 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       token VARCHAR(100) PRIMARY KEY,
       email VARCHAR(150) NOT NULL,
       role VARCHAR(50) NOT NULL,
+      operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ',
       data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       data_expiracao TIMESTAMP NOT NULL
     );
   `;
   await pool.query(createSessionsTableQuery);
+
+  // Garantir operacao nas sessoes e etiquetas
+  try {
+    await pool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+  } catch (e) {}
 
   // Criar tabela de impressoras
   const createPrintersTableQuery = `
@@ -1402,7 +1416,7 @@ DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
 // Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', async (req: any, res: any) => {
   try {
-    let { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url } = req.body;
+    let { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao } = req.body;
 
     fabricante = normalizeFabricante(fabricante || 'N/A', modelo || '');
     // Gerar um GPON SN único se vier como N/A para não violar a UNIQUE constraint no PostgreSQL
@@ -1613,15 +1627,16 @@ app.post('/api/save-label', async (req: any, res: any) => {
             modelo = $2,
             cpe_sn = $3,
             mac = $4,
-          wifi_ssid = $5,
-          wifi_ssid_5g = $6,
-          wifi_key = $7,
-          usuario = $8,
-          web_key = $9,
-          operador_email = $10,
-          imagem_url = COALESCE($12, imagem_url),
-          data_leitura = CURRENT_TIMESTAMP
-        WHERE gpon_sn = $11
+            wifi_ssid = $5,
+            wifi_ssid_5g = $6,
+            wifi_key = $7,
+            usuario = $8,
+            web_key = $9,
+            operador_email = $10,
+            imagem_url = COALESCE($12, imagem_url),
+            operacao = $13,
+            data_leitura = CURRENT_TIMESTAMP
+          WHERE gpon_sn = $11
       `;
       const updateValues = [
         finalFabricante,
@@ -1635,14 +1650,15 @@ app.post('/api/save-label', async (req: any, res: any) => {
         finalWebKey,
         operador || 'sistema',
         targetGpon,
-        zplUrl || imagem_url || null
+        zplUrl || imagem_url || null,
+        operacao || 'CTDI MATRIZ'
       ];
       await pool.query(updateQuery, updateValues);
       console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON alvo: ${targetGpon}`);
     } else {
       const insertQuery = `
-        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, imagem_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, imagem_url, operacao)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       `;
       if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -1653,15 +1669,16 @@ app.post('/api/save-label', async (req: any, res: any) => {
           normalizedModelo || 'N/A',
           cpe_sn || 'N/A',
           gpon_sn,
-        mac || 'N/A',
-        wifi_ssid || 'N/A',
-        resolvedWifiSsid5g,
-        wifi_key || 'N/A',
-        usuario || 'N/A',
-        resolvedWebKey || 'N/A',
-        operador || 'sistema',
-        zplUrl || imagem_url || null
-      ];
+          mac || 'N/A',
+          wifi_ssid || 'N/A',
+          resolvedWifiSsid5g,
+          wifi_key || 'N/A',
+          usuario || 'N/A',
+          resolvedWebKey || 'N/A',
+          operador || 'sistema',
+          zplUrl || imagem_url || null,
+          operacao || 'CTDI MATRIZ'
+        ];
       await pool.query(insertQuery, insertValues);
       console.log(`Dados salvos com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
     }
@@ -1817,7 +1834,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     }
 
     const userRes = await dbPool.query(
-      'SELECT email, role, operacao FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
+      'SELECT email, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
       [email.trim().toLowerCase(), senha]
     );
 
@@ -1829,8 +1846,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       
       // Salvar a sessão no banco com validade de 1 dia
       await dbPool.query(
-        "INSERT INTO sessoes_scan_onu (token, email, role, data_expiracao) VALUES ($1, $2, $3, NOW() + INTERVAL '1 day')",
-        [token, user.email, user.role]
+        "INSERT INTO sessoes_scan_onu (token, email, role, operacao, data_expiracao) VALUES ($1, $2, $3, $4, NOW() + INTERVAL '1 day')",
+        [token, user.email, user.role, user.operacao || 'CTDI MATRIZ']
       );
 
       return res.json({ 
@@ -1851,7 +1868,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 // Rota para cadastrar novos usuários (somente Admin)
 app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
-    const { email, senha, role, operacao } = req.body;
+    const { email, senha, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -1863,8 +1880,16 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
     }
 
     await dbPool.query(
-      'INSERT INTO usuarios_scan_onu (email, senha, role, operacao) VALUES ($1, $2, $3, $4)',
-      [email.trim().toLowerCase(), senha, role || 'operador', operacao || 'CTDI MATRIZ']
+      'INSERT INTO usuarios_scan_onu (email, senha, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [
+        email.trim().toLowerCase(), 
+        senha, 
+        role || 'operador', 
+        operacao || 'CTDI MATRIZ',
+        permitir_gpon !== undefined ? permitir_gpon : true,
+        permitir_reimpressao !== undefined ? permitir_reimpressao : true,
+        tecnologias_permitidas || 'IPTV,GPON,EMTA,STB'
+      ]
     );
 
     return res.json({ success: true, message: `Usuário ${email} cadastrado com sucesso!` });
@@ -1881,7 +1906,7 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
 // Rota para editar e resetar senhas de usuários (somente Admin)
 app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
-    const { id, email, senha, role, operacao } = req.body;
+    const { id, email, senha, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -1896,11 +1921,28 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
     let queryValues = [];
 
     if (senha && senha.trim() !== '') {
-      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3, operacao = $4 WHERE id = $5';
-      queryValues = [email.trim().toLowerCase(), senha.trim(), role, operacao || 'CTDI MATRIZ', id];
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3, operacao = $4, permitir_gpon = $5, permitir_reimpressao = $6, tecnologias_permitidas = $7 WHERE id = $8';
+      queryValues = [
+        email.trim().toLowerCase(),
+        senha.trim(),
+        role,
+        operacao || 'CTDI MATRIZ',
+        permitir_gpon !== undefined ? permitir_gpon : true,
+        permitir_reimpressao !== undefined ? permitir_reimpressao : true,
+        tecnologias_permitidas || 'IPTV,GPON,EMTA,STB',
+        id
+      ];
     } else {
-      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2, operacao = $3 WHERE id = $4';
-      queryValues = [email.trim().toLowerCase(), role, operacao || 'CTDI MATRIZ', id];
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2, operacao = $3, permitir_gpon = $4, permitir_reimpressao = $5, tecnologias_permitidas = $6 WHERE id = $7';
+      queryValues = [
+        email.trim().toLowerCase(),
+        role,
+        operacao || 'CTDI MATRIZ',
+        permitir_gpon !== undefined ? permitir_gpon : true,
+        permitir_reimpressao !== undefined ? permitir_reimpressao : true,
+        tecnologias_permitidas || 'IPTV,GPON,EMTA,STB',
+        id
+      ];
     }
 
     await dbPool.query(queryText, queryValues);
@@ -1919,14 +1961,14 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
 app.get('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) {
-      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'master', operacao: 'CTDI MATRIZ' }] });
+      return res.json({ success: true, users: [{ email: 'admin@scanonu.com', role: 'master', operacao: 'CTDI MATRIZ', permitir_gpon: true, permitir_reimpressao: true, tecnologias_permitidas: 'IPTV,GPON,EMTA,STB' }] });
     }
 
     if (req.user.role !== 'master' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
-    const usersRes = await dbPool.query('SELECT id, email, role, operacao FROM usuarios_scan_onu ORDER BY email ASC');
+    const usersRes = await dbPool.query('SELECT id, email, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas FROM usuarios_scan_onu ORDER BY email ASC');
     return res.json({ success: true, users: usersRes.rows });
 
   } catch (err: any) {
@@ -2587,8 +2629,8 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 
       try {
         const query = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, operacao)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
@@ -2600,6 +2642,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
             usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
             web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
             operador_email = EXCLUDED.operador_email,
+            operacao = EXCLUDED.operacao,
             data_leitura = CURRENT_TIMESTAMP
         `;
         const values = [
@@ -2613,7 +2656,8 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           reconciledWifiKey || wifi_key,
           usuario,
           reconciledWebKey || web_key,
-          operador_email
+          operador_email,
+          req.user.operacao || 'CTDI MATRIZ'
         ];
         await pool.query(query, values);
         successCount++;
@@ -2798,8 +2842,8 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
 
       try {
         const query = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, operacao)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
@@ -2811,6 +2855,7 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
             usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
             web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
             operador_email = EXCLUDED.operador_email,
+            operacao = EXCLUDED.operacao,
             data_leitura = CURRENT_TIMESTAMP
         `;
         const values = [
@@ -2824,7 +2869,8 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
           reconciledWifiKey || row.wifi_key || 'N/A',
           row.usuario || 'N/A',
           reconciledWebKey || row.web_key || 'N/A',
-          operatorEmail
+          operatorEmail,
+          req.user.operacao || 'CTDI MATRIZ'
         ];
         await pool.query(query, values);
         successCount++;

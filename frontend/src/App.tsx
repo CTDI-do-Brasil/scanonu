@@ -198,7 +198,7 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
 
 export default function App() {
   // Autenticação
-  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string } | null>(null);
   const [activeModule, setActiveModule] = useState<'selection' | 'gpon' | 'iptv'>('selection');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -209,11 +209,14 @@ export default function App() {
   // Administração
   const [adminTab, setAdminTab] = useState<'scan' | 'admin'>('scan');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string; operacao?: string }>>([]);
+  const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string }>>([]);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('operador');
   const [newOperacao, setNewOperacao] = useState('CTDI MATRIZ');
+  const [newPermitirGpon, setNewPermitirGpon] = useState(true);
+  const [newPermitirReimpressao, setNewPermitirReimpressao] = useState(true);
+  const [newTecnologiasPermitidas, setNewTecnologiasPermitidas] = useState<string[]>(['IPTV', 'GPON', 'EMTA', 'STB']);
   const [adminMessage, setAdminMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -221,11 +224,14 @@ export default function App() {
   const currentVersionRef = useRef<string | null>(null);
 
   // Estados para edição/reset de senha de usuários
-  const [editingUser, setEditingUser] = useState<{ id?: number; email: string; role: string; operacao?: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string } | null>(null);
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState('operador');
   const [editOperacao, setEditOperacao] = useState('CTDI MATRIZ');
+  const [editPermitirGpon, setEditPermitirGpon] = useState(true);
+  const [editPermitirReimpressao, setEditPermitirReimpressao] = useState(true);
+  const [editTecnologiasPermitidas, setEditTecnologiasPermitidas] = useState<string[]>(['IPTV', 'GPON', 'EMTA', 'STB']);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
   const [editUserError, setEditUserError] = useState<string | null>(null);
 
@@ -471,6 +477,28 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [activeModule, iptvTab]);
+
+  useEffect(() => {
+    if (user && activeModule === 'selection') {
+      const gponAllowed = user.role === 'master' || user.role === 'admin' || user.permitir_gpon !== false;
+      const iptvAllowed = user.role === 'master' || user.role === 'admin' || user.permitir_reimpressao !== false;
+      
+      if (gponAllowed && !iptvAllowed) {
+        setActiveModule('gpon');
+      } else if (!gponAllowed && iptvAllowed) {
+        setActiveModule('iptv');
+      }
+    }
+  }, [user, activeModule]);
+
+  useEffect(() => {
+    if (user && user.role !== 'master' && user.role !== 'admin') {
+      const allowed = user.tecnologias_permitidas ? user.tecnologias_permitidas.split(',') : ['IPTV', 'GPON', 'EMTA', 'STB'];
+      if (allowed.length > 0 && !allowed.includes(selectedTecnologia)) {
+        setSelectedTecnologia(allowed[0] as any);
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('scanonu_user');
@@ -794,7 +822,10 @@ export default function App() {
           email: newEmail,
           senha: newPassword,
           role: newRole,
-          operacao: newOperacao
+          operacao: newOperacao,
+          permitir_gpon: newPermitirGpon,
+          permitir_reimpressao: newPermitirReimpressao,
+          tecnologias_permitidas: newTecnologiasPermitidas.join(',')
         })
       });
       const result = await response.json();
@@ -804,6 +835,9 @@ export default function App() {
         setNewPassword('');
         setNewRole('operador');
         setNewOperacao('CTDI MATRIZ');
+        setNewPermitirGpon(true);
+        setNewPermitirReimpressao(true);
+        setNewTecnologiasPermitidas(['IPTV', 'GPON', 'EMTA', 'STB']);
         fetchUsers();
       } else {
         setAdminMessage({ type: 'error', text: result.error || 'Erro ao cadastrar usuário.' });
@@ -833,7 +867,10 @@ export default function App() {
           email: editEmail,
           senha: editPassword,
           role: editRole,
-          operacao: editOperacao
+          operacao: editOperacao,
+          permitir_gpon: editPermitirGpon,
+          permitir_reimpressao: editPermitirReimpressao,
+          tecnologias_permitidas: editTecnologiasPermitidas.join(',')
         })
       });
       const result = await response.json();
@@ -1329,7 +1366,8 @@ export default function App() {
                     body: JSON.stringify({
                       ...processedData,
                       operador: user?.email || 'admin@scanonu.com',
-                      overwrite: false
+                      overwrite: false,
+                      operacao: user?.operacao || 'CTDI MATRIZ'
                     })
                   });
                   const saveResult = await saveResponse.json();
@@ -1470,7 +1508,8 @@ export default function App() {
               body: JSON.stringify({
                 ...processedData,
                 operador: user?.email || 'admin@scanonu.com',
-                overwrite: false
+                overwrite: false,
+                operacao: user?.operacao || 'CTDI MATRIZ'
               })
             });
             const saveResult = await saveResponse.json();
@@ -2062,32 +2101,36 @@ export default function App() {
 
         <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl">
           {/* Módulo GPON */}
-          <button
-            onClick={() => setActiveModule('gpon')}
-            className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
-          >
-            <div className="bg-[#003865]/10 p-4 rounded-2xl group-hover:bg-[#003865]/20 transition-colors">
-              <Cpu className="w-12 h-12 text-[#003865]" />
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo GPON</h2>
-              <p className="text-sm text-slate-500 font-medium">Captura e Auditoria de ONUs</p>
-            </div>
-          </button>
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
+            <button
+              onClick={() => setActiveModule('gpon')}
+              className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
+            >
+              <div className="bg-[#003865]/10 p-4 rounded-2xl group-hover:bg-[#003865]/20 transition-colors">
+                <Cpu className="w-12 h-12 text-[#003865]" />
+              </div>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo GPON</h2>
+                <p className="text-sm text-slate-500 font-medium">Captura e Auditoria de ONUs</p>
+              </div>
+            </button>
+          )}
 
           {/* Módulo IPTV */}
-          <button
-            onClick={() => setActiveModule('iptv')}
-            className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-blue-500/20"
-          >
-            <div className="bg-blue-500/10 p-4 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
-              <Printer className="w-12 h-12 text-blue-600" />
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo Reimpressão</h2>
-              <p className="text-sm text-slate-500 font-medium">IPTV e Setup Box</p>
-            </div>
-          </button>
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_reimpressao !== false) && (
+            <button
+              onClick={() => setActiveModule('iptv')}
+              className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-blue-500/20"
+            >
+              <div className="bg-blue-500/10 p-4 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
+                <Printer className="w-12 h-12 text-blue-600" />
+              </div>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo Reimpressão</h2>
+                <p className="text-sm text-slate-500 font-medium">IPTV e Setup Box</p>
+              </div>
+            </button>
+          )}
         </div>
         
         <button 
@@ -2174,7 +2217,16 @@ export default function App() {
             const proxyRes = await fetch('/api/print-jobs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ zpl: fullZpl, targetStation: stationId })
+              body: JSON.stringify({ 
+                zpl: fullZpl, 
+                targetStation: stationId,
+                metadata: {
+                  operador: user?.email,
+                  operacao: user?.operacao,
+                  tecnologia: selectedTecnologia,
+                  modelo: selectedModel.nome_modelo
+                }
+              })
             });
             const proxyData = await proxyRes.json();
             
@@ -2201,7 +2253,13 @@ export default function App() {
             printerId: selectedPrinter,
             fieldsData,
             printSpeed,
-            printDarkness
+            printDarkness,
+            metadata: {
+              operador: user?.email,
+              operacao: user?.operacao,
+              tecnologia: selectedTecnologia,
+              modelo: selectedModel.nome_modelo
+            }
           })
         });
 
@@ -2266,24 +2324,30 @@ export default function App() {
                 
                 {/* Filtro de Tecnologia (Abas) */}
                 <div className="flex border-b border-slate-200 mb-6 bg-slate-50 rounded-xl p-1">
-                  {(['IPTV', 'GPON', 'EMTA', 'STB'] as const).map((tech) => (
-                    <button
-                      key={tech}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTecnologia(tech);
-                        setSelectedModel(null);
-                        setFieldsData({});
-                      }}
-                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all uppercase ${
-                        selectedTecnologia === tech
-                          ? 'bg-[#003865] text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80'
-                      }`}
-                    >
-                      {tech}
-                    </button>
-                  ))}
+                  {(['IPTV', 'GPON', 'EMTA', 'STB'] as const)
+                    .filter((tech) => {
+                      if (!user || user.role === 'master' || user.role === 'admin') return true;
+                      const allowed = user.tecnologias_permitidas ? user.tecnologias_permitidas.split(',') : ['IPTV', 'GPON', 'EMTA', 'STB'];
+                      return allowed.includes(tech);
+                    })
+                    .map((tech) => (
+                      <button
+                        key={tech}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTecnologia(tech);
+                          setSelectedModel(null);
+                          setFieldsData({});
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all uppercase ${
+                          selectedTecnologia === tech
+                            ? 'bg-[#003865] text-white shadow-sm'
+                            : 'text-slate-500 hover:text-[#003865]'
+                        }`}
+                      >
+                        {tech}
+                      </button>
+                    ))}
                 </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -3447,6 +3511,55 @@ export default function App() {
                       </select>
                     </div>
 
+                    <div className="space-y-2 border-t border-slate-100 pt-3">
+                      <label className="text-[10px] font-bold text-[#003865] uppercase tracking-wide">Permissões de Módulo</label>
+                      <div className="flex flex-col gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={newPermitirGpon}
+                            onChange={(e) => setNewPermitirGpon(e.target.checked)}
+                            className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                          />
+                          <span>Acesso ao Módulo GPON</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={newPermitirReimpressao}
+                            onChange={(e) => setNewPermitirReimpressao(e.target.checked)}
+                            className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                          />
+                          <span>Acesso ao Módulo Reimpressão</span>
+                        </label>
+                      </div>
+
+                      {newPermitirReimpressao && (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                          <label className="text-[9px] font-bold text-slate-400 uppercase">Tecnologias na Reimpressão</label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(['IPTV', 'GPON', 'EMTA', 'STB'] as const).map((tech) => (
+                              <label key={tech} className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  checked={newTecnologiasPermitidas.includes(tech)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setNewTecnologiasPermitidas([...newTecnologiasPermitidas, tech]);
+                                    } else {
+                                      setNewTecnologiasPermitidas(newTecnologiasPermitidas.filter(t => t !== tech));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                                />
+                                <span>{tech}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <button 
                       type="submit"
                       disabled={isCreatingUser}
@@ -3503,6 +3616,9 @@ export default function App() {
                                 setEditPassword('');
                                 setEditRole(usr.role);
                                 setEditOperacao(usr.operacao || 'CTDI MATRIZ');
+                                setEditPermitirGpon(usr.permitir_gpon !== undefined ? usr.permitir_gpon : true);
+                                setEditPermitirReimpressao(usr.permitir_reimpressao !== undefined ? usr.permitir_reimpressao : true);
+                                setEditTecnologiasPermitidas(usr.tecnologias_permitidas ? usr.tecnologias_permitidas.split(',') : ['IPTV', 'GPON', 'EMTA', 'STB']);
                                 setEditUserError(null);
                               }}
                               className="text-slate-400 hover:text-[#003865] p-1 rounded-md hover:bg-slate-100 transition-all"
@@ -4213,7 +4329,8 @@ export default function App() {
                             body: JSON.stringify({
                               ...data,
                               operador: user?.email || 'admin@scanonu.com',
-                              overwrite: equipmentExistsInDb // Se já existe, envia para sobrescrever
+                              overwrite: equipmentExistsInDb, // Se já existe, envia para sobrescrever
+                              operacao: user?.operacao || 'CTDI MATRIZ'
                             })
                           });
                           const result = await response.json();
@@ -4542,6 +4659,55 @@ export default function App() {
                 <option value="CTDI MATRIZ">CTDI MATRIZ (db-scanonu)</option>
                 <option value="CTDI OPERAÇÃO GLP">CTDI OPERAÇÃO GLP (ScanONU_Claro)</option>
               </select>
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <label className="text-[10px] font-bold text-[#003865] uppercase tracking-wide">Permissões de Módulo</label>
+              <div className="flex flex-col gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={editPermitirGpon}
+                    onChange={(e) => setEditPermitirGpon(e.target.checked)}
+                    className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                  />
+                  <span>Acesso ao Módulo GPON</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={editPermitirReimpressao}
+                    onChange={(e) => setEditPermitirReimpressao(e.target.checked)}
+                    className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                  />
+                  <span>Acesso ao Módulo Reimpressão</span>
+                </label>
+              </div>
+
+              {editPermitirReimpressao && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase">Tecnologias na Reimpressão</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(['IPTV', 'GPON', 'EMTA', 'STB'] as const).map((tech) => (
+                      <label key={tech} className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          checked={editTecnologiasPermitidas.includes(tech)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditTecnologiasPermitidas([...editTecnologiasPermitidas, tech]);
+                            } else {
+                              setEditTecnologiasPermitidas(editTecnologiasPermitidas.filter(t => t !== tech));
+                            }
+                          }}
+                          className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                        />
+                        <span>{tech}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2">
