@@ -2138,6 +2138,14 @@ export default function App() {
           alert(`O campo ${config.label} não pode ter mais de ${config.maxLength} caracteres. (Atual: ${val.length})`);
           return;
         }
+        if (config.prefix) {
+          const cleanVal = val.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          const cleanPrefix = config.prefix.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          if (!cleanVal.startsWith(cleanPrefix)) {
+            alert(`O campo ${config.label} deve começar com "${config.prefix}". (Valor digitado: "${val}")`);
+            return;
+          }
+        }
       }
 
       setIsPrinting(true);
@@ -2361,21 +2369,35 @@ export default function App() {
                       if (idxB !== -1) return 1;
                       return 0; // Ordenação estável: preserva a ordem relativa original do JSON
                     })
-                    .map(([key, config]: [string, any]) => (
-                      <div key={key}>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          {config.label}
-                        </label>
-                        <input
-                          type="text"
-                          value={fieldsData[key] || ''}
-                          onChange={(e) => handleFieldChange(key, e.target.value)}
-                          placeholder="Biper com o scanner ou digite..."
-                          className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono focus:border-[#003865] focus:ring-0 transition-colors"
-                          maxLength={config.maxLength}
-                        />
-                      </div>
-                    ));
+                    .map(([key, config]: [string, any]) => {
+                      const val = fieldsData[key] || '';
+                      const hasPrefixError = val && config.prefix && !val.replace(/[^A-Za-z0-9]/g, '').toUpperCase().startsWith(config.prefix.replace(/[^A-Za-z0-9]/g, '').toUpperCase());
+                      
+                      return (
+                        <div key={key}>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">
+                            {config.label}
+                          </label>
+                          <input
+                            type="text"
+                            value={val}
+                            onChange={(e) => handleFieldChange(key, e.target.value)}
+                            placeholder="Biper com o scanner ou digite..."
+                            className={`w-full bg-white border-2 rounded-xl px-4 py-3 text-slate-800 font-mono focus:ring-0 transition-colors ${
+                              hasPrefixError 
+                                ? 'border-red-500 focus:border-red-500 text-red-700' 
+                                : 'border-slate-200 focus:border-[#003865]'
+                            }`}
+                            maxLength={config.maxLength}
+                          />
+                          {hasPrefixError && (
+                            <p className="text-red-500 text-xs mt-1 font-semibold">
+                              Atenção: O código deve começar com "{config.prefix}"
+                            </p>
+                          )}
+                        </div>
+                      );
+                    });
                 })()}
 
                 <button
