@@ -435,11 +435,15 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
 
   // Garantir coluna operacao se não existir e colunas de permissão
   try {
-    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
-    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS permitir_gpon BOOLEAN DEFAULT TRUE");
-    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS permitir_reimpressao BOOLEAN DEFAULT TRUE");
-    await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'");
-  } catch (e) {}
+    const checkCols = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='usuarios_scan_onu'");
+    const cols = checkCols.rows.map(r => r.column_name);
+    if (!cols.includes('operacao')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+    if (!cols.includes('permitir_gpon')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_gpon BOOLEAN DEFAULT TRUE");
+    if (!cols.includes('permitir_reimpressao')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_reimpressao BOOLEAN DEFAULT TRUE");
+    if (!cols.includes('tecnologias_permitidas')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'");
+  } catch (e) {
+    console.error('Erro ao adicionar colunas em usuarios_scan_onu:', e);
+  }
 
   // Criar tabela de sessões
   const createSessionsTableQuery = `
@@ -456,9 +460,17 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
 
   // Garantir operacao nas sessoes e etiquetas
   try {
-    await pool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
-    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
-  } catch (e) {}
+    const checkSess = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='sessoes_scan_onu'");
+    if (!checkSess.rows.some(r => r.column_name === 'operacao')) {
+      await pool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+    }
+    const checkEtiq = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
+    if (!checkEtiq.rows.some(r => r.column_name === 'operacao')) {
+      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+    }
+  } catch (e) {
+    console.error('Erro ao adicionar operacao nas tabelas:', e);
+  }
 
   // Criar tabela de impressoras
   const createPrintersTableQuery = `
@@ -656,8 +668,15 @@ async function connectToDatabase() {
 
       // Garantir coluna operacao se não existir
       try {
-        await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN IF NOT EXISTS operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
-      } catch (e) {}
+        const checkCols = await dbPool.query("SELECT column_name FROM information_schema.columns WHERE table_name='usuarios_scan_onu'");
+        const cols = checkCols.rows.map(r => r.column_name);
+        if (!cols.includes('operacao')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+        if (!cols.includes('permitir_gpon')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_gpon BOOLEAN DEFAULT TRUE");
+        if (!cols.includes('permitir_reimpressao')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_reimpressao BOOLEAN DEFAULT TRUE");
+        if (!cols.includes('tecnologias_permitidas')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'");
+      } catch (e) {
+        console.error('Erro ao adicionar colunas em usuarios_scan_onu (initDb):', e);
+      }
 
       // Criar a tabela de sessões
       const createSessionsTableQuery = `
@@ -665,11 +684,22 @@ async function connectToDatabase() {
           token VARCHAR(100) PRIMARY KEY,
           email VARCHAR(150) NOT NULL,
           role VARCHAR(50) NOT NULL,
+          operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ',
           data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           data_expiracao TIMESTAMP NOT NULL
         );
       `;
       await dbPool.query(createSessionsTableQuery);
+      
+      // Garantir operacao nas sessoes
+      try {
+        const checkSess = await dbPool.query("SELECT column_name FROM information_schema.columns WHERE table_name='sessoes_scan_onu'");
+        if (!checkSess.rows.some(r => r.column_name === 'operacao')) {
+          await dbPool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+        }
+      } catch (e) {
+        console.error('Erro ao adicionar operacao em sessoes_scan_onu:', e);
+      }
 
       // Criar tabela de impressoras
       const createPrintersTableQuery = `
