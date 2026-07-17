@@ -691,14 +691,18 @@ async function connectToDatabase() {
       `;
       await dbPool.query(createSessionsTableQuery);
       
-      // Garantir operacao nas sessoes
+      // Garantir operacao nas sessoes e etiquetas
       try {
         const checkSess = await dbPool.query("SELECT column_name FROM information_schema.columns WHERE table_name='sessoes_scan_onu'");
         if (!checkSess.rows.some(r => r.column_name === 'operacao')) {
           await dbPool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
         }
+        const checkEtiq = await dbPool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
+        if (!checkEtiq.rows.some(r => r.column_name === 'operacao')) {
+          await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+        }
       } catch (e) {
-        console.error('Erro ao adicionar operacao em sessoes_scan_onu:', e);
+        console.error('Erro ao adicionar operacao nas tabelas (initDb):', e);
       }
 
       // Criar tabela de impressoras
