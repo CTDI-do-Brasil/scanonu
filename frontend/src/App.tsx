@@ -2812,12 +2812,12 @@ export default function App() {
             {/* Sidebar Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
               <div className="flex items-center gap-2.5">
-                <div className="bg-white text-[#003865] p-1.5 rounded-lg">
+                <div className="bg-white text-[#003865] p-1.5 rounded-lg shadow-sm">
                   <Cpu className="w-5 h-5" />
                 </div>
                 <span className="font-extrabold text-lg tracking-tight">SMART SCAN</span>
                 <div className="h-6 w-px bg-white/20 mx-1"></div>
-                <div className="bg-white rounded p-0.5 shadow-sm">
+                <div className="bg-white/95 rounded-lg p-1 shadow-inner border border-white/20 flex items-center justify-center">
                   <img src={logoCtdi} alt="CTDI" className="h-4 w-auto object-contain" />
                 </div>
               </div>
@@ -2837,10 +2837,10 @@ export default function App() {
                   setAdminTab('scan');
                   setSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
                   adminTab === 'scan'
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Camera className="w-4 h-4" />
@@ -2855,10 +2855,10 @@ export default function App() {
                   setAdminSubTab('metrics');
                   setSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
                   adminTab === 'admin' && adminSubTab === 'metrics'
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                 }`}
               >
                 <BarChart3 className="w-4 h-4" />
@@ -2873,10 +2873,10 @@ export default function App() {
                   setAdminSubTab('export');
                   setSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
                   adminTab === 'admin' && adminSubTab === 'export'
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Search className="w-4 h-4" />
@@ -2890,10 +2890,10 @@ export default function App() {
                   setAdminSubTab('users');
                   setSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
                   adminTab === 'admin' && adminSubTab === 'users'
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -2907,10 +2907,10 @@ export default function App() {
                   setAdminSubTab('printers');
                   setSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
                   adminTab === 'admin' && adminSubTab === 'printers'
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                 }`}
               >
                 <Printer className="w-4 h-4" />
@@ -2920,32 +2920,18 @@ export default function App() {
 
               {user?.role === 'master' && (
               <button
-                onClick={() => setAdminSubTab('iptv-models')}
-                className={`flex-1 text-center py-2 text-xs font-bold rounded-lg transition-all ${
-                  adminSubTab === 'iptv-models'
-                    ? 'bg-white text-[#003865] shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Modelos IPTV
-              </button>
-              )}
-
-
-              {user?.role === 'master' && (
-              <button
                 onClick={() => {
                   setAdminTab('admin');
                   setAdminSubTab('iptv-models');
                   setSidebarOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
                   adminTab === 'admin' && adminSubTab === 'iptv-models'
-                    ? 'bg-white/15 text-white shadow-sm'
-                    : 'text-blue-100/75 hover:bg-white/5 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                 }`}
               >
-                <Printer className="w-4 h-4" />
+                <MonitorPlay className="w-4 h-4" />
                 Modelos IPTV
               </button>
               )}
