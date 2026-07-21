@@ -1246,27 +1246,74 @@ export default function App() {
     setScreen('idle');
   };
 
+  const compressImageForUpload = (dataUrl: string, maxDim = 1600, quality = 0.85): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch (e) {
+            resolve(dataUrl);
+          }
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
   const capturePhoto = () => {
     if (videoRef.current) {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
       
-      // Garantir dimensões válidas maiores que zero
-      const w = video.videoWidth;
-      const h = video.videoHeight;
-      canvas.width = w > 0 ? w : 1280;
-      canvas.height = h > 0 ? h : 720;
+      let rawW = video.videoWidth || 1280;
+      let rawH = video.videoHeight || 720;
+      
+      const maxDim = 1600;
+      let width = rawW;
+      let height = rawH;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
         try {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(video, 0, 0, width, height);
           
           let base64 = '';
           try {
-            base64 = canvas.toDataURL('image/jpeg', 1.0);
+            base64 = canvas.toDataURL('image/jpeg', 0.85);
           } catch (e) {
-            // Fallback para image/png se o Safari der erro de padrão de string
             base64 = canvas.toDataURL('image/png');
           }
           
@@ -1308,8 +1355,9 @@ export default function App() {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-        setCapturedImage(base64);
-        await processImage(base64);
+        const compressedBase64 = await compressImageForUpload(base64);
+        setCapturedImage(compressedBase64);
+        await processImage(compressedBase64);
       } else {
         // Fluxo de processamento em Lote (Batch)
         setScreen('idle');
@@ -2972,7 +3020,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.6</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.7</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
