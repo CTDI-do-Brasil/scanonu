@@ -229,12 +229,12 @@ Regras de Conversão:
 ZPL Bruto:
 ${rawZpl}`;
 
-    let response;
+    let response: any;
     // Tentar rodar com o modelo padrão disponível (gemini-1.5-flash ou gemini-2.0-flash)
     for (const modelName of ['gemini-1.5-flash', 'gemini-2.0-flash']) {
       try {
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout de 25s excedido no modelo ' + modelName)), 25000)
+          setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
         );
         response = await Promise.race([
           ai.models.generateContent({
@@ -247,47 +247,25 @@ ${rawZpl}`;
                 properties: {
                   codigo_zpl: { type: Type.STRING },
                   campos: {
-                    type: Type.OBJECT,
-                    additionalProperties: { type: Type.STRING }
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        key: { type: Type.STRING, description: "Nome curto da variável usada no ZPL (sem chaves e sem cifrão). Ex: 'sn', 'mac', 'caid'" },
+                        label: { type: Type.STRING, description: "Label legível de exibição. Ex: 'S/N:', 'MAC:', 'CAID:'" },
+                        minLength: { type: Type.INTEGER, description: "Comprimento mínimo do campo" },
+                        maxLength: { type: Type.INTEGER, description: "Comprimento máximo do campo" }
+                      },
+                      required: ['key', 'label', 'minLength', 'maxLength']
+                    }
                   }
                 },
-                required: ['codigo_zpl']
+                required: ['codigo_zpl', 'campos']
               }
             }
           }),
           timeoutPromise
         ]);
-        break;
-      } catch (err: any) {
-        console.warn(`Erro no modelo ${modelName} ao gerar ZPL:`, err?.message || err);
-      }
-    }
-          model: modelName,
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                codigo_zpl: { type: Type.STRING },
-                campos: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      key: { type: Type.STRING, description: "Nome curto da variável usada no ZPL (sem chaves e sem cifrão). Ex: 'sn', 'mac', 'caid'" },
-                      label: { type: Type.STRING, description: "Label legível de exibição. Ex: 'S/N:', 'MAC:', 'CAID:'" },
-                      minLength: { type: Type.INTEGER, description: "Comprimento mínimo do campo" },
-                      maxLength: { type: Type.INTEGER, description: "Comprimento máximo do campo" }
-                    },
-                    required: ['key', 'label', 'minLength', 'maxLength']
-                  }
-                }
-              },
-              required: ['codigo_zpl', 'campos']
-            }
-          }
-        });
         if (response && response.text) break;
       } catch (err: any) {
         console.error(`Erro ao rodar Smart Import com ${modelName}:`, err.message);
@@ -1180,7 +1158,7 @@ DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
 * Validação por Contexto Cruzado:
   - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 dígitos hexadecimais (ex: '95C8'), compare com os últimos 4 dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
 
-    let response;
+    let response: any;
     const maxAttempts = 2;
     let lastError: any = null;
 
