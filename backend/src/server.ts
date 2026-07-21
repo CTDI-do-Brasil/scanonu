@@ -2970,6 +2970,45 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
 import fs from 'fs';
 import path from 'path';
 
+app.delete('/api/external/duplicates', async (req, res) => {
+  try {
+    const apiKeyHeader = req.headers['x-api-key'];
+    const expectedApiKey = process.env.EXTERNAL_API_KEY;
+
+    if (!expectedApiKey || expectedApiKey.trim() === '') {
+      return res.status(503).json({ success: false, error: 'EXTERNAL_API_KEY não configurada.' });
+    }
+
+    if (apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ success: false, error: 'Acesso negado. Chave inválida.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    const query = `
+      DELETE FROM etiquetas_scan_onu 
+      WHERE id IN (
+          SELECT id 
+          FROM (
+              SELECT id,
+                     ROW_NUMBER() OVER(PARTITION BY mac ORDER BY data_leitura DESC, id DESC) as rn
+              FROM etiquetas_scan_onu
+              WHERE mac IS NOT NULL AND mac != 'N/A' AND mac != ''
+          ) t
+          WHERE t.rn > 1
+      );
+    `;
+
+    const result = await dbPool.query(query);
+    res.json({ success: true, deletedCount: result.rowCount, message: 'Duplicatas removidas com sucesso.' });
+  } catch (err: any) {
+    console.error('Erro ao deletar duplicatas:', err);
+    res.status(500).json({ success: false, error: 'Erro interno no servidor ao tentar apagar duplicatas.' });
+  }
+});
+
 // Rota da API externa para consulta de unidades (ex: integração com C#)
 app.get('/api/external/units', async (req, res) => {
   try {
