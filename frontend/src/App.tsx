@@ -2825,32 +2825,32 @@ export default function App() {
           {/* Sidebar Drawer Container */}
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#003865] text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out md:static md:flex md:flex-col shadow-xl md:shadow-none`}>
             {/* Sidebar Header */}
-            <div className="flex flex-col px-6 py-6 border-b border-white/10 bg-gradient-to-b from-white/5 to-transparent relative">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-gradient-to-br from-[#00b4d8] to-[#0077b6] text-white p-2 rounded-xl shadow-lg shadow-[#00b4d8]/20 border border-white/10">
-                    <Cpu className="w-5 h-5" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-black text-lg tracking-tight whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">
-                      SMART SCAN
-                    </span>
-                    <span className="text-[9px] font-bold tracking-widest text-[#00b4d8] uppercase">
-                      Assistente de Campo
-                    </span>
-                  </div>
+            <div className="flex flex-col items-center justify-center px-6 pt-6 pb-5 border-b border-white/10 bg-gradient-to-b from-white/5 to-transparent relative">
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden text-white/75 hover:text-white p-1 absolute top-4 right-4"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Title & Icon Unit - Centered */}
+              <div className="flex items-center justify-center gap-3 w-full mb-4">
+                <div className="bg-gradient-to-br from-[#00b4d8] to-[#0077b6] text-white p-2.5 rounded-xl shadow-lg shadow-[#00b4d8]/20 border border-white/10 shrink-0">
+                  <Cpu className="w-6 h-6" />
                 </div>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="md:hidden text-white/75 hover:text-white p-1 absolute top-6 right-4"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex flex-col">
+                  <span className="font-black text-lg tracking-tight whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-blue-200">
+                    SMART SCAN
+                  </span>
+                  <span className="text-[9px] font-bold tracking-widest text-[#00b4d8] uppercase">
+                    Assistente de Campo
+                  </span>
+                </div>
               </div>
-              
-              {/* CTDI Logo */}
-              <div className="mt-6 flex justify-center items-center w-full py-2">
-                <img src={logoCtdiHq} alt="CTDI" className="h-9 w-auto object-contain drop-shadow-md" />
+
+              {/* CTDI Logo - Centered */}
+              <div className="flex justify-center items-center w-full pt-1">
+                <img src={logoCtdiHq} alt="CTDI" className="h-8 w-auto object-contain drop-shadow-md" />
               </div>
             </div>
 
@@ -2972,7 +2972,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.4</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.5</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
