@@ -2361,8 +2361,9 @@ export default function App() {
               >
                 Imprimir Etiqueta
               </button>
+              {(user?.role === 'admin' || user?.role === 'master') && (
               <button
-                onClick={() => setIptvTab('models')}
+                onClick={() => {setIptvTab('models')}}
                 className={`py-3 px-6 font-bold text-sm border-b-2 transition-all ${
                   iptvTab === 'models' ? 'border-[#003865] text-[#003865]' : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
@@ -2854,7 +2855,7 @@ export default function App() {
               )}
 
               <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mt-6 mb-2">Painel Administrativo</div>
-              {user?.role !== 'admin' && (
+              {(user?.role === 'admin' || user?.role === 'master') && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
@@ -2872,7 +2873,6 @@ export default function App() {
               </button>
             )}
 
-              {user?.role !== 'admin' && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
@@ -2888,8 +2888,8 @@ export default function App() {
                 <Search className="w-4 h-4" />
                 Consulta & Exportação
               </button>
-            )}
 
+              {(user?.role === 'admin' || user?.role === 'master') && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
@@ -2905,8 +2905,9 @@ export default function App() {
                 <Users className="w-4 h-4" />
                 Gerenciar Usuários
               </button>
+              )}
 
-              {user?.role !== 'admin' && (
+              {(user?.role === 'admin' || user?.role === 'master') && (
               <button
                 onClick={() => {
                   setAdminTab('admin');
