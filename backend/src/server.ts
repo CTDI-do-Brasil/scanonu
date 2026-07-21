@@ -1942,6 +1942,34 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
   }
 });
 
+// Rota para o próprio usuário alterar sua senha
+app.put('/api/user/password', authenticateSession, async (req: any, res: any) => {
+  try {
+    const { novaSenha } = req.body;
+    
+    if (!novaSenha || novaSenha.trim() === '') {
+      return res.status(400).json({ error: 'A nova senha não pode ser vazia.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(500).json({ error: 'Banco de dados não está conectado.' });
+    }
+
+    // req.user.email was set by authenticateSession
+    const email = req.user.email.trim().toLowerCase();
+
+    await dbPool.query(
+      'UPDATE usuarios_scan_onu SET senha = $1 WHERE email = $2',
+      [novaSenha.trim(), email]
+    );
+
+    return res.json({ success: true, message: 'Senha alterada com sucesso!' });
+  } catch (err: any) {
+    console.error('Erro ao alterar senha do usuário:', err);
+    return res.status(500).json({ error: 'Erro interno ao alterar senha.' });
+  }
+});
+
 // Rota para editar e resetar senhas de usuários (somente Admin)
 app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {

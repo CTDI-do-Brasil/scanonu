@@ -35,7 +35,8 @@ import {
   Plus,
   User,
   Lock,
-  Sparkles
+  Sparkles,
+  Key
 } from 'lucide-react';
 
 
@@ -209,6 +210,14 @@ export default function App() {
   // Administração
   const [adminTab, setAdminTab] = useState<'scan' | 'admin'>('scan');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Alteração de Senha do Próprio Usuário
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [userNewPassword, setUserNewPassword] = useState('');
+  const [userConfirmPassword, setUserConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState(false);
   const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string }>>([]);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -922,6 +931,48 @@ export default function App() {
       setPrinterError('Erro de conexão com o servidor.');
     } finally {
       setIsUpdatingPrinter(false);
+    }
+  };
+
+  const handleChangeUserPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userNewPassword !== userConfirmPassword) {
+      setChangePasswordError('As senhas não coincidem.');
+      return;
+    }
+    if (userNewPassword.length < 6) {
+      setChangePasswordError('A senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    
+    setIsChangingPassword(true);
+    setChangePasswordError(null);
+    try {
+      const response = await fetch('/api/user/password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        },
+        body: JSON.stringify({ novaSenha: userNewPassword })
+      });
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        setChangePasswordSuccess(true);
+        setTimeout(() => {
+          setIsChangePasswordModalOpen(false);
+          setChangePasswordSuccess(false);
+          setUserNewPassword('');
+          setUserConfirmPassword('');
+        }, 2000);
+      } else {
+        setChangePasswordError(result.error || 'Erro ao alterar senha.');
+      }
+    } catch (err) {
+      setChangePasswordError('Erro de conexão com o servidor.');
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -2914,10 +2965,17 @@ export default function App() {
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                  <button 
-                    onClick={openInNewTab}
-                    className="hidden md:flex text-blue-200/70 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-                    title="Abrir em Nova Aba"
+                                   <button
+                    onClick={() => setIsChangePasswordModalOpen(true)}
+                    className="text-blue-200 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                    title="Alterar Senha"
+                  >
+                    <Key className="w-4.5 h-4.5" />
+                  </button>
+                  <button
+                    onClick={() => setAdminTab(adminTab === 'admin' ? 'scan' : 'admin')}
+                    className="text-blue-200 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                    title={adminTab === 'admin' ? 'Voltar para Scan' : 'Painel Admin'}
                   >
                     <ExternalLink className="w-4.5 h-4.5" />
                   </button>
@@ -2960,20 +3018,29 @@ export default function App() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">{user?.email}</span>
-              <button 
-                onClick={openInNewTab}
-                className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors"
-                title="Abrir em Nova Aba"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={handleLogout}
-                className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors flex items-center gap-1 text-xs font-medium border border-transparent hover:border-red-100"
-                title="Sair"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex gap-1 ml-2">
+                <button 
+                  onClick={() => setIsChangePasswordModalOpen(true)}
+                  className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors"
+                  title="Alterar Senha"
+                >
+                  <Key className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setAdminTab(adminTab === 'admin' ? 'scan' : 'admin')}
+                  className="text-slate-500 hover:text-[#003865] p-2 rounded-full hover:bg-slate-100 transition-colors"
+                  title={adminTab === 'admin' ? 'Voltar para Scan' : 'Painel Admin'}
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors"
+                  title="Sair"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -4727,6 +4794,108 @@ export default function App() {
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
                   <span>Salvar</span>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: ALTERAR SENHA DO USUÁRIO LOGADO */}
+      {isChangePasswordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <form 
+            onSubmit={handleChangeUserPassword}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-scaleIn"
+          >
+            <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-[#003865]">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">Alterar Senha</h3>
+                <p className="text-xs text-slate-500">Mude sua senha de acesso</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {changePasswordError && (
+                <div className="p-3 bg-red-50 text-red-600 text-xs font-medium rounded-lg flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <p>{changePasswordError}</p>
+                </div>
+              )}
+              {changePasswordSuccess && (
+                <div className="p-3 bg-green-50 text-green-700 text-xs font-medium rounded-lg flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <p>Senha alterada com sucesso!</p>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={userNewPassword}
+                    onChange={(e) => setUserNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={isChangingPassword || changePasswordSuccess}
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#003865] transition-colors"
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Confirmar Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={userConfirmPassword}
+                    onChange={(e) => setUserConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={isChangingPassword || changePasswordSuccess}
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#003865] transition-colors"
+                    placeholder="Repita a nova senha"
+                  />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 flex items-center justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsChangePasswordModalOpen(false);
+                  setUserNewPassword('');
+                  setUserConfirmPassword('');
+                  setChangePasswordError(null);
+                }}
+                disabled={isChangingPassword}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isChangingPassword || changePasswordSuccess || userNewPassword.length < 6 || userNewPassword !== userConfirmPassword}
+                className="px-4 py-2 text-sm font-bold text-white bg-[#003865] hover:bg-[#002f55] rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isChangingPassword ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <span>Salvar Nova Senha</span>
                 )}
               </button>
             </div>
