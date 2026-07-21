@@ -2340,7 +2340,9 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-bold text-white">{user?.email}</p>
-              <p className="text-[10px] text-blue-200 uppercase tracking-wider">{user?.role}</p>
+              <p className="text-[10px] text-blue-200 uppercase tracking-wider">
+                {user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico - Consulta de dados' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'}
+              </p>
             </div>
           </div>
         </header>
@@ -2955,7 +2957,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Consulta' : 'Administrador'} • v1.3.7</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.3.7</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -3559,10 +3561,10 @@ export default function App() {
                         onChange={(e) => setNewRole(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
                       >
-                        <option value="operador">Operador (Apenas scanner)</option>
-                        <option value="admin">Administrador (Somente Gerenciar Usuários)</option>
-   <option value="master">Master (Acesso Total)</option>
-                        <option value="consulta">Consulta (Apenas relatórios)</option>
+                        <option value="operador">Operador - Smart Scan</option>
+                        <option value="admin">Administrador</option>
+   <option value="master">Master</option>
+                        <option value="consulta">Técnico - Consulta de dados</option>
                       </select>
                     </div>
 
@@ -3674,7 +3676,7 @@ export default function App() {
                                 ? 'bg-purple-50 text-purple-700 border border-purple-100'
                                 : 'bg-blue-50 text-[#003865] border border-blue-100'
                             }`}>
-                              {usr.role === 'master' ? 'Master' : usr.role === 'admin' ? 'Admin' : usr.role === 'consulta' ? 'Consulta' : 'Operador'}
+                              {usr.role === 'master' ? 'Master' : usr.role === 'admin' ? 'Admin' : usr.role === 'consulta' ? 'Técnico' : 'Operador - Smart Scan'}
                             </span>
                             <button
                               onClick={() => {
@@ -4709,10 +4711,10 @@ export default function App() {
                 onChange={(e) => setEditRole(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
               >
-                <option value="operador">Operador (Apenas scanner)</option>
-                <option value="admin">Administrador (Somente Gerenciar Usuários)</option>
-   <option value="master">Master (Acesso Total)</option>
-                <option value="consulta">Consulta (Apenas relatórios)</option>
+                <option value="operador">Operador - Smart Scan</option>
+                <option value="admin">Administrador</option>
+   <option value="master">Master</option>
+                <option value="consulta">Técnico - Consulta de dados</option>
               </select>
             </div>
 
