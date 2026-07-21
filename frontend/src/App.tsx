@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 // @ts-ignore
 import logoCtdi from './assets/logo-ctdi.png';
+import logoCtdiHq from './assets/logo-ctdi-hq.png';
 import {  
   Camera, 
   Upload, 
@@ -2847,8 +2848,8 @@ export default function App() {
               </div>
               
               {/* CTDI Logo */}
-              <div className="mt-6 flex justify-center items-center w-full bg-white/5 rounded-lg py-2.5 border border-white/10">
-                <img src={logoCtdi} alt="CTDI" className="h-5 w-auto object-contain drop-shadow-md brightness-0 invert opacity-90" />
+              <div className="mt-6 flex justify-center items-center w-full py-2">
+                <img src={logoCtdiHq} alt="CTDI" className="h-9 w-auto object-contain drop-shadow-md" />
               </div>
             </div>
 
@@ -2967,18 +2968,10 @@ export default function App() {
 
             {/* Sidebar User Profile Section */}
             <div className="p-4 border-t border-white/10 bg-[#002f55] relative overflow-hidden">
-              <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
-                <img src={logoCtdi} alt="" className="w-32 h-auto grayscale" />
-              </div>
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="bg-white/95 rounded p-0.5 shadow-inner border border-white/20 flex items-center justify-center h-5 w-auto">
-                      <img src={logoCtdi} alt="CTDI" className="h-3.5 w-auto object-contain" />
-                    </div>
-                  </div>
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.2</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.3</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
