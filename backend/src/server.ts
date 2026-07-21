@@ -1478,6 +1478,15 @@ app.post('/api/save-label', async (req: any, res: any) => {
       }
     }
 
+    if (isFast5670) {
+      if (wifi_key && wifi_key.toUpperCase() !== 'N/A' && wifi_key.trim().length !== 10) {
+        return res.status(400).json({ success: false, error: `Senha WIFI inválida para F@ST 5670. Esperado: 10 caracteres. Capturado: ${wifi_key.trim().length} (${wifi_key})` });
+      }
+      if (resolvedWebKey && resolvedWebKey.toUpperCase() !== 'N/A' && resolvedWebKey.trim().length !== 8) {
+        return res.status(400).json({ success: false, error: `Senha WEB inválida para F@ST 5670. Esperado: 8 caracteres. Capturado: ${resolvedWebKey.trim().length} (${resolvedWebKey})` });
+      }
+    }
+
     if (!dbConnected) {
       console.warn("PostgreSQL não está conectado. Simulando gravação com sucesso.");
       return res.json({ 
