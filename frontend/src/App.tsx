@@ -1173,8 +1173,9 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          width: { min: 1280, ideal: 4096, max: 4096 },
+          height: { min: 720, ideal: 2160, max: 2160 },
+          advanced: [{ focusMode: "continuous" }] as any
         },
         audio: false
       });
@@ -1253,7 +1254,7 @@ export default function App() {
           
           let base64 = '';
           try {
-            base64 = canvas.toDataURL('image/jpeg', 0.9);
+            base64 = canvas.toDataURL('image/jpeg', 1.0);
           } catch (e) {
             // Fallback para image/png se o Safari der erro de padrão de string
             base64 = canvas.toDataURL('image/png');
