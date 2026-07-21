@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 // @ts-ignore
 import logoCtdi from './assets/logo-ctdi.png';
+// @ts-ignore
 import logoCtdiHq from './assets/logo-ctdi-hq.png';
 import {  
   Camera, 
