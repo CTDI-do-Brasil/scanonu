@@ -230,10 +230,38 @@ ZPL Bruto:
 ${rawZpl}`;
 
     let response;
-    // Tentar rodar com o modelo padrão disponível
-    for (const modelName of ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']) {
+    // Tentar rodar com o modelo padrão disponível (gemini-1.5-flash ou gemini-2.0-flash)
+    for (const modelName of ['gemini-1.5-flash', 'gemini-2.0-flash']) {
       try {
-        response = await ai.models.generateContent({
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout de 25s excedido no modelo ' + modelName)), 25000)
+        );
+        response = await Promise.race([
+          ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  codigo_zpl: { type: Type.STRING },
+                  campos: {
+                    type: Type.OBJECT,
+                    additionalProperties: { type: Type.STRING }
+                  }
+                },
+                required: ['codigo_zpl']
+              }
+            }
+          }),
+          timeoutPromise
+        ]);
+        break;
+      } catch (err: any) {
+        console.warn(`Erro no modelo ${modelName} ao gerar ZPL:`, err?.message || err);
+      }
+    }
           model: modelName,
           contents: prompt,
           config: {
@@ -1156,43 +1184,51 @@ DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
     const maxAttempts = 2;
     let lastError: any = null;
 
-    // Tentamos os modelos mais recentes e estáveis em sequência: gemini-2.5-flash, gemini-3.5-flash e depois gemini-3.1-flash-lite
-    for (const modelName of ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']) {
+    // Tentamos os modelos mais recentes e estáveis em sequência: gemini-1.5-flash e gemini-2.0-flash
+    for (const modelName of ['gemini-1.5-flash', 'gemini-2.0-flash']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: base64Data
-                }
-              },
-              prompt
-            ],
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  fabricante: { type: Type.STRING },
-                  modelo: { type: Type.STRING },
-                  cpe_sn: { type: Type.STRING },
-                  gpon_sn: { type: Type.STRING },
-                  mac: { type: Type.STRING },
-                  wifi_ssid: { type: Type.STRING },
-                  wifi_ssid_5g: { type: Type.STRING },
-                  wifi_key: { type: Type.STRING },
-                  usuario: { type: Type.STRING },
-                  web_key: { type: Type.STRING },
-                  reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
+          
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
+          );
+
+          response = await Promise.race([
+            ai.models.generateContent({
+              model: modelName,
+              contents: [
+                {
+                  inlineData: {
+                    mimeType: mimeType,
+                    data: base64Data
+                  }
                 },
-                required: ['gpon_sn']
+                prompt
+              ],
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    fabricante: { type: Type.STRING },
+                    modelo: { type: Type.STRING },
+                    cpe_sn: { type: Type.STRING },
+                    gpon_sn: { type: Type.STRING },
+                    mac: { type: Type.STRING },
+                    wifi_ssid: { type: Type.STRING },
+                    wifi_ssid_5g: { type: Type.STRING },
+                    wifi_key: { type: Type.STRING },
+                    usuario: { type: Type.STRING },
+                    web_key: { type: Type.STRING },
+                    reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
+                  },
+                  required: ['gpon_sn']
+                }
               }
-            }
-          });
+            }),
+            timeoutPromise
+          ]);
           scanSource = `gemini-vision (${modelName})`;
           break;
         } catch (err: any) {
