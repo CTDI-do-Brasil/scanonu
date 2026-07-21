@@ -3230,25 +3230,29 @@ export default function App() {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Inicial</label>
-                    <input 
-                      type="date" 
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                    />
-                  </div>
+                  {user?.role !== 'consulta' && (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Inicial</label>
+                        <input 
+                          type="date" 
+                          value={filterStartDate}
+                          onChange={(e) => setFilterStartDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                        />
+                      </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Final</label>
-                    <input 
-                      type="date" 
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
-                    />
-                  </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Final</label>
+                        <input 
+                          type="date" 
+                          value={filterEndDate}
+                          onChange={(e) => setFilterEndDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Botões de Ação do Filtro */}
@@ -3264,7 +3268,7 @@ export default function App() {
                     }}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all"
                   >
-                    Limpar
+                    Nova Consulta
                   </button>
                   <button
                     onClick={handleSearchLabels}
@@ -3274,6 +3278,7 @@ export default function App() {
                     {isQuerying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                     <span>Buscar no Banco</span>
                   </button>
+                  {user?.role !== 'consulta' && (
                   <button
                     onClick={handleExportExcel}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-750 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
@@ -3281,6 +3286,7 @@ export default function App() {
                     <Download className="w-4 h-4" />
                     <span>Baixar Planilha Excel (XLSX)</span>
                   </button>
+                  )}
                 </div>
               </div>
 
