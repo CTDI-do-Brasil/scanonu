@@ -1011,8 +1011,13 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'BCSKV630';
   }
 
+  // ZTE ZXHN F680
+  if (modelClean.includes('F680') || modelClean.includes('680')) {
+    return 'ZXHN F680';
+  }
+
   // ZTE ZXHN F6600P
-  if (modelClean.includes('F6600') || modelClean.includes('6600P') || modelClean.includes('6600') || modelClean.includes('ZXHN')) {
+  if (modelClean.includes('F6600') || modelClean.includes('6600P') || modelClean.includes('6600')) {
     return 'ZXHN F6600P';
   }
 
