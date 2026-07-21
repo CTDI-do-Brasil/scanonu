@@ -2989,11 +2989,11 @@ app.delete('/api/external/duplicates', async (req, res) => {
 
     const query = `
       DELETE FROM etiquetas_scan_onu 
-      WHERE id IN (
-          SELECT id 
+      WHERE gpon_sn IN (
+          SELECT gpon_sn 
           FROM (
-              SELECT id,
-                     ROW_NUMBER() OVER(PARTITION BY mac ORDER BY data_leitura DESC, id DESC) as rn
+              SELECT gpon_sn,
+                     ROW_NUMBER() OVER(PARTITION BY mac ORDER BY data_leitura DESC) as rn
               FROM etiquetas_scan_onu
               WHERE mac IS NOT NULL AND mac != 'N/A' AND mac != ''
           ) t
