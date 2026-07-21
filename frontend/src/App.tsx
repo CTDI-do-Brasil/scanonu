@@ -1173,9 +1173,8 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { min: 1280, ideal: 4096, max: 4096 },
-          height: { min: 720, ideal: 2160, max: 2160 },
-          advanced: [{ focusMode: "continuous" }] as any
+          width: { ideal: 4096 },
+          height: { ideal: 2160 }
         },
         audio: false
       });
@@ -1195,9 +1194,29 @@ export default function App() {
         // Aplica um zoom de 2.5x por padrão (ou o máximo se for menor que 2.5)
         const targetZoom = Math.min(2.5, capabilities.zoom.max || 1);
         setZoomLevel(targetZoom);
-        await videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
+        
+        try {
+          await videoTrack.applyConstraints({
+            advanced: [
+              { zoom: targetZoom },
+              { focusMode: "continuous" }
+            ]
+          } as any);
+        } catch (constraintErr) {
+          console.warn('Algumas restrições avançadas não são suportadas:', constraintErr);
+          // Fallback just for zoom if the combined constraint fails
+          try {
+            await videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
+          } catch (zoomErr) {
+            console.warn('Zoom não suportado:', zoomErr);
+          }
+        }
       } else {
         setIsZoomSupported(false);
+        // Tenta aplicar focusMode mesmo se zoom não for suportado
+        try {
+          await videoTrack.applyConstraints({ advanced: [{ focusMode: "continuous" }] } as any);
+        } catch(e) {}
       }
       
     } catch (err: any) {
