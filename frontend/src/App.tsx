@@ -38,7 +38,9 @@ import {
   User,
   Lock,
   Sparkles,
-  Key
+  Key,
+  Barcode,
+  Scan
 } from 'lucide-react';
 
 
@@ -255,6 +257,7 @@ export default function App() {
 
   // Filtros de Exportação
   const [filterSearch, setFilterSearch] = useState('');
+  const [scanMode, setScanMode] = useState<'full' | 'sn_mac'>('full');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -3084,7 +3087,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.2</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.3</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4272,11 +4275,19 @@ export default function App() {
                 {/* Botões de Ação */}
                 <div className="space-y-3">
                   <button 
-                    onClick={startCamera}
+                    onClick={() => { setScanMode('full'); startCamera(); }}
                     className="w-full bg-[#003865] hover:bg-[#004e8c] active:bg-[#002340] text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-900/10 transition-all"
                   >
                     <Camera className="w-5 h-5" />
                     <span>Tirar Foto (Câmera)</span>
+                  </button>
+
+                  <button 
+                    onClick={() => { setScanMode('sn_mac'); startCamera(); }}
+                    className="w-full bg-gradient-to-r from-[#00b4d8] to-[#0077b6] hover:from-[#0096c7] hover:to-[#005f73] active:scale-[0.99] text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00b4d8]/20 transition-all"
+                  >
+                    <Barcode className="w-5 h-5" />
+                    <span>Escanear SN e MAC</span>
                   </button>
 
                   <button 
@@ -4340,7 +4351,16 @@ export default function App() {
               <div className="fixed inset-0 bg-black z-50 flex flex-col justify-between max-w-md mx-auto">
                 {/* Header da Câmera */}
                 <div className="p-4 flex justify-between items-center bg-black/40 backdrop-blur-sm z-10">
-                  <span className="text-white font-medium text-sm">Escaneando etiqueta...</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-medium text-sm">
+                      {scanMode === 'sn_mac' ? 'Escaneando SN & MAC...' : 'Escaneando etiqueta...'}
+                    </span>
+                    {scanMode === 'sn_mac' && (
+                      <span className="bg-[#00b4d8]/20 text-[#00b4d8] border border-[#00b4d8]/40 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        Modo Rápido
+                      </span>
+                    )}
+                  </div>
                   <button 
                     onClick={cancelCamera}
                     className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-full text-xs font-semibold backdrop-blur transition-all"
@@ -4367,8 +4387,8 @@ export default function App() {
                     <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
                     <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
                     
-                    <span className="text-white/40 text-[10px] uppercase tracking-wider font-bold mt-auto pb-2">
-                      Alinhe a etiqueta da ONU aqui
+                    <span className="text-white/70 text-[10px] uppercase tracking-wider font-bold mt-auto pb-2 text-center">
+                      {scanMode === 'sn_mac' ? 'Alinhe os códigos de barra (SN e MAC) aqui' : 'Alinhe a etiqueta da ONU aqui'}
                     </span>
                   </div>
 
