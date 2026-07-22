@@ -1370,6 +1370,11 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE (cpe_sn = $1 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $2 AND mac <> \'N/A\')',
             [scanResult.cpe_sn, scanResult.mac]
           );
+        } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
+          checkRes = await dbPool.query(
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE mac = $1',
+            [scanResult.mac]
+          );
         } else if (scanResult.wifi_ssid && scanResult.wifi_ssid.toUpperCase() !== 'N/A' && scanResult.wifi_ssid.toUpperCase() !== 'NA') {
             checkRes = await dbPool.query(
               'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
@@ -1381,6 +1386,9 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
               );
               const matchingRows = candidatesRes.rows.filter((row: any) => {
                 const normModel = row.modelo ? row.modelo.toUpperCase() : '';
+                if (normModelo && normModel && !normModel.includes(normModelo.toUpperCase()) && !normModelo.toUpperCase().includes(normModel)) {
+                  return false;
+                }
                 const isFast5670 = normModel.includes('5670');
                 if (isFast5670) {
                   return matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid);
@@ -1399,12 +1407,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
                 }
               });
 
-              if (matchingRows.length > 1) {
-                return res.json({
-                  success: false,
-                  error: 'Separe esta unidade e entregue para o seu Líder'
-                });
-              } else if (matchingRows.length === 1) {
+              if (matchingRows.length === 1) {
                 checkRes.rows = [matchingRows[0]];
                 checkRes.rowCount = 1;
               }
@@ -1622,6 +1625,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
       );
       const matchingRows = candidatesRes.rows.filter((row: any) => {
           const normModel = row.modelo ? row.modelo.toUpperCase() : '';
+          const normScanModelo = modelo ? modelo.toUpperCase() : '';
+          if (normScanModelo && normModel && !normModel.includes(normScanModelo) && !normScanModelo.includes(normModel)) {
+            return false;
+          }
           const isFast5670 = normModel.includes('5670');
           if (isFast5670) {
             return matchMacAndSsidSuffix(row.mac, wifi_ssid);
@@ -1640,11 +1647,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           }
         });
 
-        if (matchingRows.length > 1) {
-          return res.status(400).json({
-            error: 'Separe esta unidade e entregue para o seu Líder'
-          });
-        } else if (matchingRows.length === 1) {
+        if (matchingRows.length === 1) {
           const matchedRow = matchingRows[0];
           reconciledGpon = matchedRow.gpon_sn;
           reconciledMac = matchedRow.mac;
