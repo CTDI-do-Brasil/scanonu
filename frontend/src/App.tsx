@@ -444,6 +444,7 @@ export default function App() {
 
   // Referências para Stream da Câmera
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const reticleRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const processingFilesRef = useRef(false);
@@ -1284,14 +1285,70 @@ export default function App() {
   const capturePhoto = () => {
     if (videoRef.current) {
       const video = videoRef.current;
-      const canvas = document.createElement('canvas');
+      const vW = video.videoWidth || 1280;
+      const vH = video.videoHeight || 720;
       
-      let rawW = video.videoWidth || 1280;
-      let rawH = video.videoHeight || 720;
-      
+      let sx = 0;
+      let sy = 0;
+      let sW = vW;
+      let sH = vH;
+
+      // Calcular o corte (crop) baseado no elemento visual da retícula
+      if (reticleRef.current) {
+        const reticleRect = reticleRef.current.getBoundingClientRect();
+        const containerEl = video.parentElement;
+        if (containerEl) {
+          const containerRect = containerEl.getBoundingClientRect();
+          const cW = containerRect.width;
+          const cH = containerRect.height;
+          
+          if (cW > 0 && cH > 0 && vW > 0 && vH > 0) {
+            const relX = reticleRect.left - containerRect.left;
+            const relY = reticleRect.top - containerRect.top;
+            const relW = reticleRect.width;
+            const relH = reticleRect.height;
+
+            const vAspect = vW / vH;
+            const cAspect = cW / cH;
+
+            let scale = 1;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            if (vAspect > cAspect) {
+              const renderedW = cH * vAspect;
+              offsetX = (renderedW - cW) / 2;
+              offsetY = 0;
+              scale = vH / cH;
+            } else {
+              const renderedW = cW;
+              const renderedH = cW / vAspect;
+              offsetX = 0;
+              offsetY = (renderedH - cW / vAspect) / 2;
+              scale = vW / cW;
+            }
+
+            // Converter para coordenadas reais do vídeo de origem
+            let rawSx = (relX + offsetX) * scale;
+            let rawSy = (relY + offsetY) * scale;
+            let rawSw = relW * scale;
+            let rawSh = relH * scale;
+
+            // Adicionar margem de segurança confortável de 12% para não cortar bordas da etiqueta
+            const marginW = rawSw * 0.12;
+            const marginH = rawSh * 0.12;
+
+            sx = Math.max(0, rawSx - marginW / 2);
+            sy = Math.max(0, rawSy - marginH / 2);
+            sW = Math.min(vW - sx, rawSw + marginW);
+            sH = Math.min(vH - sy, rawSh + marginH);
+          }
+        }
+      }
+
       const maxDim = 1600;
-      let width = rawW;
-      let height = rawH;
+      let width = sW;
+      let height = sH;
       if (width > maxDim || height > maxDim) {
         if (width > height) {
           height = Math.round((height * maxDim) / width);
@@ -1302,13 +1359,14 @@ export default function App() {
         }
       }
 
-      canvas.width = width;
-      canvas.height = height;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(10, Math.round(width));
+      canvas.height = Math.max(10, Math.round(height));
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
         try {
-          ctx.drawImage(video, 0, 0, width, height);
+          ctx.drawImage(video, sx, sy, sW, sH, 0, 0, canvas.width, canvas.height);
           
           let base64 = '';
           try {
@@ -3020,7 +3078,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.8</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.9</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4296,7 +4354,7 @@ export default function App() {
                   />
                   
                   {/* Retícula guia centralizada */}
-                  <div className="relative w-72 h-44 border-2 border-dashed border-blue-400/80 rounded-xl flex flex-col items-center justify-between p-4 z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                  <div ref={reticleRef} className="relative w-72 h-44 border-2 border-dashed border-blue-400/80 rounded-xl flex flex-col items-center justify-between p-4 z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
                     {/* Cantores destacados */}
                     <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
                     <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
