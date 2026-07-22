@@ -3003,6 +3003,41 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
 import fs from 'fs';
 import path from 'path';
 
+app.post('/api/external/fix-models', async (req, res) => {
+  try {
+    const apiKeyHeader = req.headers['x-api-key'];
+    const expectedApiKey = process.env.EXTERNAL_API_KEY;
+
+    if (!expectedApiKey || expectedApiKey.trim() === '') {
+      return res.status(503).json({ success: false, error: 'EXTERNAL_API_KEY não configurada.' });
+    }
+
+    if (apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ success: false, error: 'Acesso negado. Chave inválida.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    const query = `
+      UPDATE etiquetas_scan_onu 
+      SET modelo = 'PG2447', 
+          fabricante = 'Kaon' 
+      WHERE modelo ILIKE '%2447%' 
+         OR modelo ILIKE '%P82447%' 
+         OR modelo ILIKE '%PG2447%' 
+         OR (fabricante ILIKE '%KAON%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo ILIKE '%2447%'));
+    `;
+
+    const result = await dbPool.query(query);
+    res.json({ success: true, updatedCount: result.rowCount, message: 'Modelos PG2447 padronizados no banco de dados com sucesso.' });
+  } catch (err: any) {
+    console.error('Erro ao padronizar modelos no banco:', err);
+    res.status(500).json({ success: false, error: 'Erro interno no servidor ao tentar padronizar modelos.' });
+  }
+});
+
 app.delete('/api/external/duplicates', async (req, res) => {
   try {
     const apiKeyHeader = req.headers['x-api-key'];
