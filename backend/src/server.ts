@@ -1388,7 +1388,12 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
                   const cleanMac = row.mac ? row.mac.replace(/[^0-9A-FA-F]/g, '').toUpperCase() : '';
                   const cleanSsid = scanResult.wifi_ssid.replace(/_(2G|5G)$/i, '').trim().toUpperCase();
                   if (cleanMac.length >= 4 && cleanSsid.length >= 4) {
-                    return cleanMac.endsWith(cleanSsid.slice(-4));
+                    const suffix = cleanSsid.slice(-4);
+                    // Ignorar se o sufixo for o próprio número do modelo (ex: '2447', '5670', '6600', '5655') ou não for um hexadecimal de 4 dígitos válido
+                    if (suffix === '2447' || suffix === '5670' || suffix === '6600' || suffix === '5655' || suffix === '5657' || !/^[0-9A-F]{4}$/.test(suffix)) {
+                      return false;
+                    }
+                    return cleanMac.endsWith(suffix);
                   }
                   return false;
                 }
@@ -1624,7 +1629,12 @@ app.post('/api/save-label', async (req: any, res: any) => {
             const cleanMac = row.mac ? row.mac.replace(/[^0-9A-FA-F]/g, '').toUpperCase() : '';
             const cleanSsid = wifi_ssid.replace(/_(2G|5G)$/i, '').trim().toUpperCase();
             if (cleanMac.length >= 4 && cleanSsid.length >= 4) {
-              return cleanMac.endsWith(cleanSsid.slice(-4));
+              const suffix = cleanSsid.slice(-4);
+              // Ignorar se o sufixo for o próprio número do modelo (ex: '2447', '5670', '6600', '5655') ou não for um hexadecimal de 4 dígitos válido
+              if (suffix === '2447' || suffix === '5670' || suffix === '6600' || suffix === '5655' || suffix === '5657' || !/^[0-9A-F]{4}$/.test(suffix)) {
+                return false;
+              }
+              return cleanMac.endsWith(suffix);
             }
             return false;
           }
