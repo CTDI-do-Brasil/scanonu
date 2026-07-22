@@ -39,8 +39,7 @@ import {
   Lock,
   Sparkles,
   Key,
-  Barcode,
-  Scan
+  Barcode
 } from 'lucide-react';
 
 
