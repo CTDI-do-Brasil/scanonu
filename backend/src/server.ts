@@ -1304,12 +1304,18 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
 
     if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || fabricanteNorm.toUpperCase().includes('KAON')) {
       let actualGpon = '';
-      if (gponNorm && gponNorm.startsWith('GP')) {
+      if (gponNorm && gponNorm.startsWith('GP0')) {
         actualGpon = gponNorm;
-      } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP')) {
+      } else if (gponNorm && gponNorm.startsWith('GP')) {
+        actualGpon = 'GP0' + gponNorm.substring(2);
+      } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP0')) {
         actualGpon = geminiData.cpe_sn.toUpperCase();
+      } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP')) {
+        actualGpon = 'GP0' + geminiData.cpe_sn.toUpperCase().substring(2);
       } else if (cpeNorm && cpeNorm.startsWith('N7')) {
-        actualGpon = 'GP' + cpeNorm.substring(2);
+        actualGpon = 'GP0' + cpeNorm.substring(2);
+      } else if (gponNorm && gponNorm.startsWith('N7')) {
+        actualGpon = 'GP0' + gponNorm.substring(2);
       }
 
       if (actualGpon) {

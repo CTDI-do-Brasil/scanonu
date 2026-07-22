@@ -114,18 +114,24 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'Blu-Castle';
   }
 
-  // Se for Kaon, restaurar o GPON correto (começando com GP02...) se foi jogado em cpe_sn
+  // Se for Kaon, restaurar o GPON correto (começando com GP0...) se foi jogado em cpe_sn
   if (isKaonModel) {
     let actualGpon = '';
     const gponUpper = (dataCopy.gpon_sn || '').toUpperCase();
     const cpeUpper = (dataCopy.cpe_sn || '').toUpperCase();
 
-    if (gponUpper.startsWith('GP')) {
+    if (gponUpper.startsWith('GP0')) {
       actualGpon = gponUpper;
-    } else if (cpeUpper.startsWith('GP')) {
+    } else if (gponUpper.startsWith('GP')) {
+      actualGpon = 'GP0' + gponUpper.substring(2);
+    } else if (cpeUpper.startsWith('GP0')) {
       actualGpon = cpeUpper;
+    } else if (cpeUpper.startsWith('GP')) {
+      actualGpon = 'GP0' + cpeUpper.substring(2);
     } else if (cpeUpper.startsWith('N7')) {
-      actualGpon = 'GP' + cpeUpper.substring(2);
+      actualGpon = 'GP0' + cpeUpper.substring(2);
+    } else if (gponUpper.startsWith('N7')) {
+      actualGpon = 'GP0' + gponUpper.substring(2);
     }
 
     if (actualGpon) {
@@ -3086,7 +3092,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.4</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.5</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
