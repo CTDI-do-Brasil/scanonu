@@ -1321,10 +1321,9 @@ export default function App() {
               offsetY = 0;
               scale = vH / cH;
             } else {
-              const renderedW = cW;
               const renderedH = cW / vAspect;
               offsetX = 0;
-              offsetY = (renderedH - cW / vAspect) / 2;
+              offsetY = (renderedH - cH) / 2;
               scale = vW / cW;
             }
 
