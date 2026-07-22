@@ -946,8 +946,12 @@ function matchMacAndSsidSuffix(mac: string, ssid: string): boolean {
   if (isNaN(macVal) || isNaN(ssidVal)) return false;
   
   const diff = macVal - ssidVal;
-  // Permite uma margem de offset de até 15 hex em qualquer direção (positivo ou negativo)
-  return Math.abs(diff) <= 15;
+  const normDiff = (diff + 0x10000) % 0x10000;
+  // Offsets exatos Sagemcom F@ST 5670 / 5655V2 / 5676V2:
+  // 0: MAC exatamente igual ao sufixo do SSID
+  // 3: MAC - 3 = SSID (padrão LIVE TIM)
+  // 7: MAC - 7 = SSID (padrão TIM ULTRAFIBRA)
+  return normDiff === 0 || normDiff === 3 || normDiff === 7;
 }
 
 function correctMacPrefix(mac: string): string {
