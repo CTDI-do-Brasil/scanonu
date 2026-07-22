@@ -89,9 +89,16 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   const mfgUpper = (dataCopy.fabricante || '').toUpperCase();
   const isKaonModel = modelUpper.includes('KAON') || mfgUpper.includes('KAON') || modelUpper.includes('PG2447') || modelUpper.includes('P82447') || modelUpper.startsWith('PG') || modelUpper.startsWith('P8');
 
-  // Normalizar modelo se for P82447
-  if (modelUpper.includes('P82447') || modelUpper.includes('82447')) {
+  // Normalizar qualquer variação de Kaon PG2447 / P82447 / 2447
+  if (
+    modelUpper.includes('PG2447') ||
+    modelUpper.includes('P82447') ||
+    modelUpper.includes('2447') ||
+    modelUpper.includes('82447') ||
+    (mfgUpper.includes('KAON') && (modelUpper.includes('2447') || modelUpper.includes('PG') || modelUpper.includes('P8')))
+  ) {
     dataCopy.modelo = 'PG2447';
+    dataCopy.fabricante = 'Kaon';
   }
 
   // Normalizar modelo se for ZTE ZXHN F6600P
@@ -3077,7 +3084,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.4.9</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.0</p>
                 </div>
                 <div className="flex gap-1">
                   <button 

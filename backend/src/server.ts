@@ -1001,8 +1001,14 @@ function normalizeModel(modelo: string, fabricante: string): string {
   const modelNorm = (modelo || '').trim();
   const mfgUpper = (fabricante || '').toUpperCase();
   const modelClean = modelNorm.toUpperCase().replace(/[^A-Z0-9@]/g, '');
-  // Kaon PG2447 / P82447
-  if (modelClean.includes('PG2447') || modelClean.includes('P82447') || modelClean.includes('82447') || (mfgUpper.includes('KAON') && modelClean.includes('2447'))) {
+  // Kaon PG2447 / P82447 e todas as variações
+  if (
+    modelClean.includes('PG2447') ||
+    modelClean.includes('P82447') ||
+    modelClean.includes('2447') ||
+    modelClean.includes('82447') ||
+    (mfgUpper.includes('KAON') && (modelClean.includes('2447') || modelClean.includes('PG') || modelClean.includes('P8')))
+  ) {
     return 'PG2447';
   }
 
@@ -1270,7 +1276,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     else if (upperMfg.includes('ALCATEL')) fabricanteNorm = 'Alcatel';
     else if (upperMfg.includes('SAGEMCOM') || upperMfg.includes('SAGEM') || upperMfg.includes('SMBS') || upperMfg.includes('SMB8')) fabricanteNorm = 'SagemCOM';
     else if (upperMfg.includes('BLU') || upperMfg.includes('CASTLE')) fabricanteNorm = 'Blu-Castle';
-    else if (upperMfg.includes('KAON') || upperMfg === 'KAO') fabricanteNorm = 'Kaon';
+    else if (upperMfg.includes('KAON') || upperMfg === 'KAO' || (geminiData.modelo && String(geminiData.modelo).toUpperCase().includes('2447'))) fabricanteNorm = 'Kaon';
 
     let gponNorm = (geminiData.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
     if (gponNorm.startsWith('SMB8')) {
