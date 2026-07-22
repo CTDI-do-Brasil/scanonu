@@ -1145,16 +1145,29 @@ Siga atentamente as instruções abaixo para cada campo:
 10. web_key: Senha de acesso web (Password/Senha). Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
 11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.
 
-DIRETRIZES DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
-* Diferenciação de Letras e Números Semelhantes (Importante para GPON, MAC, CPE, Senhas e SSIDs):
-  - '8' vs 'B' vs 'G': Olhe atentamente os contornos. Um erro aqui invalida o serial.
-  - '0' (Zero) vs 'O' (letra) vs 'Q': Em campos hexadecimais (como MAC e a parte final de GPONs), o correto é sempre usar o número '0' (Zero).
-  - '1' vs 'I' vs 'L' vs 'T': Verifique se há serifa ou se o traço é 100% vertical.
-  - '5' vs 'S': Dobre a atenção nas curvas de cantos.
-  - '2' vs 'Z': Analise se a base é reta ou curvada.
-  - 'U' vs 'V': Verifique se o fundo da letra é arredondado ou pontiagudo.
-* Diferenciação de Maiúsculas e Minúsculas com Grafia Idêntica (ex: X/x, C/c, O/o, S/s, Z/z, V/v):
-  - Avalie com rigor a altura vertical relativa do caractere em comparação com os números ou caracteres adjacentes. Se o caractere tiver a mesma altura de topo de um número ou letra maiúscula adjacente, ele é MAIÚSCULO. Se tiver cerca de metade da altura vertical (x-height) de seus vizinhos, ele é MINÚSCULO.
+DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
+* TABELA DE MAIÚSCULAS VS MINÚSCULAS DE GRAFIA HOMÓLOGA (Ex: X/x, Z/z, C/c, O/o, S/s, V/v, W/w, P/p, K/k, U/u):
+  - 'X' vs 'x': Se o topo do cruzamento atingir a linha superior das maiúsculas vizinhas, é 'X' MAIÚSCULO. Se alinhar com a linha média (x-height) dos caracteres adjacentes, é 'x' MINÚSCULO.
+  - 'Z' vs 'z': Haste vertical de altura cheia = 'Z' MAIÚSCULO; meia altura = 'z' MINÚSCULO.
+  - 'C' vs 'c': Abertura e altura inteira = 'C' MAIÚSCULO; meia altura = 'c' MINÚSCULO.
+  - 'O' vs 'o': Circunferência total de topo alto = 'O' MAIÚSCULO; meia altura = 'o' MINÚSCULO.
+  - 'S' vs 's': Curva cheia no topo = 'S' MAIÚSCULO; meia altura = 's' MINÚSCULO.
+  - 'V' vs 'v': Vértice de altura inteira = 'V' MAIÚSCULO; meia altura = 'v' MINÚSCULO.
+  - 'W' vs 'w': Largura e altura cheias = 'W' MAIÚSCULO; meia altura = 'w' MINÚSCULO.
+  - 'P' vs 'p': Se a haste vertical assenta na linha de base de escrita (baseline) = 'P' MAIÚSCULO. Se a haste descer abaixo da linha de base (descender) = 'p' MINÚSCULO.
+  - 'K' vs 'k': Haste vertical que supera os braços oblíquos = 'k' MINÚSCULO; braços abrindo exatamente da metade da haste = 'K' MAIÚSCULO.
+  - 'U' vs 'u': Fundo em curva contínua sem perna = 'U' MAIÚSCULO; presença de perna vertical descendente no lado direito = 'u' MINÚSCULO.
+
+* TABELA DE DISCRIMINAÇÃO RIGOROSA ENTRE NÚMEROS (0-9) E LETRAS (A-Z):
+  - '0' (Zero) vs 'O' (Ó) vs 'Q': Em MAC, GPON e senhas hexadecimais, o padrão numérico é sempre o dígito '0' (Zero). O número zero tem formato mais estreito e vertical.
+  - '1' (Um) vs 'I' (Í) vs 'l' (ele) vs '!': O número '1' possui serifa inclinada no topo. A letra 'I' possui haste reta (ou barras horizontais em topo e base). O símbolo '!' (exclamação) possui um ponto visível na base da haste vertical (em senhas de roteador, verifique sempre se há o ponto embaixo!).
+  - '2' (Dois) vs 'Z' / 'z': O número '2' tem topo curvo e base plana reta. A letra 'Z' tem cantos retos e pontudos.
+  - '3' (Três) vs 'E' / 'B': O número '3' é aberto no lado esquerdo com duas curvas fluidadas.
+  - '5' (Cinco) vs 'S' / 's': O número '5' tem o topo horizontal 100% reto e um canto reto de 90° antes da curva. A letra 'S' é curva em todo o contorno.
+  - '6' (Seis) vs 'G' / 'b': O número '6' tem laço fechado na base e topo curvo para a direita.
+  - '8' (Oito) vs 'B': O número '8' é composto por dois laços redondos empilhados. A letra 'B' possui uma haste vertical reta no lado esquerdo.
+  - '9' (Nove) vs 'g' / 'q': O número '9' assenta na linha de base com laço no topo. As letras 'g' e 'q' possuem hastes verticais que descem abaixo da linha de base.
+
 * Validação por Contexto Cruzado:
   - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 dígitos hexadecimais (ex: '95C8'), compare com os últimos 4 dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
 
