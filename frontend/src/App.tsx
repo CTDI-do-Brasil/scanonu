@@ -213,78 +213,25 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   return dataCopy;
 }
 
-function deriveBipadorData(gponInput: string, macInput: string, selectedModel: string): ScanData {
+function deriveBipadorData(gponInput: string, macInput: string): ScanData {
   const cleanGpon = (gponInput || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
   const cleanMac = (macInput || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
 
   const last4Gpon = cleanGpon.length >= 4 ? cleanGpon.slice(-4) : (cleanMac.length >= 4 ? cleanMac.slice(-4) : '0000');
   const last6Gpon = cleanGpon.length >= 6 ? cleanGpon.slice(-6) : (cleanMac.length >= 6 ? cleanMac.slice(-6) : '000000');
-  const last4Mac = cleanMac.length >= 4 ? cleanMac.slice(-4) : last4Gpon;
 
   let baseData: ScanData = {
-    fabricante: 'Outro',
-    modelo: selectedModel,
+    fabricante: 'Blu-Castle',
+    modelo: 'BCSKV630',
     cpe_sn: 'N/A',
     gpon_sn: cleanGpon || 'N/A',
     mac: cleanMac || 'N/A',
-    wifi_ssid: 'N/A',
-    wifi_ssid_5g: 'N/A',
-    wifi_key: 'N/A',
+    wifi_ssid: `TIM_ULTRAFIBRA_${last4Gpon}_2G`,
+    wifi_ssid_5g: `TIM_ULTRAFIBRA_${last4Gpon}_5G`,
+    wifi_key: `T1m@${last4Gpon}`,
     usuario: 'admin',
-    senha: 'N/A'
+    senha: `BcSk@${last6Gpon}`
   };
-
-  if (selectedModel === 'BCSKV630') {
-    baseData.fabricante = 'Blu-Castle';
-    baseData.modelo = 'BCSKV630';
-    baseData.cpe_sn = 'N/A';
-    baseData.gpon_sn = cleanGpon || 'N/A';
-    baseData.mac = cleanMac || 'N/A';
-    baseData.wifi_ssid = `TIM_ULTRAFIBRA_${last4Gpon}_2G`;
-    baseData.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Gpon}_5G`;
-    baseData.wifi_key = `T1m@${last4Gpon}`;
-    baseData.senha = `BcSk@${last6Gpon}`;
-    baseData.usuario = 'admin';
-  } else if (selectedModel === 'PG2447') {
-    let normGpon = cleanGpon;
-    if (normGpon.startsWith('N7') || normGpon.startsWith('GP')) {
-      normGpon = 'GP0' + normGpon.substring(normGpon.startsWith('N7') ? 2 : (normGpon.startsWith('GP0') ? 3 : 2));
-    }
-    baseData.fabricante = 'Kaon';
-    baseData.modelo = 'PG2447';
-    baseData.cpe_sn = 'N/A';
-    baseData.gpon_sn = normGpon || 'N/A';
-    baseData.mac = cleanMac || 'N/A';
-    baseData.wifi_ssid = `LIVE TIM_${last4Mac}_2G`;
-    baseData.wifi_ssid_5g = `LIVE TIM_${last4Mac}_5G`;
-    baseData.wifi_key = `T1m@${last4Mac}`;
-    baseData.senha = `BcSk@${cleanMac.slice(-6)}`;
-    baseData.usuario = 'admin';
-  } else if (selectedModel.includes('5670')) {
-    baseData.fabricante = 'SagemCOM';
-    baseData.modelo = 'F@ST 5670';
-    baseData.cpe_sn = cleanGpon.startsWith('N7') ? cleanGpon : `N7${cleanMac.slice(-10)}`;
-    baseData.gpon_sn = cleanGpon.startsWith('SMBS') ? cleanGpon : `SMBS${cleanMac.slice(-8)}`;
-    baseData.mac = cleanMac || 'N/A';
-    const macInt = parseInt(last4Mac, 16);
-    const sub3Hex = !isNaN(macInt) ? ((macInt - 3 + 0x10000) % 0x10000).toString(16).toUpperCase().padStart(4, '0') : last4Mac;
-    baseData.wifi_ssid = `LIVE TIM_${sub3Hex}_2G`;
-    baseData.wifi_ssid_5g = `LIVE TIM_${sub3Hex}_5G`;
-    baseData.wifi_key = `T1m@${last4Mac}`;
-    baseData.senha = `admin123`;
-    baseData.usuario = 'admin';
-  } else if (selectedModel.includes('F6600')) {
-    baseData.fabricante = 'ZTE';
-    baseData.modelo = 'ZXHN F6600P';
-    baseData.cpe_sn = 'N/A';
-    baseData.gpon_sn = cleanGpon || 'N/A';
-    baseData.mac = cleanMac || 'N/A';
-    baseData.wifi_ssid = `TIM ULTRAFIBRA_${last4Mac}`;
-    baseData.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Mac}`;
-    baseData.wifi_key = `T1m@${last4Mac}`;
-    baseData.senha = `admin`;
-    baseData.usuario = 'admin';
-  }
 
   return applyMacSsidRules(baseData);
 }
@@ -3234,7 +3181,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.8</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.9</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4442,7 +4389,7 @@ export default function App() {
                     className="w-full bg-gradient-to-r from-[#00b4d8] to-[#0077b6] hover:from-[#0096c7] hover:to-[#005f73] active:scale-[0.99] text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00b4d8]/20 transition-all"
                   >
                     <Barcode className="w-5 h-5" />
-                    <span>Escanear SN e MAC (Bipador)</span>
+                    <span>Bipar BCSKV630 (SN e MAC)</span>
                   </button>
 
                   <button 
@@ -5111,9 +5058,9 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: BIPADOR DIRETO (SN + MAC SEM CÂMERA) */}
+      {/* MODAL: BIPADOR DIRETO BCSKV630 (SN + MAC SEM CÂMERA) */}
       {showBipadorModal && (() => {
-        const derivedData = deriveBipadorData(bipadorGpon, bipadorMac, bipadorModel);
+        const derivedData = deriveBipadorData(bipadorGpon, bipadorMac);
         
         const handleSaveBipadorDirect = async () => {
           if (!bipadorGpon.trim() && !bipadorMac.trim()) {
@@ -5140,7 +5087,7 @@ export default function App() {
             const result = await response.json();
             if (result.success) {
               setData(derivedData);
-              setDbMessage({ type: 'success', text: result.message || 'Equipamento salvo no banco de dados com sucesso!' });
+              setDbMessage({ type: 'success', text: result.message || 'Equipamento BCSKV630 salvo no banco de dados com sucesso!' });
               setShowBipadorModal(false);
               setScreen('result');
             } else {
@@ -5162,8 +5109,8 @@ export default function App() {
                     <Barcode className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-slate-800">Bipar SN e MAC</h3>
-                    <p className="text-xs text-slate-500">Sem câmera • Preenchimento automático por modelo</p>
+                    <h3 className="font-bold text-base text-slate-800">Bipar BCSKV630</h3>
+                    <p className="text-xs text-slate-500">Exclusivo Blu-Castle BCSKV630 • Sem câmera</p>
                   </div>
                 </div>
                 <button 
@@ -5175,22 +5122,10 @@ export default function App() {
               </div>
 
               <div className="space-y-3.5">
-                {/* Seletor de Modelo */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">Modelo do Equipamento</label>
-                  <select 
-                    value={bipadorModel}
-                    onChange={(e) => setBipadorModel(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none transition-all font-semibold"
-                  >
-                    <option value="BCSKV630">Blu-Castle BCSKV630</option>
-                    <option value="PG2447">Kaon PG2447</option>
-                    <option value="F@ST 5670">Sagemcom F@ST 5670</option>
-                    <option value="ZXHN F6600P">ZTE ZXHN F6600P</option>
-                    <option value="BC-UM221E">Blu-Castle BC-UM221E</option>
-                    <option value="ZXHN F680">ZTE ZXHN F680</option>
-                    <option value="HG8145V5">Huawei HG8145V5</option>
-                  </select>
+                {/* Indicador Fixo do Modelo */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500">Modelo Selecionado:</span>
+                  <span className="text-xs font-bold text-[#003865] bg-blue-100/60 px-2.5 py-1 rounded-lg border border-blue-200/50">Blu-Castle BCSKV630</span>
                 </div>
 
                 {/* Campo 1: GPON SN */}
@@ -5199,7 +5134,7 @@ export default function App() {
                   <input 
                     ref={bipadorGponRef}
                     type="text" 
-                    placeholder="Ex: BCSK489871FF ou GP02447..."
+                    placeholder="Ex: BCSK489871FF"
                     value={bipadorGpon}
                     onChange={(e) => setBipadorGpon(e.target.value.toUpperCase().trim())}
                     onKeyDown={(e) => {
@@ -5217,7 +5152,7 @@ export default function App() {
                   <input 
                     ref={bipadorMacRef}
                     type="text" 
-                    placeholder="Ex: 1494489871FF ou 24E4CE2EE8BA"
+                    placeholder="Ex: 1494489871FF"
                     value={bipadorMac}
                     onChange={(e) => setBipadorMac(e.target.value.toUpperCase().trim())}
                     onKeyDown={(e) => {
@@ -5233,13 +5168,13 @@ export default function App() {
                 {(bipadorGpon || bipadorMac) && (
                   <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3.5 space-y-2 text-xs">
                     <div className="flex items-center justify-between text-blue-900 font-bold border-b border-blue-200/60 pb-1.5">
-                      <span>Cálculo Automático ({derivedData.modelo})</span>
+                      <span>Regras Blu-Castle BCSKV630</span>
                       <span className="text-[10px] bg-blue-200/80 text-blue-900 px-2 py-0.5 rounded-full font-extrabold">Auto-Derivado</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700 font-mono">
-                      <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Fabricante</span><strong>{derivedData.fabricante}</strong></div>
-                      <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Modelo</span><strong>{derivedData.modelo}</strong></div>
+                      <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Fabricante</span><strong>Blu-Castle</strong></div>
+                      <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Modelo</span><strong>BCSKV630</strong></div>
                       <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">SSID 2.4G</span><strong className="text-blue-700">{derivedData.wifi_ssid}</strong></div>
                       <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">SSID 5G</span><strong className="text-blue-700">{derivedData.wifi_ssid_5g}</strong></div>
                       <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Senha Wi-Fi</span><strong className="text-emerald-700">{derivedData.wifi_key}</strong></div>
