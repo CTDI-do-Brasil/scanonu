@@ -164,6 +164,10 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   else if (modelUpper.includes('BCSKV630') || (modelUpper.includes('BCSK') && !modelUpper.includes('UM221E'))) {
     dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4Hex}_2G`;
     dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Hex}_5G`;
+    const cleanGponStr = (dataCopy.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const last6GponStr = cleanGponStr.length >= 6 ? cleanGponStr.slice(-6) : cleanMac.slice(-6);
+    dataCopy.wifi_key = `BcSk@${last6GponStr}`;
+    dataCopy.senha = `T1m@${last4Hex}`;
   }
 
   // Rule 1.6: BLU-CASTLE BC-UM221E
@@ -228,9 +232,9 @@ function deriveBipadorData(gponInput: string, macInput: string): ScanData {
     mac: cleanMac || 'N/A',
     wifi_ssid: `TIM_ULTRAFIBRA_${last4Gpon}_2G`,
     wifi_ssid_5g: `TIM_ULTRAFIBRA_${last4Gpon}_5G`,
-    wifi_key: `T1m@${last4Gpon}`,
+    wifi_key: `BcSk@${last6Gpon}`,
     usuario: 'admin',
-    senha: `BcSk@${last6Gpon}`
+    senha: `T1m@${last4Gpon}`
   };
 
   return applyMacSsidRules(baseData);
@@ -3183,7 +3187,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.0</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.1</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4588,6 +4592,11 @@ export default function App() {
                     {(Object.keys(fieldLabels) as Array<keyof typeof fieldLabels>).map((field) => {
                       const label = fieldLabels[field];
                       const value = data[field] || '';
+
+                      // Ocultar CPE Serial (S/N) se for N/A ou vazio
+                      if (field === 'cpe_sn' && (!value || value.toUpperCase() === 'N/A' || value.toUpperCase() === 'NA')) {
+                        return null;
+                      }
 
                       return (
                         <div key={field} className="flex flex-col gap-1">
