@@ -555,6 +555,8 @@ export default function App() {
   const fetchUsers = async () => {
     if (!user || (user.role !== 'master' && user.role !== 'admin')) return;
     setIsLoadingUsers(true);
+    setNewEmail('');
+    setNewPassword('');
     try {
       const response = await fetch('/api/admin/users', {
         headers: {
@@ -3149,7 +3151,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.6</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.7</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -3727,12 +3729,18 @@ export default function App() {
                     </div>
                   )}
 
-                  <form onSubmit={handleCreateUser} className="space-y-3">
+                  <form onSubmit={handleCreateUser} className="space-y-3" autoComplete="off">
+                    {/* Inputs ocultos de segurança para impedir autopreenchimento do navegador (Chrome/Edge) */}
+                    <input type="text" name="fake_username_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" />
+                    <input type="password" name="fake_password_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" />
+
                     <div className="space-y-1">
                       <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Usuário</label>
                       <input 
                         type="text" 
                         required
+                        autoComplete="off"
+                        name="new_user_email_nocache"
                         placeholder="ex: lucas.albino ou operador@scanonu.com"
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
@@ -3745,6 +3753,8 @@ export default function App() {
                       <input 
                         type="password" 
                         required
+                        autoComplete="new-password"
+                        name="new_user_password_nocache"
                         placeholder="Senha temporária"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
