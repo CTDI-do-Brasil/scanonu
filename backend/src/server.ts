@@ -1034,6 +1034,11 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'BCSKV630';
   }
 
+  // NP5454T
+  if (modelClean.includes('NP5454T') || modelClean.includes('5454T') || modelClean.includes('5454')) {
+    return 'NP5454T';
+  }
+
   // ZTE ZXHN F680
   if (modelClean.includes('F680') || modelClean.includes('680')) {
     return 'ZXHN F680';
@@ -1750,10 +1755,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
-      const isBcskv630Model = (finalModelo || normalizedModelo || '').toUpperCase().includes('BCSKV630') || 
-                              (finalModelo || normalizedModelo || '').toUpperCase().includes('BCSK') || 
-                              (finalModelo || normalizedModelo || '').toUpperCase().includes('630');
-      const finalPasswordRouter = isBcskv630Model ? (finalWebKey || resolvedWebKey || 'N/A') : 'N/A';
+      const isNp5454tModel = (finalModelo || normalizedModelo || '').toUpperCase().includes('NP5454T') || 
+                             (finalModelo || normalizedModelo || '').toUpperCase().includes('5454');
+      const finalPasswordRouter = isNp5454tModel ? (finalWebKey || resolvedWebKey || 'N/A') : 'N/A';
 
       const updateValues = [
         finalFabricante,
@@ -1782,10 +1786,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
-        const isBcskv630Model = (normalizedModelo || '').toUpperCase().includes('BCSKV630') || 
-                                (normalizedModelo || '').toUpperCase().includes('BCSK') || 
-                                (normalizedModelo || '').toUpperCase().includes('630');
-        const finalPasswordRouter = isBcskv630Model ? (resolvedWebKey || 'N/A') : 'N/A';
+        const isNp5454tModel = (normalizedModelo || '').toUpperCase().includes('NP5454T') || 
+                               (normalizedModelo || '').toUpperCase().includes('5454');
+        const finalPasswordRouter = isNp5454tModel ? (resolvedWebKey || 'N/A') : 'N/A';
 
         const insertValues = [
           fabricante || 'N/A',
@@ -2992,10 +2995,9 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
         }
       }
 
-      const isRowBcsk = (normalizedModelo || '').toUpperCase().includes('BCSKV630') || 
-                        (normalizedModelo || '').toUpperCase().includes('BCSK') || 
-                        (normalizedModelo || '').toUpperCase().includes('630');
-      const rowPasswordRouter = isRowBcsk ? (reconciledWebKey || row.web_key || 'N/A') : 'N/A';
+      const isRowNp5454t = (normalizedModelo || '').toUpperCase().includes('NP5454T') || 
+                           (normalizedModelo || '').toUpperCase().includes('5454');
+      const rowPasswordRouter = isRowNp5454t ? (reconciledWebKey || row.web_key || 'N/A') : 'N/A';
 
       try {
         const query = `
