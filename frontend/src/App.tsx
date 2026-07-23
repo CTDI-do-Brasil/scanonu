@@ -1490,13 +1490,16 @@ export default function App() {
                 if (dbResponse.ok) {
                   const dbResult = await dbResponse.json();
                   if (dbResult.success && dbResult.data) {
-                    result = {
-                      success: true,
-                      existsInDb: true,
-                      data: dbResult.data,
-                      existingData: dbResult.data
-                    };
-                    skipGemini = true;
+                    const hasCompleteWifi = dbResult.data.wifi_ssid && dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A';
+                    if (hasCompleteWifi) {
+                      result = {
+                        success: true,
+                        existsInDb: true,
+                        data: dbResult.data,
+                        existingData: dbResult.data
+                      };
+                      skipGemini = true;
+                    }
                   }
                 }
               }
@@ -1525,13 +1528,64 @@ export default function App() {
                   errorMsg: 'Etiqueta Reimpressa Bloqueada'
                 } : item));
               } else if (result.existsInDb) {
-                setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
-                  ...item, 
-                  data: processedData, 
-                  status: 'duplicate',
-                  existsInDb: true,
-                  existingData: result.existingData
-                } : item));
+                const dbHasMissingWifi = !result.existingData?.wifi_ssid || result.existingData?.wifi_ssid === 'N/A' || result.existingData?.wifi_ssid === 'NA';
+                const capturedHasWifi = processedData.wifi_ssid && processedData.wifi_ssid !== 'N/A' && processedData.wifi_ssid !== 'NA';
+
+                if (dbHasMissingWifi && capturedHasWifi) {
+                  // O registro no banco não tinha SSID/Senhas (veio da planilha de pré-cadastro), mas a foto atual leu! Atualizar no banco
+                  setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                    ...item, 
+                    data: processedData,
+                    isSaving: true
+                  } : item));
+
+                  try {
+                    const saveResponse = await fetch('/api/save-label', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        ...processedData,
+                        operador: user?.email || 'admin@scanonu.com',
+                        overwrite: true,
+                        operacao: user?.operacao || 'CTDI MATRIZ'
+                      })
+                    });
+                    const saveResult = await saveResponse.json();
+                    if (saveResult.success) {
+                      setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                        ...item, 
+                        status: 'saved',
+                        isSaving: false,
+                        dbMessage: { type: 'success', text: 'Dados atualizados no banco!' }
+                      } : item));
+                    } else {
+                      setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                        ...item, 
+                        status: 'duplicate',
+                        existsInDb: true,
+                        existingData: result.existingData
+                      } : item));
+                    }
+                  } catch (saveErr: any) {
+                    setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                      ...item, 
+                      status: 'duplicate',
+                      existsInDb: true,
+                      existingData: result.existingData
+                    } : item));
+                  }
+                } else {
+                  setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                    ...item, 
+                    data: processedData, 
+                    status: 'duplicate',
+                    existsInDb: true,
+                    existingData: result.existingData
+                  } : item));
+                }
               } else {
                 // Gravar automaticamente no banco de dados
                 setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
@@ -1864,25 +1918,28 @@ export default function App() {
           if (dbResponse.ok) {
             const dbResult = await dbResponse.json();
             if (dbResult.success && dbResult.data) {
-              console.log('Equipamento encontrado no banco localmente (0 tokens gastos!).');
-              setData(prevData => {
-                const merged = { ...prevData } as any;
-                Object.keys(dbResult.data).forEach(key => {
-                  const newVal = (dbResult.data as any)[key];
-                  const oldVal = merged[key];
-                  if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
-                    merged[key] = newVal;
-                  } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
-                    merged[key] = oldVal || 'N/A';
-                  }
+              const hasCompleteWifi = dbResult.data.wifi_ssid && dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A';
+              if (hasCompleteWifi) {
+                console.log('Equipamento com dados completos encontrado no banco localmente (0 tokens gastos!).');
+                setData(prevData => {
+                  const merged = { ...prevData } as any;
+                  Object.keys(dbResult.data).forEach(key => {
+                    const newVal = (dbResult.data as any)[key];
+                    const oldVal = merged[key];
+                    if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+                      merged[key] = newVal;
+                    } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
+                      merged[key] = oldVal || 'N/A';
+                    }
+                  });
+                  return merged;
                 });
-                return merged;
-              });
-              setEquipmentExistsInDb(true);
-              setExistingEquipmentData(dbResult.data);
-              setShowDuplicateModal(true);
-              setScreen('result');
-              return; // Sai do fluxo economizando o token!
+                setEquipmentExistsInDb(true);
+                setExistingEquipmentData(dbResult.data);
+                setShowDuplicateModal(true);
+                setScreen('result');
+                return; // Sai do fluxo economizando o token!
+              }
             }
           }
         }
@@ -3092,7 +3149,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.5</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.5.6</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
