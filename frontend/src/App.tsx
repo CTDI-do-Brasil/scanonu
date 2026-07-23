@@ -303,9 +303,11 @@ export default function App() {
   const [printerFormData, setPrinterFormData] = useState({
     nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ'
   });
+  const [printerError, setPrinterError] = useState<string | null>(null);
+  const [isUpdatingPrinter, setIsUpdatingPrinter] = useState(false);
+
   // Modo Bipador Direto (SN + MAC sem Câmera)
   const [showBipadorModal, setShowBipadorModal] = useState(false);
-  const [bipadorModel, setBipadorModel] = useState('BCSKV630');
   const [bipadorGpon, setBipadorGpon] = useState('');
   const [bipadorMac, setBipadorMac] = useState('');
   const [bipadorError, setBipadorError] = useState<string | null>(null);
