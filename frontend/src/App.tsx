@@ -3223,7 +3223,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.3</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.4</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -3558,6 +3558,16 @@ export default function App() {
                     {isQuerying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                     <span>Buscar no Banco</span>
                   </button>
+                  {['master', 'admin'].includes(user?.role || '') && (
+                    <button
+                      onClick={() => handleDeleteManufacturer('TELLESCOM')}
+                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all text-xs"
+                      title="Excluir todos os registros do fabricante Tellescom"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                      <span>Apagar Tellescom</span>
+                    </button>
+                  )}
                   {user?.role !== 'consulta' && (
                   <button
                     onClick={handleExportExcel}
