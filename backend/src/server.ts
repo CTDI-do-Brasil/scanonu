@@ -472,8 +472,15 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       await pool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
     }
     const checkEtiq = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
-    if (!checkEtiq.rows.some(r => r.column_name === 'operacao')) {
+    const etiqCols = checkEtiq.rows.map((r: any) => r.column_name.toLowerCase());
+    if (!etiqCols.includes('operacao')) {
       await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+    }
+    try {
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS password_router VARCHAR(100) DEFAULT \'N/A\'');
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS "PASSWORD_ROUTER" VARCHAR(100) DEFAULT \'N/A\'');
+    } catch (e) {
+      console.error('Erro ao adicionar coluna password_router em etiquetas_scan_onu:', e);
     }
   } catch (e) {
     console.error('Erro ao adicionar operacao nas tabelas:', e);
@@ -710,9 +717,11 @@ async function connectToDatabase() {
         if (!etiqCols.includes('operacao')) {
           await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
         }
-        if (!etiqCols.includes('password_router')) {
-          await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN password_router VARCHAR(100) DEFAULT 'N/A'");
-          await dbPool.query("UPDATE etiquetas_scan_onu SET password_router = 'N/A' WHERE password_router IS NULL");
+        try {
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS password_router VARCHAR(100) DEFAULT \'N/A\'');
+          await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS "PASSWORD_ROUTER" VARCHAR(100) DEFAULT \'N/A\'');
+        } catch (e) {
+          console.error('Erro ao adicionar coluna password_router em etiquetas_scan_onu (initDb):', e);
         }
       } catch (e) {
         console.error('Erro ao adicionar operacao nas tabelas (initDb):', e);
