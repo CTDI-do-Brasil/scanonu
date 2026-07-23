@@ -218,18 +218,33 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
 }
 
 function deriveBipadorData(gponInput: string, macInput: string): ScanData {
-  const cleanGpon = (gponInput || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-  const cleanMac = (macInput || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+  let clean1 = (gponInput || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+  let clean2 = (macInput || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
 
-  const last4Gpon = cleanGpon.length >= 4 ? cleanGpon.slice(-4) : (cleanMac.length >= 4 ? cleanMac.slice(-4) : '0000');
-  const last6Gpon = cleanGpon.length >= 6 ? cleanGpon.slice(-6) : (cleanMac.length >= 6 ? cleanMac.slice(-6) : '000000');
+  let finalGpon = '';
+  let finalMac = '';
+
+  // Trava Inteligente Anti-Inversão: O GPON do BCSKV630 obrigatoriamente começa com 'BCSK'
+  if (clean1.startsWith('BCSK')) {
+    finalGpon = clean1;
+    finalMac = clean2.startsWith('BCSK') ? '' : clean2;
+  } else if (clean2.startsWith('BCSK')) {
+    finalGpon = clean2;
+    finalMac = clean1;
+  } else {
+    finalGpon = clean1;
+    finalMac = clean2;
+  }
+
+  const last4Gpon = finalGpon.length >= 4 ? finalGpon.slice(-4) : (finalMac.length >= 4 ? finalMac.slice(-4) : '0000');
+  const last6Gpon = finalGpon.length >= 6 ? finalGpon.slice(-6) : (finalMac.length >= 6 ? finalMac.slice(-6) : '000000');
 
   let baseData: ScanData = {
     fabricante: 'Blu-Castle',
     modelo: 'BCSKV630',
     cpe_sn: 'N/A',
-    gpon_sn: cleanGpon || 'N/A',
-    mac: cleanMac || 'N/A',
+    gpon_sn: finalGpon || 'N/A',
+    mac: finalMac || 'N/A',
     wifi_ssid: `TIM_ULTRAFIBRA_${last4Gpon}_2G`,
     wifi_ssid_5g: `TIM_ULTRAFIBRA_${last4Gpon}_5G`,
     wifi_key: `BcSk@${last6Gpon}`,
@@ -3187,7 +3202,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.1</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.2</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5074,7 +5089,8 @@ export default function App() {
         const derivedData = deriveBipadorData(bipadorGpon, bipadorMac);
         
         const handleSaveBipadorDirect = async () => {
-          if (!bipadorGpon.trim() && !bipadorMac.trim()) {
+          const lookupVal = derivedData.gpon_sn !== 'N/A' ? derivedData.gpon_sn : derivedData.mac;
+          if (!lookupVal || lookupVal === 'N/A') {
             setBipadorError('Por favor, bipe ou digite o GPON SN ou o MAC.');
             return;
           }
@@ -5082,6 +5098,23 @@ export default function App() {
           setBipadorError(null);
           try {
             const token = localStorage.getItem('scanonu_token');
+            
+            // 1. Verificar se a unidade JÁ EXISTE no Banco de Dados (Se existir, IGNORE E NÃO SALVE)
+            const checkRes = await fetch(`/api/label/${encodeURIComponent(lookupVal)}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              if (checkData.success && checkData.existsInDb && checkData.data) {
+                // UNIDADE JÁ CADASTRADA NO BANCO: BLOQUEAR E IGNORAR SALVAMENTO!
+                setBipadorError(`⚠️ Unidade (${lookupVal}) já cadastrada no banco de dados! Operação ignorada para evitar duplicidade.`);
+                setIsSavingBipador(false);
+                return;
+              }
+            }
+
+            // 2. Se for unidade NOVA (não existente), salvar no banco
             const response = await fetch('/api/save-label', {
               method: 'POST',
               headers: {
@@ -5091,24 +5124,53 @@ export default function App() {
               body: JSON.stringify({
                 ...derivedData,
                 operador: user?.email || 'admin@scanonu.com',
-                overwrite: true,
+                overwrite: false,
                 operacao: user?.operacao || 'CTDI MATRIZ'
               })
             });
             const result = await response.json();
             if (result.success) {
               setData(derivedData);
-              setDbMessage({ type: 'success', text: result.message || 'Equipamento BCSKV630 salvo no banco de dados com sucesso!' });
+              setDbMessage({ type: 'success', text: `✅ Unidade ${lookupVal} salva com sucesso no banco de dados!` });
               setShowBipadorModal(false);
               setScreen('result');
             } else {
               setBipadorError(result.error || 'Erro ao salvar no banco.');
             }
           } catch (err: any) {
-            setBipadorError('Erro de conexão ao salvar equipamento.');
+            setBipadorError('Erro de conexão ao verificar/salvar equipamento.');
           } finally {
             setIsSavingBipador(false);
           }
+        };
+
+        // Handlers com Trava Anti-Inversão em tempo real
+        const handleGponInputChange = (val: string) => {
+          const clean = val.toUpperCase().trim();
+          if (clean.length >= 10 && !clean.startsWith('BCSK') && !bipadorMac) {
+            // Operador bipou o MAC no campo do GPON! Mover automaticamente para o MAC
+            setBipadorMac(clean);
+            setBipadorGpon('');
+            bipadorGponRef.current?.focus();
+            return;
+          }
+          setBipadorGpon(clean);
+        };
+
+        const handleMacInputChange = (val: string) => {
+          const clean = val.toUpperCase().trim();
+          if (clean.startsWith('BCSK')) {
+            // Operador bipou o GPON no campo do MAC! Mover automaticamente para o GPON
+            setBipadorGpon(clean);
+            if (bipadorGpon && !bipadorGpon.startsWith('BCSK')) {
+              setBipadorMac(bipadorGpon);
+            } else {
+              setBipadorMac('');
+            }
+            bipadorMacRef.current?.focus();
+            return;
+          }
+          setBipadorMac(clean);
         };
 
         return (
@@ -5147,7 +5209,7 @@ export default function App() {
                     type="text" 
                     placeholder="Ex: BCSK489871FF"
                     value={bipadorGpon}
-                    onChange={(e) => setBipadorGpon(e.target.value.toUpperCase().trim())}
+                    onChange={(e) => handleGponInputChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         bipadorMacRef.current?.focus();
@@ -5165,7 +5227,7 @@ export default function App() {
                     type="text" 
                     placeholder="Ex: 1494489871FF"
                     value={bipadorMac}
-                    onChange={(e) => setBipadorMac(e.target.value.toUpperCase().trim())}
+                    onChange={(e) => handleMacInputChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleSaveBipadorDirect();
