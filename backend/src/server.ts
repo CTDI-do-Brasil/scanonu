@@ -711,8 +711,8 @@ async function connectToDatabase() {
           await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
         }
         if (!etiqCols.includes('password_router')) {
-          await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN password_router VARCHAR(100)");
-          await dbPool.query("UPDATE etiquetas_scan_onu SET password_router = web_key WHERE password_router IS NULL AND web_key IS NOT NULL");
+          await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN password_router VARCHAR(100) DEFAULT 'N/A'");
+          await dbPool.query("UPDATE etiquetas_scan_onu SET password_router = 'N/A' WHERE password_router IS NULL");
         }
       } catch (e) {
         console.error('Erro ao adicionar operacao nas tabelas (initDb):', e);
@@ -1750,6 +1750,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
+      const isBcskv630Model = (finalModelo || normalizedModelo || '').toUpperCase().includes('BCSKV630') || 
+                              (finalModelo || normalizedModelo || '').toUpperCase().includes('BCSK') || 
+                              (finalModelo || normalizedModelo || '').toUpperCase().includes('630');
+      const finalPasswordRouter = isBcskv630Model ? (finalWebKey || resolvedWebKey || 'N/A') : 'N/A';
+
       const updateValues = [
         finalFabricante,
         finalModelo,
@@ -1764,7 +1769,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
         targetGpon,
         zplUrl || imagem_url || null,
         operacao || 'CTDI MATRIZ',
-        finalWebKey || 'N/A'
+        finalPasswordRouter
       ];
       await pool.query(updateQuery, updateValues);
       console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON alvo: ${targetGpon}`);
@@ -1777,6 +1782,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
+        const isBcskv630Model = (normalizedModelo || '').toUpperCase().includes('BCSKV630') || 
+                                (normalizedModelo || '').toUpperCase().includes('BCSK') || 
+                                (normalizedModelo || '').toUpperCase().includes('630');
+        const finalPasswordRouter = isBcskv630Model ? (resolvedWebKey || 'N/A') : 'N/A';
+
         const insertValues = [
           fabricante || 'N/A',
           normalizedModelo || 'N/A',
@@ -1788,7 +1798,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           wifi_key || 'N/A',
           usuario || 'N/A',
           resolvedWebKey || 'N/A',
-          resolvedWebKey || 'N/A',
+          finalPasswordRouter,
           operador || 'sistema',
           zplUrl || imagem_url || null,
           operacao || 'CTDI MATRIZ'
@@ -2982,10 +2992,15 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
         }
       }
 
+      const isRowBcsk = (normalizedModelo || '').toUpperCase().includes('BCSKV630') || 
+                        (normalizedModelo || '').toUpperCase().includes('BCSK') || 
+                        (normalizedModelo || '').toUpperCase().includes('630');
+      const rowPasswordRouter = isRowBcsk ? (reconciledWebKey || row.web_key || 'N/A') : 'N/A';
+
       try {
         const query = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, operacao)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, operacao)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
@@ -2996,6 +3011,7 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
             wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
             usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
             web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
+            password_router = COALESCE(NULLIF(EXCLUDED.password_router, 'N/A'), etiquetas_scan_onu.password_router),
             operador_email = EXCLUDED.operador_email,
             operacao = EXCLUDED.operacao,
             data_leitura = CURRENT_TIMESTAMP
@@ -3011,6 +3027,7 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
           reconciledWifiKey || row.wifi_key || 'N/A',
           row.usuario || 'N/A',
           reconciledWebKey || row.web_key || 'N/A',
+          rowPasswordRouter,
           operatorEmail,
           req.user.operacao || 'CTDI MATRIZ'
         ];
