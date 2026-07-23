@@ -411,6 +411,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       wifi_key VARCHAR(100),
       usuario VARCHAR(100),
       web_key VARCHAR(100),
+      password_router VARCHAR(100),
       imagem_url VARCHAR(500),
       operador_email VARCHAR(150),
       data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -648,6 +649,7 @@ async function connectToDatabase() {
           wifi_key VARCHAR(100),
           usuario VARCHAR(100),
           web_key VARCHAR(100),
+          password_router VARCHAR(100),
           operador_email VARCHAR(150),
           data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -704,8 +706,13 @@ async function connectToDatabase() {
           await dbPool.query("ALTER TABLE sessoes_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
         }
         const checkEtiq = await dbPool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
-        if (!checkEtiq.rows.some(r => r.column_name === 'operacao')) {
+        const etiqCols = checkEtiq.rows.map((r: any) => r.column_name.toLowerCase());
+        if (!etiqCols.includes('operacao')) {
           await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
+        }
+        if (!etiqCols.includes('password_router')) {
+          await dbPool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN password_router VARCHAR(100)");
+          await dbPool.query("UPDATE etiquetas_scan_onu SET password_router = web_key WHERE password_router IS NULL AND web_key IS NOT NULL");
         }
       } catch (e) {
         console.error('Erro ao adicionar operacao nas tabelas (initDb):', e);
@@ -1372,27 +1379,27 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
         
         if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $3 AND mac <> \'N/A\')',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $3 AND mac <> \'N/A\')',
             [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE (cpe_sn = $1 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $2 AND mac <> \'N/A\')',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (cpe_sn = $1 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $2 AND mac <> \'N/A\')',
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE mac = $1',
+            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE mac = $1',
             [scanResult.mac]
           );
         } else if (scanResult.wifi_ssid && scanResult.wifi_ssid.toUpperCase() !== 'N/A' && scanResult.wifi_ssid.toUpperCase() !== 'NA') {
             checkRes = await dbPool.query(
-              'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
+              'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
               [scanResult.wifi_ssid]
             );
             if (checkRes.rowCount === 0) {
               const candidatesRes = await dbPool.query(
-                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
+                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
               );
               const matchingRows = candidatesRes.rows.filter((row: any) => {
                 const normModel = row.modelo ? row.modelo.toUpperCase() : '';
@@ -1739,6 +1746,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
             operador_email = $10,
             imagem_url = COALESCE($12, imagem_url),
             operacao = $13,
+            password_router = $14,
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
@@ -1755,14 +1763,15 @@ app.post('/api/save-label', async (req: any, res: any) => {
         operador || 'sistema',
         targetGpon,
         zplUrl || imagem_url || null,
-        operacao || 'CTDI MATRIZ'
+        operacao || 'CTDI MATRIZ',
+        finalWebKey || 'N/A'
       ];
       await pool.query(updateQuery, updateValues);
       console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON alvo: ${targetGpon}`);
     } else {
       const insertQuery = `
-        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, imagem_url, operacao)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       `;
       if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -1778,6 +1787,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           resolvedWifiSsid5g,
           wifi_key || 'N/A',
           usuario || 'N/A',
+          resolvedWebKey || 'N/A',
           resolvedWebKey || 'N/A',
           operador || 'sistema',
           zplUrl || imagem_url || null,
@@ -2875,7 +2885,7 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
       const usuario_raw = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username', 'login', 'Login']);
       const usuario = usuario_raw || 'N/A';
 
-      const web_key_raw = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key', 'WebKey', 'Web Key', 'senha_web', 'ACCESS_KEY1', 'WPA_PSK2']);
+      const web_key_raw = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key', 'WebKey', 'Web Key', 'senha_web', 'ACCESS_KEY1', 'WPA_PSK2', 'PASSWORD_ROUTER', 'password_router']);
       const web_key = web_key_raw || 'N/A';
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
@@ -3125,7 +3135,7 @@ app.get('/api/external/units', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
     }
 
-    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
+    let queryText = 'SELECT ROW_NUMBER() OVER (ORDER BY data_leitura ASC)::integer AS id, fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha, operador_email, data_leitura FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
