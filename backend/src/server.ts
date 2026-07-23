@@ -479,9 +479,11 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     try {
       await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS password_router VARCHAR(100) DEFAULT \'N/A\'');
       try {
-        await pool.query('UPDATE etiquetas_scan_onu SET password_router = "PASSWORD_ROUTER" WHERE "PASSWORD_ROUTER" IS NOT NULL AND "PASSWORD_ROUTER" != \'N/A\' AND (password_router IS NULL OR password_router = \'N/A\')');
         await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS "PASSWORD_ROUTER"');
       } catch (dropErr) {}
+      try {
+        await pool.query("UPDATE etiquetas_scan_onu SET password_router = 'N/A' WHERE password_router = web_key");
+      } catch (cleanErr) {}
     } catch (e) {
       console.error('Erro ao adicionar/limpar coluna password_router em etiquetas_scan_onu:', e);
     }
@@ -723,9 +725,11 @@ async function connectToDatabase() {
         try {
           await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS password_router VARCHAR(100) DEFAULT \'N/A\'');
           try {
-            await dbPool.query('UPDATE etiquetas_scan_onu SET password_router = "PASSWORD_ROUTER" WHERE "PASSWORD_ROUTER" IS NOT NULL AND "PASSWORD_ROUTER" != \'N/A\' AND (password_router IS NULL OR password_router = \'N/A\')');
             await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS "PASSWORD_ROUTER"');
           } catch (dropErr) {}
+          try {
+            await dbPool.query("UPDATE etiquetas_scan_onu SET password_router = 'N/A' WHERE password_router = web_key");
+          } catch (cleanErr) {}
         } catch (e) {
           console.error('Erro ao adicionar/limpar coluna password_router em etiquetas_scan_onu (initDb):', e);
         }
@@ -1770,9 +1774,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
-      const isNp5454tModel = (finalModelo || normalizedModelo || '').toUpperCase().includes('NP5454T') || 
-                             (finalModelo || normalizedModelo || '').toUpperCase().includes('5454');
-      const finalPasswordRouter = isNp5454tModel ? (finalWebKey || resolvedWebKey || 'N/A') : 'N/A';
+      const finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
 
       const updateValues = [
         finalFabricante,
@@ -1801,9 +1803,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
-        const isNp5454tModel = (normalizedModelo || '').toUpperCase().includes('NP5454T') || 
-                               (normalizedModelo || '').toUpperCase().includes('5454');
-        const finalPasswordRouter = isNp5454tModel ? (resolvedWebKey || 'N/A') : 'N/A';
+        const finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
 
         const insertValues = [
           fabricante || 'N/A',
@@ -2913,8 +2913,11 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
       const usuario_raw = getVal(row, ['Usuário', 'usuario', 'User', 'Usuario', 'Username', 'login', 'Login']);
       const usuario = usuario_raw || 'N/A';
 
-      const web_key_raw = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key', 'WebKey', 'Web Key', 'senha_web', 'ACCESS_KEY1', 'WPA_PSK2', 'PASSWORD_ROUTER', 'password_router']);
+      const web_key_raw = getVal(row, ['Senha WEB', 'web_key', 'Senha Web', 'Web_Key', 'WebKey', 'Web Key', 'senha_web', 'ACCESS_KEY1', 'WPA_PSK2', 'Senha', 'senha', 'Password', 'Pass']);
       const web_key = web_key_raw || 'N/A';
+
+      const password_router_raw = getVal(row, ['PASSWORD_ROUTER', 'password_router', 'Password Router', 'Password_Router', 'Router Password', 'router_password']);
+      const password_router = password_router_raw || 'N/A';
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
 
@@ -2944,6 +2947,7 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
         wifi_key,
         usuario,
         web_key,
+        password_router,
         gpon_sn
       });
     }
@@ -3010,9 +3014,7 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
         }
       }
 
-      const isRowNp5454t = (normalizedModelo || '').toUpperCase().includes('NP5454T') || 
-                           (normalizedModelo || '').toUpperCase().includes('5454');
-      const rowPasswordRouter = isRowNp5454t ? (reconciledWebKey || row.web_key || 'N/A') : 'N/A';
+      const rowPasswordRouter = (row.password_router !== undefined && row.password_router !== null && String(row.password_router).trim() !== '') ? String(row.password_router).trim() : 'N/A';
 
       try {
         const query = `
