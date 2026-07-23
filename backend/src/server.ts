@@ -3129,6 +3129,52 @@ app.delete('/api/external/duplicates', async (req, res) => {
   }
 });
 
+app.post('/api/external/delete-manufacturer', async (req, res) => {
+  try {
+    const apiKeyHeader = req.headers['x-api-key'];
+    const expectedApiKey = process.env.EXTERNAL_API_KEY;
+
+    if (!expectedApiKey || expectedApiKey.trim() === '') {
+      return res.status(503).json({ success: false, error: 'EXTERNAL_API_KEY não configurada.' });
+    }
+
+    if (apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ success: false, error: 'Acesso negado. Chave inválida.' });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
+    }
+
+    const targetMfg = (req.body.fabricante || 'TELLESCOM').trim().toUpperCase();
+
+    const query = `
+      DELETE FROM etiquetas_scan_onu 
+      WHERE UPPER(fabricante) LIKE '%' || $1 || '%';
+    `;
+
+    let totalDeleted = 0;
+    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    for (const dbName of databases) {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        if (pool) {
+          const result = await pool.query(query, [targetMfg]);
+          totalDeleted += (result.rowCount || 0);
+          console.log(`Deletados ${result.rowCount} registros do fabricante ${targetMfg} no banco ${dbName}`);
+        }
+      } catch (err) {
+        console.error(`Erro ao deletar registros no banco ${dbName}:`, err);
+      }
+    }
+
+    res.json({ success: true, deletedCount: totalDeleted, message: `Deletados ${totalDeleted} registros do fabricante ${targetMfg} nos bancos de dados.` });
+  } catch (err: any) {
+    console.error('Erro ao deletar fabricante no banco:', err);
+    res.status(500).json({ success: false, error: 'Erro interno no servidor ao tentar deletar fabricante.' });
+  }
+});
+
 // Rota da API externa para consulta de unidades (ex: integração com C#)
 app.get('/api/external/units', async (req, res) => {
   try {
