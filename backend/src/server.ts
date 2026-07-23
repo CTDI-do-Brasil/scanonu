@@ -478,9 +478,12 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
     try {
       await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS password_router VARCHAR(100) DEFAULT \'N/A\'');
-      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS "PASSWORD_ROUTER" VARCHAR(100) DEFAULT \'N/A\'');
+      try {
+        await pool.query('UPDATE etiquetas_scan_onu SET password_router = "PASSWORD_ROUTER" WHERE "PASSWORD_ROUTER" IS NOT NULL AND "PASSWORD_ROUTER" != \'N/A\' AND (password_router IS NULL OR password_router = \'N/A\')');
+        await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS "PASSWORD_ROUTER"');
+      } catch (dropErr) {}
     } catch (e) {
-      console.error('Erro ao adicionar coluna password_router em etiquetas_scan_onu:', e);
+      console.error('Erro ao adicionar/limpar coluna password_router em etiquetas_scan_onu:', e);
     }
   } catch (e) {
     console.error('Erro ao adicionar operacao nas tabelas:', e);
@@ -719,9 +722,12 @@ async function connectToDatabase() {
         }
         try {
           await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS password_router VARCHAR(100) DEFAULT \'N/A\'');
-          await dbPool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS "PASSWORD_ROUTER" VARCHAR(100) DEFAULT \'N/A\'');
+          try {
+            await dbPool.query('UPDATE etiquetas_scan_onu SET password_router = "PASSWORD_ROUTER" WHERE "PASSWORD_ROUTER" IS NOT NULL AND "PASSWORD_ROUTER" != \'N/A\' AND (password_router IS NULL OR password_router = \'N/A\')');
+            await dbPool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS "PASSWORD_ROUTER"');
+          } catch (dropErr) {}
         } catch (e) {
-          console.error('Erro ao adicionar coluna password_router em etiquetas_scan_onu (initDb):', e);
+          console.error('Erro ao adicionar/limpar coluna password_router em etiquetas_scan_onu (initDb):', e);
         }
       } catch (e) {
         console.error('Erro ao adicionar operacao nas tabelas (initDb):', e);
