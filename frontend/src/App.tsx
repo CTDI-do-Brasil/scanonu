@@ -1120,6 +1120,27 @@ export default function App() {
     }
   };
 
+  const handleDeleteManufacturer = async (mfgName: string) => {
+    if (!confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE todos os registros do fabricante '${mfgName}' no banco de dados (${targetDatabase})?`)) return;
+    try {
+      const response = await fetch(`/api/admin/delete-by-manufacturer?mfg=${encodeURIComponent(mfgName)}&targetDb=${targetDatabase}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        alert(result.message || `Todos os registros do fabricante ${mfgName} foram excluídos com sucesso!`);
+        handleSearchLabels();
+      } else {
+        alert(result.error || 'Erro ao excluir registros.');
+      }
+    } catch (err: any) {
+      alert('Erro de conexão ao tentar excluir registros por fabricante.');
+    }
+  };
+
   const handleExportExcel = async () => {
     if (!user || (user.role !== 'master' && user.role !== 'admin' && user.role !== 'consulta')) return;
     try {
@@ -3202,7 +3223,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.2</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.3</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -3557,9 +3578,21 @@ export default function App() {
                       <Search className="w-4.5 h-4.5 text-[#003865]" />
                       <h4 className="font-bold text-sm text-slate-800">Resultados da Consulta</h4>
                     </div>
-                    <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-                      {queryResults.length} registros encontrados (máx. 200)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {['master', 'admin'].includes(user?.role || '') && (
+                        <button
+                          onClick={() => handleDeleteManufacturer('TELLESCOM')}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                          title="Excluir todos os registros do fabricante Tellescom"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Excluir Registros Tellescom</span>
+                        </button>
+                      )}
+                      <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                        {queryResults.length} registros encontrados (máx. 200)
+                      </span>
+                    </div>
                   </div>
 
                   {isQuerying ? (
