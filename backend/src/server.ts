@@ -1886,6 +1886,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
     if (foundRecord) {
       return res.json({
         success: true,
+        existsInDb: true,
         data: foundRecord,
         database: foundDb
       });

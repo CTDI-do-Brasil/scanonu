@@ -3211,7 +3211,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.6</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.7</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5115,7 +5115,7 @@ export default function App() {
 
             if (checkRes.ok) {
               const checkData = await checkRes.json();
-              if (checkData.success && checkData.existsInDb && checkData.data) {
+              if (checkData.success && checkData.data) {
                 // UNIDADE JÁ CADASTRADA NO BANCO: BLOQUEAR E IGNORAR SALVAMENTO!
                 setBipadorError(`⚠️ Unidade (${lookupVal}) já cadastrada no banco de dados! Operação ignorada para evitar duplicidade.`);
                 setIsSavingBipador(false);
