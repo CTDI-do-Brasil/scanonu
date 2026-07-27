@@ -3211,7 +3211,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.7</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.8</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5098,8 +5098,10 @@ export default function App() {
         const derivedData = deriveBipadorData(bipadorGpon, bipadorMac);
         
         const handleSaveBipadorDirect = async () => {
-          const lookupVal = derivedData.gpon_sn !== 'N/A' ? derivedData.gpon_sn : derivedData.mac;
-          if (!lookupVal || lookupVal === 'N/A') {
+          const gponVal = derivedData.gpon_sn && derivedData.gpon_sn !== 'N/A' ? derivedData.gpon_sn : null;
+          const macVal = derivedData.mac && derivedData.mac !== 'N/A' ? derivedData.mac : null;
+
+          if (!gponVal && !macVal) {
             setBipadorError('Por favor, bipe ou digite o GPON SN ou o MAC.');
             return;
           }
@@ -5108,22 +5110,37 @@ export default function App() {
           try {
             const token = localStorage.getItem('scanonu_token');
             
-            // 1. Verificar se a unidade JÁ EXISTE no Banco de Dados (Se existir, IGNORE E NÃO SALVE)
-            const checkRes = await fetch(`/api/label/${encodeURIComponent(lookupVal)}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (checkRes.ok) {
-              const checkData = await checkRes.json();
-              if (checkData.success && checkData.data) {
-                // UNIDADE JÁ CADASTRADA NO BANCO: BLOQUEAR E IGNORAR SALVAMENTO!
-                setBipadorError(`⚠️ Unidade (${lookupVal}) já cadastrada no banco de dados! Operação ignorada para evitar duplicidade.`);
-                setIsSavingBipador(false);
-                return;
+            // 1. Verificar duplicidade pelo GPON SN se fornecido
+            if (gponVal) {
+              const checkResGpon = await fetch(`/api/label/${encodeURIComponent(gponVal)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (checkResGpon.ok) {
+                const checkDataGpon = await checkResGpon.json();
+                if (checkDataGpon.success && checkDataGpon.data) {
+                  setBipadorError(`⚠️ Equipamento com GPON ${gponVal} já cadastrado no banco de dados! Operação ignorada.`);
+                  setIsSavingBipador(false);
+                  return;
+                }
               }
             }
 
-            // 2. Se for unidade NOVA (não existente), salvar no banco
+            // 2. Verificar duplicidade pelo MAC se fornecido
+            if (macVal) {
+              const checkResMac = await fetch(`/api/label/${encodeURIComponent(macVal)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (checkResMac.ok) {
+                const checkDataMac = await checkResMac.json();
+                if (checkDataMac.success && checkDataMac.data) {
+                  setBipadorError(`⚠️ Equipamento com MAC ${macVal} já cadastrado no banco de dados! Operação ignorada.`);
+                  setIsSavingBipador(false);
+                  return;
+                }
+              }
+            }
+
+            // 3. Se for unidade NOVA, salvar no banco
             const response = await fetch('/api/save-label', {
               method: 'POST',
               headers: {
@@ -5139,7 +5156,8 @@ export default function App() {
             });
             const result = await response.json();
             if (result.success) {
-              setBipadorSuccess(`✅ Unidade ${lookupVal} salva com sucesso no banco de dados!`);
+              const savedVal = gponVal || macVal || '';
+              setBipadorSuccess(`✅ Unidade ${savedVal} salva com sucesso no banco de dados!`);
               setBipadorGpon('');
               setBipadorMac('');
               setBipadorError(null);
