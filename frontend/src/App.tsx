@@ -336,6 +336,7 @@ export default function App() {
   const [bipadorGpon, setBipadorGpon] = useState('');
   const [bipadorMac, setBipadorMac] = useState('');
   const [bipadorError, setBipadorError] = useState<string | null>(null);
+  const [bipadorSuccess, setBipadorSuccess] = useState<string | null>(null);
   const [isSavingBipador, setIsSavingBipador] = useState(false);
   const bipadorGponRef = useRef<HTMLInputElement | null>(null);
   const bipadorMacRef = useRef<HTMLInputElement | null>(null);
@@ -3210,7 +3211,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.5</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.6</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4414,7 +4415,7 @@ export default function App() {
                   </button>
 
                   <button 
-                    onClick={() => { setShowBipadorModal(true); setBipadorGpon(''); setBipadorMac(''); setBipadorError(null); setTimeout(() => bipadorGponRef.current?.focus(), 100); }}
+                    onClick={() => { setShowBipadorModal(true); setBipadorGpon(''); setBipadorMac(''); setBipadorError(null); setBipadorSuccess(null); setTimeout(() => bipadorGponRef.current?.focus(), 100); }}
                     className="w-full bg-gradient-to-r from-[#00b4d8] to-[#0077b6] hover:from-[#0096c7] hover:to-[#005f73] active:scale-[0.99] text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-[#00b4d8]/20 transition-all"
                   >
                     <Barcode className="w-5 h-5" />
@@ -5138,15 +5139,18 @@ export default function App() {
             });
             const result = await response.json();
             if (result.success) {
-              setData(derivedData);
-              setDbMessage({ type: 'success', text: `✅ Unidade ${lookupVal} salva com sucesso no banco de dados!` });
-              setShowBipadorModal(false);
-              setScreen('result');
+              setBipadorSuccess(`✅ Unidade ${lookupVal} salva com sucesso no banco de dados!`);
+              setBipadorGpon('');
+              setBipadorMac('');
+              setBipadorError(null);
+              setTimeout(() => bipadorGponRef.current?.focus(), 150);
             } else {
               setBipadorError(result.error || 'Erro ao salvar no banco.');
+              setBipadorSuccess(null);
             }
           } catch (err: any) {
             setBipadorError('Erro de conexão ao verificar/salvar equipamento.');
+            setBipadorSuccess(null);
           } finally {
             setIsSavingBipador(false);
           }
@@ -5154,6 +5158,7 @@ export default function App() {
 
         // Handlers com Trava Anti-Inversão em tempo real
         const handleGponInputChange = (val: string) => {
+          setBipadorSuccess(null);
           const clean = val.toUpperCase().trim();
           if (clean.length >= 10 && !clean.startsWith('BCSK') && !bipadorMac) {
             // Operador bipou o MAC no campo do GPON! Mover automaticamente para o MAC
@@ -5166,6 +5171,7 @@ export default function App() {
         };
 
         const handleMacInputChange = (val: string) => {
+          setBipadorSuccess(null);
           const clean = val.toUpperCase().trim();
           if (clean.startsWith('BCSK')) {
             // Operador bipou o GPON no campo do MAC! Mover automaticamente para o GPON
@@ -5266,6 +5272,10 @@ export default function App() {
 
                 {bipadorError && (
                   <p className="text-xs text-red-600 font-semibold bg-red-50 p-2.5 rounded-xl border border-red-200">{bipadorError}</p>
+                )}
+
+                {bipadorSuccess && (
+                  <p className="text-xs text-emerald-700 font-semibold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{bipadorSuccess}</p>
                 )}
               </div>
 
