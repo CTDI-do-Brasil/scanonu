@@ -1058,6 +1058,11 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'NP5454T';
   }
 
+  // NP7287G
+  if (modelClean.includes('NP7287G') || modelClean.includes('7287G') || modelClean.includes('7287')) {
+    return 'NP7287G';
+  }
+
   // ZTE ZXHN F680
   if (modelClean.includes('F680') || modelClean.includes('680')) {
     return 'ZXHN F680';
@@ -1335,22 +1340,22 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
 
     if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || fabricanteNorm.toUpperCase().includes('KAON')) {
       let actualGpon = '';
-      if (gponNorm && gponNorm.startsWith('GP0')) {
-        actualGpon = gponNorm;
-      } else if (gponNorm && gponNorm.startsWith('GP')) {
-        actualGpon = 'GP0' + gponNorm.substring(2);
-      } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP0')) {
-        actualGpon = geminiData.cpe_sn.toUpperCase();
+      if (gponNorm && (gponNorm.toUpperCase().startsWith('GPO') || gponNorm.toUpperCase().startsWith('GP0'))) {
+        actualGpon = 'GPO' + gponNorm.substring(3);
+      } else if (gponNorm && gponNorm.toUpperCase().startsWith('GP')) {
+        actualGpon = 'GPO' + gponNorm.substring(2);
+      } else if (geminiData.cpe_sn && (geminiData.cpe_sn.toUpperCase().startsWith('GPO') || geminiData.cpe_sn.toUpperCase().startsWith('GP0'))) {
+        actualGpon = 'GPO' + geminiData.cpe_sn.substring(3);
       } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP')) {
-        actualGpon = 'GP0' + geminiData.cpe_sn.toUpperCase().substring(2);
-      } else if (cpeNorm && cpeNorm.startsWith('N7')) {
-        actualGpon = 'GP0' + cpeNorm.substring(2);
-      } else if (gponNorm && gponNorm.startsWith('N7')) {
-        actualGpon = 'GP0' + gponNorm.substring(2);
+        actualGpon = 'GPO' + geminiData.cpe_sn.substring(2);
+      } else if (cpeNorm && cpeNorm.toUpperCase().startsWith('N7')) {
+        actualGpon = 'GPO' + cpeNorm.substring(2);
+      } else if (gponNorm && gponNorm.toUpperCase().startsWith('N7')) {
+        actualGpon = 'GPO' + gponNorm.substring(2);
       }
 
       if (actualGpon) {
-        gponNorm = actualGpon.replace(/[^A-Z0-9]/ig, '');
+        gponNorm = actualGpon.replace(/[^A-Z0-9]/ig, '').toUpperCase();
       }
       cpeNorm = 'N/A';
     }

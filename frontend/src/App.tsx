@@ -114,24 +114,30 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'Blu-Castle';
   }
 
-  // Se for Kaon, restaurar o GPON correto (começando com GP0...) se foi jogado em cpe_sn
+  // Normalizar modelo se for Tellescom NP7287G
+  if (modelUpper.includes('NP7287G') || modelUpper.includes('7287G') || modelUpper.includes('7287')) {
+    dataCopy.modelo = 'NP7287G';
+    dataCopy.fabricante = 'Tellescom';
+  }
+
+  // Se for Kaon, restaurar o GPON correto (começando com GPO...) se foi jogado em cpe_sn
   if (isKaonModel) {
     let actualGpon = '';
     const gponUpper = (dataCopy.gpon_sn || '').toUpperCase();
     const cpeUpper = (dataCopy.cpe_sn || '').toUpperCase();
 
-    if (gponUpper.startsWith('GP0')) {
-      actualGpon = gponUpper;
+    if (gponUpper.startsWith('GPO') || gponUpper.startsWith('GP0')) {
+      actualGpon = 'GPO' + gponUpper.substring(3);
     } else if (gponUpper.startsWith('GP')) {
-      actualGpon = 'GP0' + gponUpper.substring(2);
-    } else if (cpeUpper.startsWith('GP0')) {
-      actualGpon = cpeUpper;
+      actualGpon = 'GPO' + gponUpper.substring(2);
+    } else if (cpeUpper.startsWith('GPO') || cpeUpper.startsWith('GP0')) {
+      actualGpon = 'GPO' + cpeUpper.substring(3);
     } else if (cpeUpper.startsWith('GP')) {
-      actualGpon = 'GP0' + cpeUpper.substring(2);
+      actualGpon = 'GPO' + cpeUpper.substring(2);
     } else if (cpeUpper.startsWith('N7')) {
-      actualGpon = 'GP0' + cpeUpper.substring(2);
+      actualGpon = 'GPO' + cpeUpper.substring(2);
     } else if (gponUpper.startsWith('N7')) {
-      actualGpon = 'GP0' + gponUpper.substring(2);
+      actualGpon = 'GPO' + gponUpper.substring(2);
     }
 
     if (actualGpon) {
