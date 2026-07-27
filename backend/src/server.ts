@@ -230,8 +230,8 @@ ZPL Bruto:
 ${rawZpl}`;
 
     let response: any;
-    // Tentar rodar com os modelos ativos da série 2.5 (gemini-2.5-flash, gemini-2.5-flash-lite, gemini-2.5-pro)
-    for (const modelName of ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']) {
+    // Tentar rodar com os modelos ativos da série (gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro)
+    for (const modelName of ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']) {
       try {
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
@@ -1221,8 +1221,8 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const maxAttempts = 2;
     let lastError: any = null;
 
-    // Tentamos os modelos ativos da série 2.5 em sequência: gemini-2.5-flash, gemini-2.5-flash-lite e gemini-2.5-pro
-    for (const modelName of ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']) {
+    // Tentamos os modelos ativos da série 2.0 e 1.5 em sequência: gemini-2.0-flash, gemini-1.5-flash e gemini-1.5-pro
+    for (const modelName of ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
