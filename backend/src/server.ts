@@ -1652,13 +1652,28 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let duplicateType = 'GPON Serial';
 
     if (gpon_sn && gpon_sn.toUpperCase() !== 'N/A' && gpon_sn.toUpperCase() !== 'NA') {
-      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+      if (mac && mac.toUpperCase() !== 'N/A' && mac.toUpperCase() !== 'NA') {
+        checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $2', [gpon_sn, mac]);
+        duplicateType = 'GPON ou MAC';
+      } else {
+        checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+      }
+    } else if (mac && mac.toUpperCase() !== 'N/A' && mac.toUpperCase() !== 'NA') {
+      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE mac = $1', [mac]);
+      duplicateType = 'MAC';
     } else if (wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
       checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE wifi_ssid = $1', [wifi_ssid]);
       duplicateType = 'SSID da Rede (pois não há GPON na etiqueta)';
     }
 
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
+
+    if (exists && !overwrite) {
+      return res.status(400).json({
+        success: false,
+        error: `⚠️ Equipamento (${duplicateType}) já cadastrado no banco de dados! Operação ignorada para evitar duplicidade.`
+      });
+    }
     
     // NOVO: Lógica de reconciliação (IA -> Planilha)
     let reconciledGpon = null;
