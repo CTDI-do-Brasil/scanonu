@@ -1219,7 +1219,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
 
     let response: any;
     const maxAttempts = 2;
-    let lastError: any = null;
+    const errorsMap: Record<string, string> = {};
 
     // Tentamos os modelos ativos da série 2.0 e 1.5 em sequência: gemini-2.0-flash, gemini-1.5-flash e gemini-1.5-pro
     for (const modelName of ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']) {
@@ -1269,8 +1269,8 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
           scanSource = `gemini-vision (${modelName})`;
           break;
         } catch (err: any) {
-          lastError = err;
           const errMsg = err?.message || String(err);
+          errorsMap[`${modelName}_attempt_${attempt}`] = errMsg;
           console.warn(`Erro no modelo ${modelName} na tentativa ${attempt}/${maxAttempts}:`, errMsg);
           
           if (errMsg.includes('Validation') || errMsg.includes('Schema')) {
@@ -1291,7 +1291,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     }
 
     if (!response) {
-      throw lastError || new Error('Não foi possível obter resposta da API do Gemini com nenhum modelo.');
+      throw new Error(`Falha na leitura do Gemini. Detalhes dos erros por modelo: ${JSON.stringify(errorsMap)}`);
     }
 
     const responseText = response.text;
