@@ -243,14 +243,16 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
   const merged = { ...scanned } as any;
   const isNP5454T = (existing.modelo && existing.modelo.toUpperCase().includes('NP5454T')) ||
                     (scanned.modelo && scanned.modelo.toUpperCase().includes('NP5454T'));
+  const is5670 = (existing.modelo && existing.modelo.toUpperCase().includes('5670')) ||
+                 (scanned.modelo && scanned.modelo.toUpperCase().includes('5670'));
 
-  if (isNP5454T) {
-    // Regras específicas do NP5454T:
+  if (isNP5454T || is5670) {
+    // Regras específicas do NP5454T e F@ST 5670:
     // Nunca alterar S/N e MAC do banco
     merged.cpe_sn = existing.cpe_sn || 'N/A';
     merged.mac = existing.mac || 'N/A';
-    merged.fabricante = existing.fabricante || 'Tellescom';
-    merged.modelo = existing.modelo || 'NP5454T';
+    merged.fabricante = existing.fabricante || (isNP5454T ? 'Tellescom' : 'Sagemcom');
+    merged.modelo = existing.modelo || (isNP5454T ? 'NP5454T' : (scanned.modelo && scanned.modelo.includes('V2') ? 'F@ST 5670V2' : 'F@ST 5670'));
 
     // Completar Senha WEB e Senha Wi-Fi
     const dbSenha = existing.senha || (existing as any).web_key;
@@ -282,6 +284,16 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
     } else {
       // Cenário B: Não alterar GPON SN (manter o que está no banco)
       merged.gpon_sn = existing.gpon_sn || 'N/A';
+    }
+
+    if (isNP5454T) {
+      // SSIDs baseados nos 4 últimos dígitos do S/N final (somente para NP5454T)
+      const cleanSn = merged.cpe_sn.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+      if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
+        const last4 = cleanSn.slice(-4);
+        merged.wifi_ssid = `TIM_ULTRAFIBRA_${last4}_2G`;
+        merged.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4}_5G`;
+      }
     }
   } else {
     // Lógica padrão para outros modelos

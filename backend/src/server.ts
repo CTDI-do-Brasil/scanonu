@@ -1404,9 +1404,10 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       try {
         let checkRes: any = { rowCount: 0, rows: [] as any[] };
         const normModelo = normalizeModel(scanResult.modelo || '', scanResult.fabricante || '');
-        if (normModelo === 'NP5454T') {
+        const isReconcileModel = normModelo === 'NP5454T' || normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2';
+        if (isReconcileModel) {
           checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'NP5454T' OR modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
@@ -1654,11 +1655,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let checkRes: any = { rowCount: 0 };
     let duplicateType = 'GPON Serial';
 
-    const isNP5454T = normalizedModelo === 'NP5454T';
+    const isReconcileModel = normalizedModelo === 'NP5454T' || normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
 
-    if (isNP5454T) {
+    if (isReconcileModel) {
       checkRes = await pool.query(
-        "SELECT * FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+        "SELECT * FROM etiquetas_scan_onu WHERE (modelo = 'NP5454T' OR modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
         [cpe_sn, mac]
       );
       duplicateType = 'MAC ou S/N';
@@ -1679,7 +1680,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
 
-    if (exists && !overwrite && !isNP5454T) {
+    if (exists && !overwrite && !isReconcileModel) {
       return res.status(400).json({
         success: false,
         error: `⚠️ Equipamento (${duplicateType}) já cadastrado no banco de dados! Operação ignorada para evitar duplicidade.`
@@ -1764,13 +1765,16 @@ app.post('/api/save-label', async (req: any, res: any) => {
         let finalWebKey = getMergedValue(resolvedWebKey, dbRow?.web_key);
         let finalGpon = exists ? dbRow.gpon_sn : (reconciledGpon || gpon_sn);
 
-        if (exists && dbRow && dbRow.modelo === 'NP5454T') {
-          // Regras específicas do NP5454T:
+        const isNP5454T = dbRow?.modelo === 'NP5454T';
+        const is5670 = dbRow?.modelo === 'F@ST 5670' || dbRow?.modelo === 'F@ST 5670V2';
+
+        if (exists && dbRow && (isNP5454T || is5670)) {
+          // Regras específicas do NP5454T e F@ST 5670:
           // Nunca alterar S/N e MAC do banco
           finalCpe = dbRow.cpe_sn || 'N/A';
           finalMac = dbRow.mac || 'N/A';
-          finalFabricante = dbRow.fabricante || 'Tellescom';
-          finalModelo = dbRow.modelo || 'NP5454T';
+          finalFabricante = dbRow.fabricante || (isNP5454T ? 'Tellescom' : 'Sagemcom');
+          finalModelo = dbRow.modelo || (isNP5454T ? 'NP5454T' : 'F@ST 5670');
 
           // Completar Senha WEB e Senha Wi-Fi se estiver em branco / N/A
           finalWifiKey = (dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A');
@@ -1794,12 +1798,14 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalGpon = dbRow.gpon_sn || 'N/A';
           }
 
-          // SSIDs baseados nos 4 últimos dígitos do S/N final
-          const cleanSn = finalCpe.replace(/[^A-Z0-9]/ig, '').toUpperCase();
-          if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
-            const last4 = cleanSn.slice(-4);
-            finalSsid = `TIM_ULTRAFIBRA_${last4}_2G`;
-            finalSsid5g = `TIM_ULTRAFIBRA_${last4}_5G`;
+          if (isNP5454T) {
+            // SSIDs baseados nos 4 últimos dígitos do S/N final (apenas para o NP5454T)
+            const cleanSn = finalCpe.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
+              const last4 = cleanSn.slice(-4);
+              finalSsid = `TIM_ULTRAFIBRA_${last4}_2G`;
+              finalSsid5g = `TIM_ULTRAFIBRA_${last4}_5G`;
+            }
           }
         }
 
