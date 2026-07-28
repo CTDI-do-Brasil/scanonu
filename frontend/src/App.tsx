@@ -120,6 +120,12 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'Tellescom';
   }
 
+  // Normalizar modelo se for NP5454T
+  if (modelUpper.includes('NP5454T') || modelUpper.includes('5454T') || modelUpper.includes('5454')) {
+    dataCopy.modelo = 'NP5454T';
+    dataCopy.fabricante = 'Tellescom';
+  }
+
   // Se for Kaon, restaurar o GPON correto (começando com GPO...) se foi jogado em cpe_sn
   if (isKaonModel) {
     let actualGpon = '';
@@ -188,6 +194,16 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
   
+  // Rule 1.8: Tellescom NP5454T (SSID based on S/N last 4 digits)
+  else if (modelUpper.includes('NP5454T') || modelUpper.includes('5454T') || modelUpper.includes('5454')) {
+    const cleanSn = (dataCopy.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
+      const last4 = cleanSn.slice(-4);
+      dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4}_2G`;
+      dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4}_5G`;
+    }
+  }
+  
   // Rule 2 & 3: F@ST 5655V2
   else if (modelUpper.includes('5655V2') || modelUpper.includes('5655 V2')) {
     // Check which format to use. We check if current scanned SSID has "LIVE" or if the 5G SSID has value
@@ -221,6 +237,70 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   }
   
   return dataCopy;
+}
+
+function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): ScanData {
+  const merged = { ...scanned } as any;
+  const isNP5454T = (existing.modelo && existing.modelo.toUpperCase().includes('NP5454T')) ||
+                    (scanned.modelo && scanned.modelo.toUpperCase().includes('NP5454T'));
+
+  if (isNP5454T) {
+    // Regras específicas do NP5454T:
+    // Nunca alterar S/N e MAC do banco
+    merged.cpe_sn = existing.cpe_sn || 'N/A';
+    merged.mac = existing.mac || 'N/A';
+    merged.fabricante = existing.fabricante || 'Tellescom';
+    merged.modelo = existing.modelo || 'NP5454T';
+
+    // Completar Senha WEB e Senha Wi-Fi
+    const dbSenha = existing.senha || (existing as any).web_key;
+    const scanSenha = scanned.senha || (scanned as any).web_key;
+    merged.senha = (dbSenha && dbSenha !== 'N/A' && dbSenha !== 'NA') ? dbSenha : (scanSenha || 'N/A');
+    if ('web_key' in merged) {
+      merged.web_key = merged.senha;
+    }
+
+    const dbWifiKey = existing.wifi_key;
+    const scanWifiKey = scanned.wifi_key;
+    merged.wifi_key = (dbWifiKey && dbWifiKey !== 'N/A' && dbWifiKey !== 'NA') ? dbWifiKey : (scanWifiKey || 'N/A');
+
+    // Validação de cenário A (ambos batem) vs cenário B (apenas um ou nenhum bate)
+    const dbCpeClean = (existing.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const scanCpeClean = (scanned.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const dbMacClean = (existing.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const scanMacClean = (scanned.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+
+    const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
+    const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
+    const bothMatch = cpeMatches && macMatches;
+
+    if (bothMatch) {
+      // Cenário A: Completar GPON SN se não tiver no banco
+      const dbGpon = existing.gpon_sn;
+      const scanGpon = scanned.gpon_sn;
+      merged.gpon_sn = (dbGpon && !dbGpon.toUpperCase().startsWith('N/A')) ? dbGpon : (scanGpon || 'N/A');
+    } else {
+      // Cenário B: Não alterar GPON SN (manter o que está no banco)
+      merged.gpon_sn = existing.gpon_sn || 'N/A';
+    }
+  } else {
+    // Lógica padrão para outros modelos
+    Object.keys(scanned).forEach(key => {
+      const val = (scanned as any)[key];
+      if (val && val.toUpperCase() !== 'N/A' && val.toUpperCase() !== 'NA' && val.trim() !== '') {
+        merged[key] = val;
+      }
+    });
+
+    Object.keys(existing).forEach(key => {
+      const newVal = (existing as any)[key];
+      if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+        merged[key] = newVal;
+      }
+    });
+  }
+
+  return applyMacSsidRules(merged);
 }
 
 function deriveBipadorData(gponInput: string, macInput: string): ScanData {
@@ -1590,14 +1670,15 @@ export default function App() {
                   errorMsg: 'Etiqueta Reimpressa Bloqueada'
                 } : item));
               } else if (result.existsInDb) {
+                const mergedBatchData = mergeExistingAndScannedData(result.existingData, processedData);
                 const dbHasMissingWifi = !result.existingData?.wifi_ssid || result.existingData?.wifi_ssid === 'N/A' || result.existingData?.wifi_ssid === 'NA';
-                const capturedHasWifi = processedData.wifi_ssid && processedData.wifi_ssid !== 'N/A' && processedData.wifi_ssid !== 'NA';
+                const capturedHasWifi = mergedBatchData.wifi_ssid && mergedBatchData.wifi_ssid !== 'N/A' && mergedBatchData.wifi_ssid !== 'NA';
 
                 if (dbHasMissingWifi && capturedHasWifi) {
                   // O registro no banco não tinha SSID/Senhas (veio da planilha de pré-cadastro), mas a foto atual leu! Atualizar no banco
                   setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
                     ...item, 
-                    data: processedData,
+                    data: mergedBatchData,
                     isSaving: true
                   } : item));
 
@@ -1609,7 +1690,7 @@ export default function App() {
                         'Authorization': `Bearer ${token}`
                       },
                       body: JSON.stringify({
-                        ...processedData,
+                        ...mergedBatchData,
                         operador: user?.email || 'admin@scanonu.com',
                         overwrite: true,
                         operacao: user?.operacao || 'CTDI MATRIZ'
@@ -1642,7 +1723,7 @@ export default function App() {
                 } else {
                   setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
                     ...item, 
-                    data: processedData, 
+                    data: mergedBatchData, 
                     status: 'duplicate',
                     existsInDb: true,
                     existingData: result.existingData
@@ -2024,28 +2105,9 @@ export default function App() {
         if (result.data.reimpressa) {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
-        if (result.existsInDb && result.existingData) {
+         if (result.existsInDb && result.existingData) {
           setData(prevData => {
-            const merged = { ...prevData } as any;
-            
-            // 1. Mesclar a captura atual (ex: senhas e SSID capturados pelo Gemini)
-            const scanData = result.data || {};
-            Object.keys(scanData).forEach(key => {
-              const val = scanData[key];
-              if (val && val.toUpperCase() !== 'N/A' && val.toUpperCase() !== 'NA' && val.trim() !== '') {
-                merged[key] = val;
-              }
-            });
-
-            // 2. Mesclar os dados existentes no banco (ex: SN/MAC/GPON pre-carregados)
-            Object.keys(result.existingData).forEach(key => {
-              const newVal = (result.existingData as any)[key];
-              if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
-                merged[key] = newVal;
-              }
-            });
-            
-            return applyMacSsidRules(merged);
+            return mergeExistingAndScannedData(result.existingData, result.data || prevData);
           });
           setEquipmentExistsInDb(true);
           setExistingEquipmentData(result.existingData);

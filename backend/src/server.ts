@@ -1404,9 +1404,12 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       try {
         let checkRes: any = { rowCount: 0, rows: [] as any[] };
         const normModelo = normalizeModel(scanResult.modelo || '', scanResult.fabricante || '');
-        const isScanFast5670 = normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2';
-        
-        if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
+        if (normModelo === 'NP5454T') {
+          checkRes = await dbPool.query(
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+            [scanResult.cpe_sn, scanResult.mac]
+          );
+        } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
             'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $3 AND mac <> \'N/A\')',
             [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
@@ -1651,7 +1654,15 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let checkRes: any = { rowCount: 0 };
     let duplicateType = 'GPON Serial';
 
-    if (gpon_sn && gpon_sn.toUpperCase() !== 'N/A' && gpon_sn.toUpperCase() !== 'NA') {
+    const isNP5454T = normalizedModelo === 'NP5454T';
+
+    if (isNP5454T) {
+      checkRes = await pool.query(
+        "SELECT * FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+        [cpe_sn, mac]
+      );
+      duplicateType = 'MAC ou S/N';
+    } else if (gpon_sn && gpon_sn.toUpperCase() !== 'N/A' && gpon_sn.toUpperCase() !== 'NA') {
       if (mac && mac.toUpperCase() !== 'N/A' && mac.toUpperCase() !== 'NA') {
         checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $2', [gpon_sn, mac]);
         duplicateType = 'GPON ou MAC';
@@ -1668,7 +1679,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
 
-    if (exists && !overwrite) {
+    if (exists && !overwrite && !isNP5454T) {
       return res.status(400).json({
         success: false,
         error: `⚠️ Equipamento (${duplicateType}) já cadastrado no banco de dados! Operação ignorada para evitar duplicidade.`
@@ -1742,15 +1753,55 @@ app.post('/api/save-label', async (req: any, res: any) => {
           return newVal;
         };
 
-        const finalFabricante = getMergedValue(fabricante, dbRow?.fabricante);
-        const finalModelo = getMergedValue(reconciledModelo || normalizedModelo, dbRow?.modelo);
-        const finalCpe = getMergedValue(reconciledCpe || cpe_sn, dbRow?.cpe_sn);
-        const finalMac = getMergedValue(reconciledMac || mac, dbRow?.mac);
-        const finalSsid = getMergedValue(wifi_ssid, dbRow?.wifi_ssid);
-        const finalSsid5g = getMergedValue(resolvedWifiSsid5g, dbRow?.wifi_ssid_5g);
-        const finalWifiKey = getMergedValue(wifi_key, dbRow?.wifi_key);
-        const finalUsuario = getMergedValue(usuario, dbRow?.usuario);
-        const finalWebKey = getMergedValue(resolvedWebKey, dbRow?.web_key);
+        let finalFabricante = getMergedValue(fabricante, dbRow?.fabricante);
+        let finalModelo = getMergedValue(reconciledModelo || normalizedModelo, dbRow?.modelo);
+        let finalCpe = getMergedValue(reconciledCpe || cpe_sn, dbRow?.cpe_sn);
+        let finalMac = getMergedValue(reconciledMac || mac, dbRow?.mac);
+        let finalSsid = getMergedValue(wifi_ssid, dbRow?.wifi_ssid);
+        let finalSsid5g = getMergedValue(resolvedWifiSsid5g, dbRow?.wifi_ssid_5g);
+        let finalWifiKey = getMergedValue(wifi_key, dbRow?.wifi_key);
+        let finalUsuario = getMergedValue(usuario, dbRow?.usuario);
+        let finalWebKey = getMergedValue(resolvedWebKey, dbRow?.web_key);
+        let finalGpon = exists ? dbRow.gpon_sn : (reconciledGpon || gpon_sn);
+
+        if (exists && dbRow && dbRow.modelo === 'NP5454T') {
+          // Regras específicas do NP5454T:
+          // Nunca alterar S/N e MAC do banco
+          finalCpe = dbRow.cpe_sn || 'N/A';
+          finalMac = dbRow.mac || 'N/A';
+          finalFabricante = dbRow.fabricante || 'Tellescom';
+          finalModelo = dbRow.modelo || 'NP5454T';
+
+          // Completar Senha WEB e Senha Wi-Fi se estiver em branco / N/A
+          finalWifiKey = (dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A');
+          finalWebKey = (dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A');
+
+          // Cenário A vs B para o GPON
+          const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+          const scanCpeClean = (cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+          const dbMacClean = (dbRow.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+          const scanMacClean = (mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+
+          const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
+          const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
+          const bothMatch = cpeMatches && macMatches;
+
+          if (bothMatch) {
+            // Cenário A: Completar GPON SN se não tiver no banco
+            finalGpon = (dbRow.gpon_sn && !dbRow.gpon_sn.toUpperCase().startsWith('N/A')) ? dbRow.gpon_sn : (gpon_sn || 'N/A');
+          } else {
+            // Cenário B: Manter GPON SN inalterado (manter o que está no banco)
+            finalGpon = dbRow.gpon_sn || 'N/A';
+          }
+
+          // SSIDs baseados nos 4 últimos dígitos do S/N final
+          const cleanSn = finalCpe.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+          if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
+            const last4 = cleanSn.slice(-4);
+            finalSsid = `TIM_ULTRAFIBRA_${last4}_2G`;
+            finalSsid5g = `TIM_ULTRAFIBRA_${last4}_5G`;
+          }
+        }
 
         if (exists) {
           const fieldsChanged = 
@@ -1762,7 +1813,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
             (finalSsid5g || 'N/A').toUpperCase() !== (dbRow.wifi_ssid_5g || 'N/A').toUpperCase() ||
             finalWifiKey !== (dbRow.wifi_key || 'N/A') ||
             finalUsuario !== (dbRow.usuario || 'N/A') ||
-            finalWebKey !== (dbRow.web_key || 'N/A');
+            finalWebKey !== (dbRow.web_key || 'N/A') ||
+            finalGpon !== (dbRow.gpon_sn || 'N/A');
 
           if (!fieldsChanged) {
             return res.json({
@@ -1791,6 +1843,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
             imagem_url = COALESCE($12, imagem_url),
             operacao = $13,
             password_router = $14,
+            gpon_sn = $15,
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
@@ -1810,7 +1863,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
         targetGpon,
         zplUrl || imagem_url || null,
         operacao || 'CTDI MATRIZ',
-        finalPasswordRouter
+        finalPasswordRouter,
+        finalGpon
       ];
       await pool.query(updateQuery, updateValues);
       console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON alvo: ${targetGpon}`);
