@@ -1770,35 +1770,67 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
         if (exists && dbRow && (isNP5454T || is5670)) {
           // Regras específicas do NP5454T e F@ST 5670:
-          // Nunca alterar S/N e MAC do banco
-          finalCpe = dbRow.cpe_sn || 'N/A';
-          finalMac = dbRow.mac || 'N/A';
-          finalFabricante = dbRow.fabricante || (isNP5454T ? 'Tellescom' : 'Sagemcom');
-          finalModelo = dbRow.modelo || (isNP5454T ? 'NP5454T' : 'F@ST 5670');
+          // Se for F@ST 5670, permitimos que o operador edite qualquer caractere se houver mudança.
+          // Caso contrário, mantemos os dados originais do banco (regra padrão de reconciliação).
+          if (is5670) {
+            finalCpe = (cpe_sn && cpe_sn !== dbRow.cpe_sn) ? cpe_sn : (dbRow.cpe_sn || 'N/A');
+            finalMac = (mac && mac !== dbRow.mac) ? mac : (dbRow.mac || 'N/A');
+            finalFabricante = (fabricante && fabricante !== dbRow.fabricante) ? fabricante : (dbRow.fabricante || 'Sagemcom');
+            finalModelo = (modelo && modelo !== dbRow.modelo) ? modelo : (dbRow.modelo || 'F@ST 5670');
+            finalSsid = (wifi_ssid && wifi_ssid !== dbRow.wifi_ssid) ? wifi_ssid : (dbRow.wifi_ssid || wifi_ssid || 'N/A');
+            finalSsid5g = (resolvedWifiSsid5g && resolvedWifiSsid5g !== dbRow.wifi_ssid_5g) ? resolvedWifiSsid5g : (dbRow.wifi_ssid_5g || resolvedWifiSsid5g || 'N/A');
+            finalWifiKey = (wifi_key && wifi_key !== dbRow.wifi_key) ? wifi_key : ((dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A'));
+            finalWebKey = (resolvedWebKey && resolvedWebKey !== dbRow.web_key) ? resolvedWebKey : ((dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A'));
+            finalUsuario = (usuario && usuario !== dbRow.usuario) ? usuario : (dbRow.usuario || 'N/A');
 
-          // Completar Senha WEB e Senha Wi-Fi se estiver em branco / N/A
-          finalWifiKey = (dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A');
-          finalWebKey = (dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A');
+            if (gpon_sn && gpon_sn !== dbRow.gpon_sn) {
+              finalGpon = gpon_sn;
+            } else {
+              // Cenário A vs B para o GPON
+              const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+              const scanCpeClean = (cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+              const dbMacClean = (dbRow.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+              const scanMacClean = (mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
 
-          // Cenário A vs B para o GPON
-          const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-          const scanCpeClean = (cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-          const dbMacClean = (dbRow.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-          const scanMacClean = (mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+              const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
+              const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
+              const bothMatch = cpeMatches && macMatches;
 
-          const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
-          const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
-          const bothMatch = cpeMatches && macMatches;
-
-          if (bothMatch) {
-            // Cenário A: Completar GPON SN se não tiver no banco
-            finalGpon = (dbRow.gpon_sn && !dbRow.gpon_sn.toUpperCase().startsWith('N/A')) ? dbRow.gpon_sn : (gpon_sn || 'N/A');
+              if (bothMatch) {
+                finalGpon = (dbRow.gpon_sn && !dbRow.gpon_sn.toUpperCase().startsWith('N/A')) ? dbRow.gpon_sn : (gpon_sn || 'N/A');
+              } else {
+                finalGpon = dbRow.gpon_sn || 'N/A';
+              }
+            }
           } else {
-            // Cenário B: Manter GPON SN inalterado (manter o que está no banco)
-            finalGpon = dbRow.gpon_sn || 'N/A';
-          }
+            // NP5454T (Mantém 100% estrito do banco)
+            finalCpe = dbRow.cpe_sn || 'N/A';
+            finalMac = dbRow.mac || 'N/A';
+            finalFabricante = dbRow.fabricante || 'Tellescom';
+            finalModelo = dbRow.modelo || 'NP5454T';
 
-          if (isNP5454T) {
+            // Completar Senha WEB e Senha Wi-Fi se estiver em branco / N/A
+            finalWifiKey = (dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A');
+            finalWebKey = (dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A');
+
+            // Cenário A vs B para o GPON
+            const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            const scanCpeClean = (cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            const dbMacClean = (dbRow.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            const scanMacClean = (mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+
+            const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
+            const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
+            const bothMatch = cpeMatches && macMatches;
+
+            if (bothMatch) {
+              // Cenário A: Completar GPON SN se não tiver no banco
+              finalGpon = (dbRow.gpon_sn && !dbRow.gpon_sn.toUpperCase().startsWith('N/A')) ? dbRow.gpon_sn : (gpon_sn || 'N/A');
+            } else {
+              // Cenário B: Manter GPON SN inalterado (manter o que está no banco)
+              finalGpon = dbRow.gpon_sn || 'N/A';
+            }
+
             // SSIDs baseados nos 4 últimos dígitos do S/N final (apenas para o NP5454T)
             const cleanSn = finalCpe.replace(/[^A-Z0-9]/ig, '').toUpperCase();
             if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
