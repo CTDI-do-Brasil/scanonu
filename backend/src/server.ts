@@ -1571,10 +1571,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     if (isFast5670) {
       if (wifi_key && wifi_key.toUpperCase() !== 'N/A' && wifi_key.trim().length !== 10) {
-        return res.status(400).json({ success: false, error: `Senha WIFI inválida para F@ST 5670. Esperado: 10 caracteres. Capturado: ${wifi_key.trim().length} (${wifi_key})` });
+        return res.status(400).json({ success: false, error: `A extração identificou caracteres a mais na Senha WIFI do F@ST 5670 (capturado: ${wifi_key.trim().length} caracteres). Por favor, digite a Senha WIFI manualmente na tela (esperado: 10 caracteres).` });
       }
       if (resolvedWebKey && resolvedWebKey.toUpperCase() !== 'N/A' && resolvedWebKey.trim().length !== 8) {
-        return res.status(400).json({ success: false, error: `Senha WEB inválida para F@ST 5670. Esperado: 8 caracteres. Capturado: ${resolvedWebKey.trim().length} (${resolvedWebKey})` });
+        return res.status(400).json({ success: false, error: `A extração identificou caracteres a mais na Senha WEB do F@ST 5670 (capturado: ${resolvedWebKey.trim().length} caracteres). Por favor, digite a Senha WEB manualmente na tela (esperado: 8 caracteres).` });
       }
     }
 

@@ -3285,7 +3285,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.8</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.9</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4686,6 +4686,27 @@ export default function App() {
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parâmetros analisados</span>
                   </div>
 
+                  {(() => {
+                    const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
+                    const isWifiKeyInvalidLength = isFast5670Model && Boolean(data.wifi_key && data.wifi_key.toUpperCase() !== 'N/A' && data.wifi_key.trim().length !== 10);
+                    const isWebKeyInvalidLength = isFast5670Model && Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 8);
+                    const has5670PasswordWarning = isWifiKeyInvalidLength || isWebKeyInvalidLength;
+
+                    if (!has5670PasswordWarning) return null;
+
+                    return (
+                      <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-start gap-3 text-amber-900 animate-fadeIn">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-xs space-y-1">
+                          <p className="font-bold">Atenção — Caracteres excedentes na extração (F@ST 5670)</p>
+                          <p className="text-amber-800 leading-relaxed">
+                            Identificamos que a extração da imagem detectou caracteres a mais na {isWifiKeyInvalidLength && isWebKeyInvalidLength ? 'Senha Wi-Fi e Senha WEB' : isWifiKeyInvalidLength ? 'Senha Wi-Fi' : 'Senha WEB'}. <span className="font-semibold underline">Por favor, confira na etiqueta e digite a senha correta manualmente nos campos abaixo antes de salvar.</span>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="space-y-3.5">
                     {(Object.keys(fieldLabels) as Array<keyof typeof fieldLabels>).map((field) => {
                       const label = fieldLabels[field];
@@ -4695,6 +4716,11 @@ export default function App() {
                       if (field === 'cpe_sn' && (!value || value.toUpperCase() === 'N/A' || value.toUpperCase() === 'NA')) {
                         return null;
                       }
+
+                      const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
+                      const isWifiKeyInvalidLength = field === 'wifi_key' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
+                      const isWebKeyInvalidLength = field === 'senha' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8);
+                      const isFieldInvalidLength = isWifiKeyInvalidLength || isWebKeyInvalidLength;
 
                       return (
                         <div key={field} className="flex flex-col gap-1">
@@ -4714,7 +4740,11 @@ export default function App() {
                                 }
                                 setData(updated);
                               }}
-                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-lg pl-3 pr-10 py-2 text-sm text-slate-800 outline-none transition-all font-medium"
+                              className={`w-full bg-slate-50 border rounded-lg pl-3 pr-10 py-2 text-sm text-slate-800 outline-none transition-all font-medium ${
+                                isFieldInvalidLength
+                                  ? 'border-amber-500 bg-amber-50/40 focus:border-amber-600 focus:ring-1 focus:ring-amber-500'
+                                  : 'border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865]'
+                              }`}
                               placeholder={`Insira o ${label.toLowerCase()}`}
                             />
                             {value && (
@@ -4731,6 +4761,14 @@ export default function App() {
                               </button>
                             )}
                           </div>
+                          {isFieldInvalidLength && (
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 mt-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                Digite a senha manualmente na tela — {field === 'wifi_key' ? `Esperado: 10 caracteres (atual: ${value.trim().length})` : `Esperado: 8 caracteres (atual: ${value.trim().length})`}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
