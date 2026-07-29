@@ -3285,7 +3285,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.9</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.10</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4689,7 +4689,7 @@ export default function App() {
                   {(() => {
                     const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
                     const isWifiKeyInvalidLength = isFast5670Model && Boolean(data.wifi_key && data.wifi_key.toUpperCase() !== 'N/A' && data.wifi_key.trim().length !== 10);
-                    const isWebKeyInvalidLength = isFast5670Model && Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 8);
+                    const isWebKeyInvalidLength = isFast5670Model && Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 8 && data.senha.trim().length !== 9);
                     const has5670PasswordWarning = isWifiKeyInvalidLength || isWebKeyInvalidLength;
 
                     if (!has5670PasswordWarning) return null;
@@ -4719,7 +4719,7 @@ export default function App() {
 
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
                       const isWifiKeyInvalidLength = field === 'wifi_key' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
-                      const isWebKeyInvalidLength = field === 'senha' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8);
+                      const isWebKeyInvalidLength = field === 'senha' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8 && value.trim().length !== 9);
                       const isFieldInvalidLength = isWifiKeyInvalidLength || isWebKeyInvalidLength;
 
                       return (
