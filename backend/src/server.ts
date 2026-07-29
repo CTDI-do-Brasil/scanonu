@@ -1800,9 +1800,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalFabricante = dbRow.fabricante || 'Tellescom';
             finalModelo = dbRow.modelo || 'NP5454T';
 
-            // Completar Senha WEB e Senha Wi-Fi se estiver em branco / N/A
-            finalWifiKey = (dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A');
-            finalWebKey = (dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A');
+            // Permitir editar e salvar no banco as informações de SENHA WEB e SENHA WIFI
+            finalWifiKey = (wifi_key && wifi_key.trim() !== '' && wifi_key.toUpperCase() !== 'N/A' && wifi_key.toUpperCase() !== 'NA') ? wifi_key : (dbRow.wifi_key || 'N/A');
+            finalWebKey = (resolvedWebKey && resolvedWebKey.trim() !== '' && resolvedWebKey.toUpperCase() !== 'N/A' && resolvedWebKey.toUpperCase() !== 'NA') ? resolvedWebKey : (dbRow.web_key || 'N/A');
 
             // Cenário A vs B para o GPON
             const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
