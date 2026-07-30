@@ -616,7 +616,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     const migrateGpoRes = await pool.query(
       "UPDATE etiquetas_scan_onu SET cpe_sn = gpon_sn, gpon_sn = 'N/A_' || UPPER(REPLACE(COALESCE(mac, 'N/A'), ':', '')) || '_' || substring(md5(random()::text) from 1 for 6) WHERE modelo = 'PG2447' AND (gpon_sn LIKE 'GPO%' OR gpon_sn LIKE 'gpo%' OR gpon_sn LIKE 'GP0%' OR gpon_sn LIKE 'gp0%')"
     );
-    if (migrateGpoRes.rowCount > 0) {
+    if (migrateGpoRes.rowCount !== null && migrateGpoRes.rowCount > 0) {
       console.log(`[${dbName}] Migração GP0/GPO concluída: ${migrateGpoRes.rowCount} registros atualizados.`);
     }
   } catch (e: any) {
@@ -915,7 +915,7 @@ async function connectToDatabase() {
           const migrateGpoRes = await dbPool.query(
             "UPDATE etiquetas_scan_onu SET cpe_sn = gpon_sn, gpon_sn = 'N/A_' || UPPER(REPLACE(COALESCE(mac, 'N/A'), ':', '')) || '_' || substring(md5(random()::text) from 1 for 6) WHERE modelo = 'PG2447' AND (gpon_sn LIKE 'GPO%' OR gpon_sn LIKE 'gpo%' OR gpon_sn LIKE 'GP0%' OR gpon_sn LIKE 'gp0%')"
           );
-          if (migrateGpoRes.rowCount > 0) {
+          if (migrateGpoRes.rowCount !== null && migrateGpoRes.rowCount > 0) {
             console.log(`Migração GP0/GPO concluída na inicialização padrão: ${migrateGpoRes.rowCount} registros atualizados.`);
           }
         } catch (migErr: any) {
