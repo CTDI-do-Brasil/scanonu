@@ -1000,6 +1000,39 @@ async function connectToDatabase() {
 
 connectToDatabase();
 
+
+// NOVO ENDPOINT DE DEBUG PARA DIAGNÓSTICO
+app.get('/api/debug-kaon/:mac', async (req, res) => {
+  if (!dbConnected) {
+    return res.status(500).json({ error: 'Banco não conectado' });
+  }
+  try {
+    const mac = req.params.mac;
+    const mapping = require('./kaon_mac_mapping.json');
+    const mappedGponRow = mapping.find((m: any) => m[1] === mac);
+    const targetGpon = mappedGponRow ? mappedGponRow[0] : null;
+
+    // Buscar todos os registros com esse MAC
+    const macRes = await dbPool!.query("SELECT * FROM etiquetas_scan_onu WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $1", [mac]);
+    
+    let gponRes = { rows: [] };
+    if (targetGpon) {
+      // Buscar registro que já possua esse GPON
+      gponRes = await dbPool!.query("SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1", [targetGpon]);
+    }
+
+    return res.json({
+      success: true,
+      mac_requested: mac,
+      target_gpon: targetGpon,
+      mac_records: macRes.rows,
+      gpon_records: gponRes.rows
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Health Check
 app.get('/health', (req, res) => {
   res.json({ 
