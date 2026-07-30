@@ -657,6 +657,18 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   } catch (migErr: any) {
     console.error(`[${dbName}] Erro na migração MAC->KAON:`, migErr.message || migErr);
   }
+
+  // Nova Migração: Corrigir cpe_sn de N70... para GPO... para bancos secundários
+  try {
+    const res = await pool.query(
+      "UPDATE etiquetas_scan_onu SET cpe_sn = 'GPO' || SUBSTRING(cpe_sn FROM 4) WHERE cpe_sn LIKE 'N70%'"
+    );
+    if (res.rowCount && res.rowCount > 0) {
+      console.log(`[${dbName}] Migração cpe_sn N70->GPO concluída: ${res.rowCount} registros atualizados.`);
+    }
+  } catch (cpeErr: any) {
+    console.error(`[${dbName}] Erro na migração cpe_sn N70->GPO:`, cpeErr.message || cpeErr);
+  }
   
 
   initializedDatabases.add(dbName);
@@ -984,6 +996,18 @@ async function connectToDatabase() {
           }
         } catch (migErr: any) {
           console.error('Erro na migração MAC->KAON no boot:', migErr.message || migErr);
+        }
+
+        // Nova Migração: Corrigir cpe_sn de N70... para GPO... no boot do banco principal
+        try {
+          const res = await dbPool.query(
+            "UPDATE etiquetas_scan_onu SET cpe_sn = 'GPO' || SUBSTRING(cpe_sn FROM 4) WHERE cpe_sn LIKE 'N70%'"
+          );
+          if (res.rowCount !== null && res.rowCount > 0) {
+            console.log(`Migração cpe_sn N70->GPO concluída no boot: ${res.rowCount} registros atualizados.`);
+          }
+        } catch (cpeErr: any) {
+          console.error('Erro na migração cpe_sn N70->GPO no boot:', cpeErr.message || cpeErr);
         }
       } catch (err: any) {
         console.error('Erro ao normalizar dados históricos existentes no banco:', err.message || err);
