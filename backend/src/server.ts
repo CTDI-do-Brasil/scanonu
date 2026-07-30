@@ -230,8 +230,8 @@ ZPL Bruto:
 ${rawZpl}`;
 
     let response: any;
-    // Use current Gemini models, falling back if 503 happens
-    for (const modelName of ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-exp']) {
+    // Use the preferred Gemini models as requested, with fallback for 503
+    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
       try {
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
@@ -1366,8 +1366,8 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const maxAttempts = 2; // Increased to 2 attempts per model to handle 503
     const errorsMap: Record<string, string> = {};
 
-    // Use current Gemini models, falling back if 503 happens
-    for (const modelName of ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-exp']) {
+    // Use the preferred Gemini models as requested, with fallback for 503
+    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
