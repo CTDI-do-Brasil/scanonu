@@ -633,14 +633,22 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     // Podemos rodar os updates de forma eficiente
     // Para evitar rodar centenas de queries individuais se nada mudou, podemos verificar
     // se existem registros que precisam ser atualizados
+    let errorCount = 0;
     for (const [correctGpon, mac] of mapping) {
-      const res = await pool.query(
-        "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REPLACE(REPLACE(REPLACE(mac, ':', ''), '-', ''), ' ', '')) = $2 AND gpon_sn != $1",
-        [correctGpon, mac]
-      );
-      if (res.rowCount && res.rowCount > 0) {
-        updatedCount += res.rowCount;
+      try {
+        const res = await pool.query(
+          "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $2 AND gpon_sn != $1",
+          [correctGpon, mac]
+        );
+        if (res.rowCount && res.rowCount > 0) {
+          updatedCount += res.rowCount;
+        }
+      } catch (innerErr) {
+        errorCount++;
       }
+    }
+    if (errorCount > 0) {
+      console.warn(`Migração MAC->KAON: ${errorCount} falhas devido a constraints (ex: duplicados) ignoradas.`);
     }
     
     if (updatedCount > 0) {
@@ -954,14 +962,22 @@ async function connectToDatabase() {
           const mapping = require('./kaon_mac_mapping.json');
           console.log(`Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon no boot...`);
           let updatedCount = 0;
+          let errorCount = 0;
           for (const [correctGpon, mac] of mapping) {
-            const res = await dbPool.query(
-              "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REPLACE(REPLACE(REPLACE(mac, ':', ''), '-', ''), ' ', '')) = $2 AND gpon_sn != $1",
-              [correctGpon, mac]
-            );
-            if (res.rowCount !== null && res.rowCount > 0) {
-              updatedCount += res.rowCount;
+            try {
+              const res = await dbPool.query(
+                "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $2 AND gpon_sn != $1",
+                [correctGpon, mac]
+              );
+              if (res.rowCount !== null && res.rowCount > 0) {
+                updatedCount += res.rowCount;
+              }
+            } catch (innerErr) {
+              errorCount++;
             }
+          }
+          if (errorCount > 0) {
+            console.warn(`Migração MAC->KAON: ${errorCount} falhas devido a constraints (ex: duplicados) ignoradas no boot.`);
           }
           if (updatedCount > 0) {
             console.log(`Migração MAC->KAON concluída no boot: ${updatedCount} registros atualizados.`);
