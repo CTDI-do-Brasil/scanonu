@@ -4652,7 +4652,7 @@ export default function App() {
                         document.getElementById('fast5670QrInput')?.focus();
                       }, 100);
                     }}
-                    className="w-full h-14 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-3"
+                    className="w-full h-14 bg-gradient-to-r from-[#003865] to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-3"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line><line x1="12" y1="8" x2="12" y2="16"></line></svg>
                     <span>Captura F@ST 5670</span>
@@ -5372,9 +5372,9 @@ export default function App() {
       {showFast5670QrModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white text-center">
+            <div className="bg-gradient-to-r from-[#003865] to-blue-600 p-6 text-white text-center">
               <h3 className="font-bold text-xl">Bipar F@ST 5670 (QR Code)</h3>
-              <p className="text-sm text-purple-100 mt-1">Escaneie o QR Code da unidade para extrair os dados básicos</p>
+              <p className="text-sm text-blue-100 mt-1">Escaneie o QR Code da unidade para extrair os dados básicos</p>
             </div>
             
             <form onSubmit={handleFast5670QrSubmit} className="p-6 space-y-4">
@@ -5395,7 +5395,7 @@ export default function App() {
                   value={fast5670QrInput}
                   onChange={(e) => setFast5670QrInput(e.target.value)}
                   placeholder="Ex: PN:253977461;PONID:..."
-                  className="w-full bg-slate-50 border-2 border-slate-200 text-slate-800 px-4 py-4 rounded-2xl font-mono text-sm focus:outline-none focus:border-purple-500 focus:bg-white transition-colors"
+                  className="w-full bg-slate-50 border-2 border-slate-200 text-slate-800 px-4 py-4 rounded-2xl font-mono text-sm focus:outline-none focus:border-[#003865] focus:bg-white transition-colors"
                   autoFocus
                 />
               </div>
@@ -5415,7 +5415,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={!fast5670QrInput}
-                  className="flex-1 px-4 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-3 bg-[#003865] text-white font-bold rounded-xl hover:bg-[#004e8c] transition-colors disabled:opacity-50"
                 >
                   Continuar
                 </button>
@@ -5429,9 +5429,9 @@ export default function App() {
       {showFast5670ConfirmModal && fast5670ConfirmData && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white text-center">
+            <div className="bg-gradient-to-r from-[#003865] to-blue-600 p-6 text-white text-center">
               <h3 className="font-bold text-xl">Confirmar Captura</h3>
-              <p className="text-sm text-purple-100 mt-1">Revise as senhas capturadas pela câmera</p>
+              <p className="text-sm text-blue-100 mt-1">Revise as senhas capturadas pela câmera</p>
             </div>
             
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
@@ -5454,46 +5454,46 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-4">
+              <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                  <span className="text-xs font-bold text-purple-600 uppercase">Dados da Câmera (Editáveis)</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                  <span className="text-xs font-bold text-blue-800 uppercase">Dados da Câmera (Editáveis)</span>
                 </div>
                 
                 <div>
-                  <label className="text-[10px] text-purple-400 font-bold">WIFI KEY</label>
+                  <label className="text-[10px] text-blue-600 font-bold">WIFI KEY</label>
                   <input
                     type="text"
                     value={fast5670ConfirmData.wifi_key || ''}
                     onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_key: e.target.value})}
-                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-purple-400 font-bold">WEB KEY / ADMIN</label>
+                  <label className="text-[10px] text-blue-600 font-bold">WEB KEY / ADMIN</label>
                   <input
                     type="text"
                     value={fast5670ConfirmData.web_key || ''}
                     onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, web_key: e.target.value})}
-                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-purple-400 font-bold">WIFI SSID (2.4G)</label>
+                  <label className="text-[10px] text-blue-600 font-bold">WIFI SSID (2.4G)</label>
                   <input
                     type="text"
                     value={fast5670ConfirmData.wifi_ssid || ''}
                     onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_ssid: e.target.value})}
-                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-purple-400 font-bold">WIFI SSID (5G)</label>
+                  <label className="text-[10px] text-blue-600 font-bold">WIFI SSID (5G)</label>
                   <input
                     type="text"
                     value={fast5670ConfirmData.wifi_ssid_5g || ''}
                     onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_ssid_5g: e.target.value})}
-                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
                   />
                 </div>
               </div>
@@ -5517,7 +5517,7 @@ export default function App() {
                 type="button"
                 onClick={handleFast5670ConfirmSave}
                 disabled={fast5670IsSaving}
-                className="flex-1 px-4 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-3 bg-[#003865] text-white font-bold rounded-xl hover:bg-[#004e8c] transition-colors flex items-center justify-center gap-2"
               >
                 {fast5670IsSaving ? (
                   <span>Salvando...</span>
@@ -5720,7 +5720,7 @@ export default function App() {
                       <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">SSID 2.4G</span><strong className="text-blue-700">{derivedData.wifi_ssid}</strong></div>
                       <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">SSID 5G</span><strong className="text-blue-700">{derivedData.wifi_ssid_5g}</strong></div>
                       <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Senha Wi-Fi</span><strong className="text-emerald-700">{derivedData.wifi_key}</strong></div>
-                      <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Senha WEB</span><strong className="text-purple-700">{derivedData.senha}</strong></div>
+                      <div><span className="text-slate-400 block font-sans text-[9px] uppercase font-semibold">Senha WEB</span><strong className="text-blue-700">{derivedData.senha}</strong></div>
                     </div>
                   </div>
                 )}
