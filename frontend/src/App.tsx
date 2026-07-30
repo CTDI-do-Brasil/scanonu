@@ -2141,7 +2141,7 @@ export default function App() {
       const result = await response.json();
 
       if (result.success && result.data) {
-        if (result.data.reimpressa) {
+        if (result.data.reimpressa && !fast5670QrData) {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
          if (result.existsInDb && result.existingData) {
@@ -3403,7 +3403,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.30</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.31</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
