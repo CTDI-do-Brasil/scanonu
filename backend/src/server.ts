@@ -635,7 +635,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     // se existem registros que precisam ser atualizados
     for (const [correctGpon, mac] of mapping) {
       const res = await pool.query(
-        "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE mac = $2 AND gpon_sn != $1",
+        "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REPLACE(REPLACE(REPLACE(mac, ':', ''), '-', ''), ' ', '')) = $2 AND gpon_sn != $1",
         [correctGpon, mac]
       );
       if (res.rowCount && res.rowCount > 0) {
@@ -956,7 +956,7 @@ async function connectToDatabase() {
           let updatedCount = 0;
           for (const [correctGpon, mac] of mapping) {
             const res = await dbPool.query(
-              "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE mac = $2 AND gpon_sn != $1",
+              "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REPLACE(REPLACE(REPLACE(mac, ':', ''), '-', ''), ' ', '')) = $2 AND gpon_sn != $1",
               [correctGpon, mac]
             );
             if (res.rowCount !== null && res.rowCount > 0) {
