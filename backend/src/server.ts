@@ -611,16 +611,16 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     console.error('Erro na migração de limpeza dos campos _clean:', e);
   }
 
-  // Migração: Mover GPO... de gpon_sn para cpe_sn e setar gpon_sn como N/A_MAC
+  // Migração: Mover GP0/GPO de gpon_sn para cpe_sn e setar gpon_sn como N/A_MAC no modelo PG2447
   try {
     const migrateGpoRes = await pool.query(
-      "UPDATE etiquetas_scan_onu SET cpe_sn = gpon_sn, gpon_sn = 'N/A_' || UPPER(REPLACE(COALESCE(mac, 'N/A'), ':', '')) || '_' || substring(md5(random()::text) from 1 for 6) WHERE gpon_sn LIKE 'GPO%' OR gpon_sn LIKE 'gpo%'"
+      "UPDATE etiquetas_scan_onu SET cpe_sn = gpon_sn, gpon_sn = 'N/A_' || UPPER(REPLACE(COALESCE(mac, 'N/A'), ':', '')) || '_' || substring(md5(random()::text) from 1 for 6) WHERE modelo = 'PG2447' AND (gpon_sn LIKE 'GPO%' OR gpon_sn LIKE 'gpo%' OR gpon_sn LIKE 'GP0%' OR gpon_sn LIKE 'gp0%')"
     );
     if (migrateGpoRes.rowCount > 0) {
-      console.log(`[${dbName}] Migração GPO concluída: ${migrateGpoRes.rowCount} registros atualizados.`);
+      console.log(`[${dbName}] Migração GP0/GPO concluída: ${migrateGpoRes.rowCount} registros atualizados.`);
     }
   } catch (e: any) {
-    console.error(`[${dbName}] Erro ao migrar registros GPO para cpe_sn:`, e.message || e);
+    console.error(`[${dbName}] Erro ao migrar registros GP0/GPO para cpe_sn:`, e.message || e);
   }
 
   initializedDatabases.add(dbName);
@@ -909,6 +909,18 @@ async function connectToDatabase() {
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145V5%' OR modelo ILIKE '%8145V5%' OR modelo ILIKE '%HG8145%') AND modelo != 'HG8145V5'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
         console.log('Normalização de dados históricos concluída com sucesso!');
+
+        // Migração para mover GP0... ou GPO... de gpon_sn para cpe_sn no modelo PG2447
+        try {
+          const migrateGpoRes = await dbPool.query(
+            "UPDATE etiquetas_scan_onu SET cpe_sn = gpon_sn, gpon_sn = 'N/A_' || UPPER(REPLACE(COALESCE(mac, 'N/A'), ':', '')) || '_' || substring(md5(random()::text) from 1 for 6) WHERE modelo = 'PG2447' AND (gpon_sn LIKE 'GPO%' OR gpon_sn LIKE 'gpo%' OR gpon_sn LIKE 'GP0%' OR gpon_sn LIKE 'gp0%')"
+          );
+          if (migrateGpoRes.rowCount > 0) {
+            console.log(`Migração GP0/GPO concluída na inicialização padrão: ${migrateGpoRes.rowCount} registros atualizados.`);
+          }
+        } catch (migErr: any) {
+          console.error('Erro na migração de GP0/GPO no modelo PG2447 (boot):', migErr.message || migErr);
+        }
       } catch (err: any) {
         console.error('Erro ao normalizar dados históricos existentes no banco:', err.message || err);
       }
