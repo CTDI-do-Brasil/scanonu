@@ -3366,7 +3366,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.27</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.28</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4575,20 +4575,19 @@ export default function App() {
                   >
                     <Barcode className="w-5 h-5" />
                     <span>Bipar BCSKV630 (SN e MAC)</span>
+                  </button>
 
-                    <button
-                      onClick={() => {
-                        setShowFast5670QrModal(true);
-                        setTimeout(() => {
-                          document.getElementById('fast5670QrInput')?.focus();
-                        }, 100);
-                      }}
-                      className="w-full h-14 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-3"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line><line x1="12" y1="8" x2="12" y2="16"></line></svg>
-                      <span>Captura F@ST 5670</span>
-                    </button>
-
+                  <button
+                    onClick={() => {
+                      setShowFast5670QrModal(true);
+                      setTimeout(() => {
+                        document.getElementById('fast5670QrInput')?.focus();
+                      }, 100);
+                    }}
+                    className="w-full h-14 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-3"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line><line x1="12" y1="8" x2="12" y2="16"></line></svg>
+                    <span>Captura F@ST 5670</span>
                   </button>
 
                   <button 
