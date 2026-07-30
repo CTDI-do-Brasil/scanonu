@@ -430,6 +430,16 @@ export default function App() {
   const [bipadorMac, setBipadorMac] = useState('');
   const [bipadorError, setBipadorError] = useState<string | null>(null);
   const [bipadorSuccess, setBipadorSuccess] = useState<string | null>(null);
+
+  // F@ST 5670 States
+  const [showFast5670QrModal, setShowFast5670QrModal] = useState(false);
+  const [fast5670QrInput, setFast5670QrInput] = useState('');
+  const [fast5670QrData, setFast5670QrData] = useState<{ cpe_sn: string; mac: string; gpon_sn: string } | null>(null);
+  const [fast5670QrError, setFast5670QrError] = useState<string | null>(null);
+  const [showFast5670ConfirmModal, setShowFast5670ConfirmModal] = useState(false);
+  const [fast5670ConfirmData, setFast5670ConfirmData] = useState<any>(null);
+  const [fast5670IsSaving, setFast5670IsSaving] = useState(false);
+
   const [isSavingBipador, setIsSavingBipador] = useState(false);
   const bipadorGponRef = useRef<HTMLInputElement | null>(null);
   const bipadorMacRef = useRef<HTMLInputElement | null>(null);
@@ -2079,6 +2089,21 @@ export default function App() {
                 console.log('Equipamento com dados completos encontrado no banco localmente (0 tokens gastos!).');
                 setData(prevData => {
                   const merged = { ...prevData } as any;
+
+            if (fast5670QrData) {
+              merged.cpe_sn = fast5670QrData.cpe_sn;
+              merged.mac = fast5670QrData.mac;
+              merged.gpon_sn = fast5670QrData.gpon_sn;
+              merged.modelo = 'F@ST 5670';
+              
+              setTimeout(() => {
+                setFast5670ConfirmData(merged);
+                setShowFast5670ConfirmModal(true);
+                setScreen('idle');
+              }, 100);
+              return merged;
+            }
+
                   Object.keys(dbResult.data).forEach(key => {
                     const newVal = (dbResult.data as any)[key];
                     const oldVal = merged[key];
@@ -2151,6 +2176,61 @@ export default function App() {
       setError(err.message || 'Ocorreu um erro ao processar a imagem da etiqueta.');
       setScreen('idle');
     }
+  };
+
+
+  const handleFast5670QrSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFast5670QrError(null);
+    const text = fast5670QrInput.trim();
+    if (!text) return;
+    
+    let sn = '';
+    let mac = '';
+    let ponid = '';
+    
+    const parts = text.split(';');
+    for (const part of parts) {
+      if (part.startsWith('SN:')) sn = part.substring(3).trim();
+      else if (part.startsWith('MAC:')) mac = part.substring(4).trim();
+      else if (part.startsWith('PONID:')) ponid = part.substring(6).trim();
+    }
+    
+    if (!sn || !mac || !ponid) {
+      setFast5670QrError('Entregue essa unidade para a engenharia');
+      return;
+    }
+    
+    setFast5670QrData({ cpe_sn: sn, mac: mac, gpon_sn: ponid });
+    setShowFast5670QrModal(false);
+    setFast5670QrInput('');
+    startCamera();
+  };
+  
+  const handleFast5670ConfirmSave = async () => {
+    if (!fast5670ConfirmData) return;
+    setFast5670IsSaving(true);
+    
+    try {
+      const token = localStorage.getItem('scanonu_token');
+      const response = await fetch('/api/save-label', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(fast5670ConfirmData)
+      });
+      if (!response.ok) throw new Error('Erro ao salvar no banco');
+    } catch(err: any) {
+      alert('Falha ao salvar. ' + err.message);
+    }
+    
+    setFast5670IsSaving(false);
+    setShowFast5670ConfirmModal(false);
+    setFast5670ConfirmData(null);
+    setFast5670QrData(null);
+    setScreen('idle');
   };
 
   const handleCopyField = (field: keyof ScanData, value: string) => {
@@ -3286,7 +3366,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.26</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.27</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -4495,6 +4575,20 @@ export default function App() {
                   >
                     <Barcode className="w-5 h-5" />
                     <span>Bipar BCSKV630 (SN e MAC)</span>
+
+                    <button
+                      onClick={() => {
+                        setShowFast5670QrModal(true);
+                        setTimeout(() => {
+                          document.getElementById('fast5670QrInput')?.focus();
+                        }, 100);
+                      }}
+                      className="w-full h-14 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-3"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line><line x1="12" y1="8" x2="12" y2="16"></line></svg>
+                      <span>Captura F@ST 5670</span>
+                    </button>
+
                   </button>
 
                   <button 
@@ -5203,6 +5297,169 @@ export default function App() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+
+      {/* MODAL: QR CODE F@ST 5670 */}
+      {showFast5670QrModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white text-center">
+              <h3 className="font-bold text-xl">Bipar F@ST 5670 (QR Code)</h3>
+              <p className="text-sm text-purple-100 mt-1">Escaneie o QR Code da unidade para extrair os dados básicos</p>
+            </div>
+            
+            <form onSubmit={handleFast5670QrSubmit} className="p-6 space-y-4">
+              {fast5670QrError && (
+                <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {fast5670QrError}
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Bipe o QR Code
+                </label>
+                <input
+                  id="fast5670QrInput"
+                  type="text"
+                  value={fast5670QrInput}
+                  onChange={(e) => setFast5670QrInput(e.target.value)}
+                  placeholder="Ex: PN:253977461;PONID:..."
+                  className="w-full bg-slate-50 border-2 border-slate-200 text-slate-800 px-4 py-4 rounded-2xl font-mono text-sm focus:outline-none focus:border-purple-500 focus:bg-white transition-colors"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 mt-6 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFast5670QrModal(false);
+                    setFast5670QrError(null);
+                    setFast5670QrInput('');
+                  }}
+                  className="flex-1 px-4 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!fast5670QrInput}
+                  className="flex-1 px-4 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
+                >
+                  Continuar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRMAÇÃO F@ST 5670 */}
+      {showFast5670ConfirmModal && fast5670ConfirmData && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white text-center">
+              <h3 className="font-bold text-xl">Confirmar Captura</h3>
+              <p className="text-sm text-purple-100 mt-1">Revise as senhas capturadas pela câmera</p>
+            </div>
+            
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  <span className="text-xs font-bold text-slate-500 uppercase">Dados do QR Code (Não editáveis)</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold">SERIAL NUMBER</span>
+                  <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.cpe_sn}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold">MAC ADDRESS</span>
+                  <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.mac}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold">PON ID</span>
+                  <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.gpon_sn}</div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                  <span className="text-xs font-bold text-purple-600 uppercase">Dados da Câmera (Editáveis)</span>
+                </div>
+                
+                <div>
+                  <label className="text-[10px] text-purple-400 font-bold">WIFI KEY</label>
+                  <input
+                    type="text"
+                    value={fast5670ConfirmData.wifi_key || ''}
+                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_key: e.target.value})}
+                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-purple-400 font-bold">WEB KEY / ADMIN</label>
+                  <input
+                    type="text"
+                    value={fast5670ConfirmData.web_key || ''}
+                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, web_key: e.target.value})}
+                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-purple-400 font-bold">WIFI SSID (2.4G)</label>
+                  <input
+                    type="text"
+                    value={fast5670ConfirmData.wifi_ssid || ''}
+                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_ssid: e.target.value})}
+                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-purple-400 font-bold">WIFI SSID (5G)</label>
+                  <input
+                    type="text"
+                    value={fast5670ConfirmData.wifi_ssid_5g || ''}
+                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_ssid_5g: e.target.value})}
+                    className="w-full bg-white border border-purple-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 flex gap-3 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFast5670ConfirmModal(false);
+                  setFast5670ConfirmData(null);
+                  setFast5670QrData(null);
+                  setScreen('idle');
+                }}
+                className="flex-1 px-4 py-3 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-colors"
+                disabled={fast5670IsSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleFast5670ConfirmSave}
+                disabled={fast5670IsSaving}
+                className="flex-1 px-4 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+              >
+                {fast5670IsSaving ? (
+                  <span>Salvando...</span>
+                ) : (
+                  <span>Confirmar e Salvar</span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
