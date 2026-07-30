@@ -626,7 +626,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   
   // Nova Migração: Corrigir gpon_sn com base na planilha de mapeamento MAC -> KAON
   try {
-    const mapping = require('./kaon_mac_mapping.json');
+    
     console.log(`[${dbName}] Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon...`);
     let updatedCount = 0;
     
@@ -959,7 +959,7 @@ async function connectToDatabase() {
         }
         // Nova Migração: Corrigir gpon_sn com base no arquivo JSON (boot)
         try {
-          const mapping = require('./kaon_mac_mapping.json');
+          
           console.log(`Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon no boot...`);
           let updatedCount = 0;
           let errorCount = 0;
@@ -1008,7 +1008,7 @@ app.get('/api/debug-kaon/:mac', async (req, res) => {
   }
   try {
     const mac = req.params.mac;
-    const mapping = require('./kaon_mac_mapping.json');
+    
     const mappedGponRow = mapping.find((m: any) => m[1] === mac);
     const targetGpon = mappedGponRow ? mappedGponRow[0] : null;
 
@@ -3296,6 +3296,7 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
 
 import fs from 'fs';
 import path from 'path';
+import { mapping } from './kaon_mac_mapping';
 
 app.post('/api/external/fix-models', async (req, res) => {
   try {
