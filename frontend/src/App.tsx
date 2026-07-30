@@ -2196,11 +2196,6 @@ export default function App() {
       else if (part.startsWith('PONID:')) ponid = part.substring(6).trim();
     }
     
-    if (!sn || !mac || !ponid) {
-      setFast5670QrError('Entregue essa unidade para a engenharia');
-      return;
-    }
-    
     setFast5670QrData({ cpe_sn: sn, mac: mac, gpon_sn: ponid });
     setShowFast5670QrModal(false);
     setFast5670QrInput('');
@@ -3366,7 +3361,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.28</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.29</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
