@@ -2239,15 +2239,34 @@ export default function App() {
     const text = fast5670QrInput.trim();
     if (!text) return;
     
+    // Remove qualquer quebra de linha (\r, \n) ou espaço em branco que o leitor de QR code insira no meio do texto
+    const cleanText = text.replace(/[\r\n\s]+/g, '');
+    
     let sn = '';
     let mac = '';
     let ponid = '';
     
-    const parts = text.split(';');
-    for (const part of parts) {
-      if (part.startsWith('SN:')) sn = part.substring(3).trim();
-      else if (part.startsWith('MAC:')) mac = part.substring(4).trim();
-      else if (part.startsWith('PONID:')) ponid = part.substring(6).trim();
+    const parts = cleanText.split(';');
+    for (const rawPart of parts) {
+      const part = rawPart.trim();
+      const upper = part.toUpperCase();
+      if (upper.startsWith('SN:')) sn = part.substring(3).trim();
+      else if (upper.startsWith('MAC:')) mac = part.substring(4).trim();
+      else if (upper.startsWith('PONID:')) ponid = part.substring(6).trim();
+    }
+    
+    // Extração complementar via Expressão Regular caso alguma tag não tenha sido separada por ponto e vírgula ou falhe
+    if (!sn) {
+      const matchSn = cleanText.match(/SN:([A-Z0-9]+)/i);
+      if (matchSn) sn = matchSn[1];
+    }
+    if (!mac) {
+      const matchMac = cleanText.match(/MAC:([A-Z0-9]+)/i);
+      if (matchMac) mac = matchMac[1];
+    }
+    if (!ponid) {
+      const matchPonid = cleanText.match(/PONID:([A-Z0-9]+)/i);
+      if (matchPonid) ponid = matchPonid[1];
     }
     
     setFast5670QrData({ cpe_sn: sn, mac: mac, gpon_sn: ponid });
