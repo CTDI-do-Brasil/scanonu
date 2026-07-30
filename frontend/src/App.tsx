@@ -240,56 +240,65 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   return dataCopy;
 }
 
+function sanitizeData(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  const cleaned: any = { ...obj };
+  Object.keys(cleaned).forEach(key => {
+    if (cleaned[key] !== null && cleaned[key] !== undefined) {
+      cleaned[key] = String(cleaned[key]).trim();
+    } else {
+      cleaned[key] = '';
+    }
+  });
+  return cleaned;
+}
+
 function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): ScanData {
-  const merged = { ...scanned } as any;
-  const isNP5454T = (existing.modelo && existing.modelo.toUpperCase().includes('NP5454T')) ||
-                    (scanned.modelo && scanned.modelo.toUpperCase().includes('NP5454T'));
-  const is5670 = (existing.modelo && existing.modelo.toUpperCase().includes('5670')) ||
-                 (scanned.modelo && scanned.modelo.toUpperCase().includes('5670'));
+  const safeExisting = sanitizeData(existing || {});
+  const safeScanned = sanitizeData(scanned || {});
+  const merged = { ...safeScanned } as any;
+
+  const isNP5454T = (String(safeExisting.modelo || '').toUpperCase().includes('NP5454T')) ||
+                    (String(safeScanned.modelo || '').toUpperCase().includes('NP5454T'));
+  const is5670 = (String(safeExisting.modelo || '').toUpperCase().includes('5670')) ||
+                 (String(safeScanned.modelo || '').toUpperCase().includes('5670'));
 
   if (isNP5454T || is5670) {
-    // Regras específicas do NP5454T e F@ST 5670:
-    // Nunca alterar S/N e MAC do banco
-    merged.cpe_sn = existing.cpe_sn || 'N/A';
-    merged.mac = existing.mac || 'N/A';
-    merged.fabricante = existing.fabricante || (isNP5454T ? 'Tellescom' : 'Sagemcom');
-    merged.modelo = existing.modelo || (isNP5454T ? 'NP5454T' : (scanned.modelo && scanned.modelo.includes('V2') ? 'F@ST 5670V2' : 'F@ST 5670'));
+    merged.cpe_sn = safeExisting.cpe_sn || 'N/A';
+    merged.mac = safeExisting.mac || 'N/A';
+    merged.fabricante = safeExisting.fabricante || (isNP5454T ? 'Tellescom' : 'Sagemcom');
+    merged.modelo = safeExisting.modelo || (isNP5454T ? 'NP5454T' : (safeScanned.modelo && String(safeScanned.modelo).includes('V2') ? 'F@ST 5670V2' : 'F@ST 5670'));
 
-    // Completar Senha WEB e Senha Wi-Fi
-    const dbSenha = existing.senha || (existing as any).web_key;
-    const scanSenha = scanned.senha || (scanned as any).web_key;
+    const dbSenha = safeExisting.senha || (safeExisting as any).web_key;
+    const scanSenha = safeScanned.senha || (safeScanned as any).web_key;
     merged.senha = (dbSenha && dbSenha !== 'N/A' && dbSenha !== 'NA') ? dbSenha : (scanSenha || 'N/A');
     if ('web_key' in merged) {
       merged.web_key = merged.senha;
     }
 
-    const dbWifiKey = existing.wifi_key;
-    const scanWifiKey = scanned.wifi_key;
+    const dbWifiKey = safeExisting.wifi_key;
+    const scanWifiKey = safeScanned.wifi_key;
     merged.wifi_key = (dbWifiKey && dbWifiKey !== 'N/A' && dbWifiKey !== 'NA') ? dbWifiKey : (scanWifiKey || 'N/A');
 
-    // Validação de cenário A (ambos batem) vs cenário B (apenas um ou nenhum bate)
-    const dbCpeClean = (existing.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-    const scanCpeClean = (scanned.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-    const dbMacClean = (existing.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-    const scanMacClean = (scanned.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const dbCpeClean = String(safeExisting.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const scanCpeClean = String(safeScanned.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const dbMacClean = String(safeExisting.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    const scanMacClean = String(safeScanned.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
 
     const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
     const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
     const bothMatch = cpeMatches && macMatches;
 
     if (bothMatch) {
-      // Cenário A: Completar GPON SN se não tiver no banco
-      const dbGpon = existing.gpon_sn;
-      const scanGpon = scanned.gpon_sn;
+      const dbGpon = String(safeExisting.gpon_sn || '');
+      const scanGpon = String(safeScanned.gpon_sn || '');
       merged.gpon_sn = (dbGpon && !dbGpon.toUpperCase().startsWith('N/A')) ? dbGpon : (scanGpon || 'N/A');
     } else {
-      // Cenário B: Não alterar GPON SN (manter o que está no banco)
-      merged.gpon_sn = existing.gpon_sn || 'N/A';
+      merged.gpon_sn = safeExisting.gpon_sn || 'N/A';
     }
 
     if (isNP5454T) {
-      // SSIDs baseados nos 4 últimos dígitos do S/N final (somente para NP5454T)
-      const cleanSn = merged.cpe_sn.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+      const cleanSn = String(merged.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
       if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
         const last4 = cleanSn.slice(-4);
         merged.wifi_ssid = `TIM_ULTRAFIBRA_${last4}_2G`;
@@ -297,16 +306,15 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
       }
     }
   } else {
-    // Lógica padrão para outros modelos
-    Object.keys(scanned).forEach(key => {
-      const val = (scanned as any)[key];
+    Object.keys(safeScanned).forEach(key => {
+      const val = String((safeScanned as any)[key] || '');
       if (val && val.toUpperCase() !== 'N/A' && val.toUpperCase() !== 'NA' && val.trim() !== '') {
         merged[key] = val;
       }
     });
 
-    Object.keys(existing).forEach(key => {
-      const newVal = (existing as any)[key];
+    Object.keys(safeExisting).forEach(key => {
+      const newVal = String((safeExisting as any)[key] || '');
       if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
         merged[key] = newVal;
       }
@@ -2044,9 +2052,10 @@ export default function App() {
       const result = await response.json();
       
       if (response.ok && result.success && result.data) {
-        setData(result.data);
+        const safeData = sanitizeData(result.data);
+        setData(safeData);
         setEquipmentExistsInDb(true);
-        setExistingEquipmentData(result.data);
+        setExistingEquipmentData(safeData);
         setCapturedImage(null); // Sem foto associada a esta consulta direta
         setScreen('result');
         setSearchGponInput('');
@@ -2084,11 +2093,12 @@ export default function App() {
           if (dbResponse.ok) {
             const dbResult = await dbResponse.json();
             if (dbResult.success && dbResult.data) {
-              const hasCompleteWifi = dbResult.data.wifi_ssid && dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A';
+              const safeDb = sanitizeData(dbResult.data);
+              const hasCompleteWifi = safeDb.wifi_ssid && safeDb.wifi_ssid !== 'N/A' && safeDb.wifi_ssid !== 'NA' && safeDb.wifi_key && safeDb.wifi_key !== 'N/A';
               if (hasCompleteWifi) {
                 console.log('Equipamento com dados completos encontrado no banco localmente (0 tokens gastos!).');
                 setData(prevData => {
-                  const merged = { ...prevData } as any;
+                  const merged = { ...prevData, ...safeDb } as any;
 
             if (fast5670QrData) {
               merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
@@ -2141,12 +2151,14 @@ export default function App() {
       const result = await response.json();
 
       if (result.success && result.data) {
-        if (result.data.reimpressa && !fast5670QrData) {
+        const safeScanned = sanitizeData(result.data);
+        const safeExisting = result.existingData ? sanitizeData(result.existingData) : null;
+        if (safeScanned.reimpressa && !fast5670QrData) {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
-         if (result.existsInDb && result.existingData) {
+         if (result.existsInDb && safeExisting) {
           setData(prevData => {
-            const merged = mergeExistingAndScannedData(result.existingData, result.data || prevData);
+            const merged = mergeExistingAndScannedData(safeExisting, safeScanned || prevData);
             if (fast5670QrData) {
               merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
               merged.mac = fast5670QrData.mac || merged.mac;
@@ -2164,7 +2176,7 @@ export default function App() {
             } else {
               setTimeout(() => {
                 setEquipmentExistsInDb(true);
-                setExistingEquipmentData(result.existingData);
+                setExistingEquipmentData(safeExisting);
                 setShowDuplicateModal(true);
               }, 100);
             }
@@ -2174,9 +2186,9 @@ export default function App() {
         } else {
           setData(prevData => {
             const merged = { ...prevData } as any;
-            Object.keys(result.data).forEach(key => {
-              const newVal = (result.data as any)[key];
-              const oldVal = merged[key];
+            Object.keys(safeScanned).forEach(key => {
+              const newVal = String((safeScanned as any)[key] || '');
+              const oldVal = String(merged[key] || '');
               if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
                 merged[key] = newVal;
               } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {

@@ -1366,8 +1366,8 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const maxAttempts = 2; // Increased to 2 attempts per model to handle 503
     const errorsMap: Record<string, string> = {};
 
-    // Use the preferred Gemini models as requested, with fallback for 503
-    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
+    // Use os modelos preferenciais com fallback para 503 e 404 (modelo não existente)
+    for (const modelName of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
@@ -1418,8 +1418,8 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
           errorsMap[`${modelName}_attempt_${attempt}`] = errMsg;
           console.warn(`Erro no modelo ${modelName} na tentativa ${attempt}/${maxAttempts}:`, errMsg);
           
-          if (errMsg.includes('Validation') || errMsg.includes('Schema')) {
-            break; // Se for erro de validação do próprio código/schema, não adianta re-tentar
+          if (errMsg.includes('Validation') || errMsg.includes('Schema') || errMsg.includes('not found') || errMsg.includes('404') || errMsg.includes('unsupported model')) {
+            break; // Se for erro de validação ou se o modelo não for suportado (404), salta para o próximo modelo imediatamente!
           }
           
           if (attempt < maxAttempts) {
