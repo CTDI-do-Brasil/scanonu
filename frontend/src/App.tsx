@@ -151,8 +151,9 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     }
   }
 
-  // PG2447 and BCSKV630/BC-UM221E do not use CPE SN, set to N/A
-  if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E') || mfgUpper.includes('BLU')) {
+  // BCSKV630/BC-UM221E do not use CPE SN, set to N/A
+  // (PG2447 now requires CPE SN collection)
+  if (modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E') || mfgUpper.includes('BLU')) {
     dataCopy.cpe_sn = 'N/A';
   }
 
@@ -3285,7 +3286,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.25</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.26</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
