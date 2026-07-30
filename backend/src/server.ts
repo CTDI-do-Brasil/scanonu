@@ -661,7 +661,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   // Nova Migração: Corrigir cpe_sn de N70... para GPO... para bancos secundários
   try {
     const res = await pool.query(
-      "UPDATE etiquetas_scan_onu SET cpe_sn = 'GPO' || SUBSTRING(cpe_sn FROM 4) WHERE cpe_sn LIKE 'N70%'"
+      "UPDATE etiquetas_scan_onu SET cpe_sn = 'GPO' || SUBSTRING(TRIM(cpe_sn) FROM 4) WHERE TRIM(cpe_sn) ILIKE 'N70%'"
     );
     if (res.rowCount && res.rowCount > 0) {
       console.log(`[${dbName}] Migração cpe_sn N70->GPO concluída: ${res.rowCount} registros atualizados.`);
@@ -1001,7 +1001,7 @@ async function connectToDatabase() {
         // Nova Migração: Corrigir cpe_sn de N70... para GPO... no boot do banco principal
         try {
           const res = await dbPool.query(
-            "UPDATE etiquetas_scan_onu SET cpe_sn = 'GPO' || SUBSTRING(cpe_sn FROM 4) WHERE cpe_sn LIKE 'N70%'"
+            "UPDATE etiquetas_scan_onu SET cpe_sn = 'GPO' || SUBSTRING(TRIM(cpe_sn) FROM 4) WHERE TRIM(cpe_sn) ILIKE 'N70%'"
           );
           if (res.rowCount !== null && res.rowCount > 0) {
             console.log(`Migração cpe_sn N70->GPO concluída no boot: ${res.rowCount} registros atualizados.`);
