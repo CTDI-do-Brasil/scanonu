@@ -611,6 +611,18 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     console.error('Erro na migração de limpeza dos campos _clean:', e);
   }
 
+  // Migração: Mover GPO... de gpon_sn para cpe_sn e setar gpon_sn como N/A_MAC
+  try {
+    const migrateGpoRes = await pool.query(
+      "UPDATE etiquetas_scan_onu SET cpe_sn = gpon_sn, gpon_sn = 'N/A_' || UPPER(REPLACE(COALESCE(mac, 'N/A'), ':', '')) || '_' || substring(md5(random()::text) from 1 for 6) WHERE gpon_sn LIKE 'GPO%' OR gpon_sn LIKE 'gpo%'"
+    );
+    if (migrateGpoRes.rowCount > 0) {
+      console.log(`[${dbName}] Migração GPO concluída: ${migrateGpoRes.rowCount} registros atualizados.`);
+    }
+  } catch (e: any) {
+    console.error(`[${dbName}] Erro ao migrar registros GPO para cpe_sn:`, e.message || e);
+  }
+
   initializedDatabases.add(dbName);
   console.log(`Banco ${dbName} inicializado com sucesso.`);
 }
