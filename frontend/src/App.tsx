@@ -2091,10 +2091,11 @@ export default function App() {
                   const merged = { ...prevData } as any;
 
             if (fast5670QrData) {
-              merged.cpe_sn = fast5670QrData.cpe_sn;
-              merged.mac = fast5670QrData.mac;
-              merged.gpon_sn = fast5670QrData.gpon_sn;
+              merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
+              merged.mac = fast5670QrData.mac || merged.mac;
+              merged.gpon_sn = fast5670QrData.gpon_sn || merged.gpon_sn;
               merged.modelo = 'F@ST 5670';
+              merged.fabricante = 'Sagemcom';
               
               setTimeout(() => {
                 setFast5670ConfirmData(merged);
@@ -2145,11 +2146,31 @@ export default function App() {
         }
          if (result.existsInDb && result.existingData) {
           setData(prevData => {
-            return mergeExistingAndScannedData(result.existingData, result.data || prevData);
+            const merged = mergeExistingAndScannedData(result.existingData, result.data || prevData);
+            if (fast5670QrData) {
+              merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
+              merged.mac = fast5670QrData.mac || merged.mac;
+              merged.gpon_sn = fast5670QrData.gpon_sn || merged.gpon_sn;
+              merged.modelo = 'F@ST 5670';
+              merged.fabricante = 'Sagemcom';
+            }
+            
+            if (fast5670QrData) {
+              setTimeout(() => {
+                setFast5670ConfirmData(merged);
+                setShowFast5670ConfirmModal(true);
+                setScreen('idle');
+              }, 100);
+            } else {
+              setTimeout(() => {
+                setEquipmentExistsInDb(true);
+                setExistingEquipmentData(result.existingData);
+                setShowDuplicateModal(true);
+              }, 100);
+            }
+            
+            return merged;
           });
-          setEquipmentExistsInDb(true);
-          setExistingEquipmentData(result.existingData);
-          setShowDuplicateModal(true);
         } else {
           setData(prevData => {
             const merged = { ...prevData } as any;
@@ -2162,10 +2183,31 @@ export default function App() {
                 merged[key] = oldVal || 'N/A';
               }
             });
-            return applyMacSsidRules(merged);
+            const applied = applyMacSsidRules(merged);
+            
+            if (fast5670QrData) {
+              applied.cpe_sn = fast5670QrData.cpe_sn || applied.cpe_sn;
+              applied.mac = fast5670QrData.mac || applied.mac;
+              applied.gpon_sn = fast5670QrData.gpon_sn || applied.gpon_sn;
+              applied.modelo = 'F@ST 5670';
+              applied.fabricante = 'Sagemcom';
+            }
+            
+            if (fast5670QrData) {
+              setTimeout(() => {
+                setFast5670ConfirmData(applied);
+                setShowFast5670ConfirmModal(true);
+                setScreen('idle');
+              }, 100);
+            } else {
+              setTimeout(() => {
+                setScreen('result');
+              }, 100);
+            }
+            
+            return applied;
           });
         }
-        setScreen('result');
       } else {
         const errorMsg = result.error || 'Erro desconhecido ao ler a etiqueta.';
         const detailsMsg = result.details ? ` Detalhes: ${JSON.stringify(result.details)}` : '';
@@ -3361,7 +3403,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.29</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.30</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
