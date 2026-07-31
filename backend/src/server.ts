@@ -544,11 +544,12 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
   } catch (e) {}
 
-  // Garantir SSID e Imagem URL
+  // Garantir SSID, Imagem URL e SAP
   try {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
+    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS sap VARCHAR(100) DEFAULT 'N/A'");
   } catch (e) {}
 
   // Migração para mover data_leitura para a última posição
@@ -2998,6 +2999,8 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 
       const web_key_raw = getVal(row, ['Senha WEB', 'Senha', 'web_key', 'senha', 'Senha Web', 'Password', 'Pass', 'Web_Key', 'web_key', 'WebKey', 'Web Key', 'senha_web', 'ACCESS_KEY1', 'WPA_PSK2']);
       const web_key = web_key_raw || 'N/A';
+      const sapRaw = getVal(row, ['SAP', 'sap', 'Codigo', 'codigo', 'Código']);
+      const sap = sapRaw || 'N/A';
 
       const operador_email = getVal(row, ['Operador', 'operador_email', 'Operator', 'Operador Email']) || req.user.email || 'N/A';
 
@@ -3048,8 +3051,8 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
 
       try {
         const query = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, operacao)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, operacao, sap)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
@@ -3062,6 +3065,7 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
             web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
             operador_email = EXCLUDED.operador_email,
             operacao = EXCLUDED.operacao,
+            sap = COALESCE(NULLIF(EXCLUDED.sap, 'N/A'), etiquetas_scan_onu.sap),
             data_leitura = CURRENT_TIMESTAMP
         `;
         const values = [
@@ -3076,7 +3080,8 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
           usuario,
           reconciledWebKey || web_key,
           operador_email,
-          req.user.operacao || 'CTDI MATRIZ'
+          req.user.operacao || 'CTDI MATRIZ',
+          sap
         ];
         await pool.query(query, values);
         successCount++;
@@ -3167,6 +3172,8 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
 
       const password_router_raw = getVal(row, ['PASSWORD_ROUTER', 'password_router', 'Password Router', 'Password_Router', 'Router Password', 'router_password']);
       const password_router = password_router_raw || 'N/A';
+      const sapRaw = getVal(row, ['SAP', 'sap', 'Codigo', 'codigo', 'Código']);
+      const sap = sapRaw || 'N/A';
 
       const normalizedModelo = normalizeModel(modelo, fabricante);
 
@@ -3197,7 +3204,8 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
         usuario,
         web_key,
         password_router,
-        gpon_sn
+        gpon_sn,
+        sap
       });
     }
 
@@ -3264,11 +3272,12 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
       }
 
       const rowPasswordRouter = (row.password_router !== undefined && row.password_router !== null && String(row.password_router).trim() !== '') ? String(row.password_router).trim() : 'N/A';
+      const rowSap = (row.sap !== undefined && row.sap !== null && String(row.sap).trim() !== '') ? String(row.sap).trim() : 'N/A';
 
       try {
         const query = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, operacao)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, operacao, sap)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           ON CONFLICT (gpon_sn) DO UPDATE SET
             fabricante = EXCLUDED.fabricante,
             modelo = EXCLUDED.modelo,
@@ -3282,6 +3291,7 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
             password_router = COALESCE(NULLIF(EXCLUDED.password_router, 'N/A'), etiquetas_scan_onu.password_router),
             operador_email = EXCLUDED.operador_email,
             operacao = EXCLUDED.operacao,
+            sap = COALESCE(NULLIF(EXCLUDED.sap, 'N/A'), etiquetas_scan_onu.sap),
             data_leitura = CURRENT_TIMESTAMP
         `;
         const values = [
@@ -3297,7 +3307,8 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
           reconciledWebKey || row.web_key || 'N/A',
           rowPasswordRouter,
           operatorEmail,
-          req.user.operacao || 'CTDI MATRIZ'
+          req.user.operacao || 'CTDI MATRIZ',
+          rowSap
         ];
         await pool.query(query, values);
         successCount++;
@@ -3315,6 +3326,99 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
   } catch (err: any) {
     console.error('Erro na rota de importação de lote:', err);
     return res.status(500).json({ success: false, error: err.message || 'Erro interno ao importar lote.' });
+  }
+});
+
+// --- INTEGRAÇÃO AUTOMÁTICA REC-PRE-ALERTA -> DB_SCANONU ---
+async function syncRecPreAlertaToScanOnu() {
+  try {
+    if (!dbConnected) return 0;
+    const scanPool = getPoolForDatabase('db-scanonu');
+    await ensureDatabaseSchema(scanPool, 'db-scanonu');
+
+    let recPool: Pool | null = null;
+    const possibleNames = ['Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    for (const name of possibleNames) {
+      try {
+        const testPool = getPoolForDatabase(name);
+        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
+        recPool = testPool;
+        break;
+      } catch (e) {}
+    }
+
+    if (!recPool) {
+      recPool = getPoolForDatabase('Rec-pre-alerta');
+    }
+
+    const resRec = await recPool.query(`
+      SELECT mac, serial_number, codigo 
+      FROM "Recebimento" 
+      WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA'
+      ORDER BY mac
+    `).catch(async () => {
+      return await recPool!.query(`
+        SELECT mac, serial_number, codigo 
+        FROM recebimento 
+        WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA'
+        ORDER BY mac
+      `);
+    });
+
+    if (!resRec || !resRec.rows || resRec.rows.length === 0) {
+      return 0;
+    }
+
+    let updatedCount = 0;
+    for (const item of resRec.rows) {
+      const cleanMac = String(item.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+      if (!cleanMac) continue;
+      const serial = String(item.serial_number || '').trim() || 'N/A';
+      const codigo = String(item.codigo || '').trim() || 'N/A';
+
+      const updateRes = await scanPool.query(`
+        UPDATE etiquetas_scan_onu 
+        SET 
+          cpe_sn = CASE WHEN (cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
+          sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A' THEN $2 ELSE sap END
+        WHERE (REPLACE(UPPER(mac), ':', '') = $3 OR REPLACE(UPPER(mac), '-', '') = $3)
+          AND (
+            ((cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A')
+            OR
+            ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A')
+          )
+      `, [serial, codigo, cleanMac]);
+
+      if (updateRes.rowCount && updateRes.rowCount > 0) {
+        updatedCount += updateRes.rowCount;
+      }
+    }
+
+    if (updatedCount > 0) {
+      console.log(`[Rec-pre-alerta Sync] ${updatedCount} registros atualizados em db-scanonu (S/N e SAP preenchidos pelo MAC).`);
+    }
+    return updatedCount;
+  } catch (err: any) {
+    console.error('Erro na sincronização automática Rec-pre-alerta -> db-scanonu:', err.message || err);
+    return 0;
+  }
+}
+
+// Iniciar a rotina automática de sincronização com Rec-pre-alerta a cada 60 segundos
+setInterval(() => {
+  syncRecPreAlertaToScanOnu().catch(() => {});
+}, 60 * 1000);
+
+// Rota manual do Admin para acionar a sincronização com Rec-pre-alerta em tempo real
+app.post('/api/admin/sync-rec-pre-alerta', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem acionar a sincronização.' });
+    }
+    const count = await syncRecPreAlertaToScanOnu();
+    return res.json({ success: true, updatedCount: count });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Falha ao rodar sincronização com Rec-pre-alerta.' });
   }
 });
 
