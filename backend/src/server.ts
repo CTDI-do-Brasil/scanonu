@@ -75,10 +75,7 @@ app.get('/api/admin/padronizar-5657', async (req, res) => {
       if (!dbPool) return res.send('Banco não conectado.');
       const result = await dbPool.query(`
         UPDATE etiquetas_scan_onu 
-        SET 
-          fabricante = 'Kaon', 
-          modelo = 'PG2447',
-          cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND gpon_sn IS NOT NULL AND UPPER(TRIM(gpon_sn)) NOT IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED') THEN gpon_sn ELSE cpe_sn END
+        SET fabricante = 'Kaon', modelo = 'PG2447' 
         WHERE (
           modelo ILIKE '%2447%' 
           OR modelo ILIKE '%PG2447%' 
@@ -92,13 +89,9 @@ app.get('/api/admin/padronizar-5657', async (req, res) => {
           OR mac ILIKE '18:34:AF%'
           OR mac ILIKE '24:E4:CE%'
           OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
-        ) AND (
-          fabricante IS DISTINCT FROM 'Kaon' 
-          OR modelo IS DISTINCT FROM 'PG2447'
-          OR (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A'))
-        )
+        ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
       `);
-      res.send('Padronização concluída com sucesso! ' + (result.rowCount || 0) + ' registros atualizados para Fabricante: Kaon e Modelo: PG2447 (e CPE_SN preenchido com S/N). Você já pode fechar esta aba.');
+      res.send('Padronização concluída com sucesso! ' + (result.rowCount || 0) + ' registros atualizados para Fabricante: Kaon e Modelo: PG2447. Você já pode fechar esta aba.');
     } catch (e: any) {
       res.send('Erro: ' + e.message);
     }
@@ -621,10 +614,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   try {
     const resFix = await pool.query(`
       UPDATE etiquetas_scan_onu 
-      SET 
-        fabricante = 'Kaon', 
-        modelo = 'PG2447',
-        cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND gpon_sn IS NOT NULL AND UPPER(TRIM(gpon_sn)) NOT IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED') THEN gpon_sn ELSE cpe_sn END
+      SET fabricante = 'Kaon', modelo = 'PG2447' 
       WHERE (
         modelo ILIKE '%2447%' 
         OR modelo ILIKE '%PG2447%' 
@@ -638,11 +628,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         OR mac ILIKE '18:34:AF%'
         OR mac ILIKE '24:E4:CE%'
         OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
-      ) AND (
-        fabricante IS DISTINCT FROM 'Kaon' 
-        OR modelo IS DISTINCT FROM 'PG2447'
-        OR (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A'))
-      )
+      ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
     `);
     if ((resFix.rowCount || 0) > 0) {
       console.log(`[Auto-Migração] Padronizados ${resFix.rowCount} registros como Kaon PG2447 no banco ${dbName}`);
@@ -3445,14 +3431,14 @@ async function syncRecPreAlertaToScanOnu() {
       FROM "Recebimento" 
       WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
          OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
-      ORDER BY id DESC LIMIT 300000
+      ORDER BY id DESC LIMIT 2000000
     `).catch(async () => {
       return await recPool!.query(`
         SELECT * 
         FROM recebimento 
         WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
            OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
-        ORDER BY id DESC LIMIT 300000
+        ORDER BY id DESC LIMIT 2000000
       `);
     });
 
@@ -3490,8 +3476,12 @@ async function syncRecPreAlertaToScanOnu() {
           ).trim().toUpperCase();
 
           if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
-            if (!cpeSn || cpeSn === 'N/A' || cpeSn === 'NA') cpeSn = generalSerial;
-            if (!gponSn || gponSn === 'N/A' || gponSn === 'NA') gponSn = generalSerial;
+            if (generalSerial.startsWith('GPO')) {
+              cpeSn = generalSerial;
+            } else {
+              if (!cpeSn || cpeSn === 'N/A' || cpeSn === 'NA') cpeSn = generalSerial;
+              if (!gponSn || gponSn === 'N/A' || gponSn === 'NA') gponSn = generalSerial;
+            }
           }
 
           const validCpe = (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && cpeSn.length >= 4) ? cpeSn : 'N/A';
@@ -3596,6 +3586,36 @@ app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
   }
 });
 
+app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.send('Informe ?q=... (ex: ?q=1834AF53C44A ou ?q=GPO)');
+    let recPool: any = null;
+    const possibleNames = ['Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    for (const name of possibleNames) {
+      try {
+        const testPool = getPoolForDatabase(name);
+        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
+        recPool = testPool;
+        break;
+      } catch (e) {}
+    }
+    if (!recPool) recPool = getPoolForDatabase('Rec-pre-alerta');
+    const sql = `
+      SELECT * FROM "Recebimento" 
+      WHERE 
+        mac ILIKE $1 OR serial_number ILIKE $1 OR gpon_sn ILIKE $1 OR cpe_sn ILIKE $1 
+      LIMIT 50
+    `;
+    let result = await recPool.query(sql, [`%${q}%`]).catch(async () => {
+      return await recPool.query(`SELECT * FROM recebimento WHERE mac ILIKE $1 OR serial_number ILIKE $1 OR gpon_sn ILIKE $1 OR cpe_sn ILIKE $1 LIMIT 50`, [`%${q}%`]);
+    });
+    return res.json({ success: true, count: result.rows.length, rows: result.rows });
+  } catch (e: any) {
+    return res.status(500).json({ success: false, error: e.message || e });
+  }
+});
+
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
     const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
@@ -3605,10 +3625,7 @@ app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res
         const scanPool = getPoolForDatabase(dbName);
         const resFix = await scanPool.query(`
           UPDATE etiquetas_scan_onu 
-          SET 
-            fabricante = 'Kaon', 
-            modelo = 'PG2447',
-            cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND gpon_sn IS NOT NULL AND UPPER(TRIM(gpon_sn)) NOT IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED') THEN gpon_sn ELSE cpe_sn END
+          SET fabricante = 'Kaon', modelo = 'PG2447' 
           WHERE (
             modelo ILIKE '%2447%' 
             OR modelo ILIKE '%PG2447%' 
@@ -3622,11 +3639,7 @@ app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res
             OR mac ILIKE '18:34:AF%'
             OR mac ILIKE '24:E4:CE%'
             OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
-          ) AND (
-            fabricante IS DISTINCT FROM 'Kaon' 
-            OR modelo IS DISTINCT FROM 'PG2447'
-            OR (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A'))
-          )
+          ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
         `);
         totalUpdated += (resFix.rowCount || 0);
       } catch (e) {}
