@@ -315,7 +315,8 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
 
     Object.keys(safeExisting).forEach(key => {
       const newVal = String((safeExisting as any)[key] || '');
-      if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
+      const currentVal = String(merged[key] || '');
+      if ((!currentVal || currentVal.toUpperCase() === 'N/A' || currentVal.toUpperCase() === 'NA' || currentVal.trim() === '') && newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
         merged[key] = newVal;
       }
     });

@@ -1367,7 +1367,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const errorsMap: Record<string, string> = {};
 
     // Use os modelos preferenciais com fallback para 503 e 404 (modelo não existente)
-    for (const modelName of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash']) {
+    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
