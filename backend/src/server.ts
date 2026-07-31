@@ -3427,14 +3427,14 @@ async function syncRecPreAlertaToScanOnu() {
     }
 
     const resRec = await recPool.query(`
-      SELECT mac, serial_number, codigo 
+      SELECT * 
       FROM "Recebimento" 
       WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
          OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
       ORDER BY id DESC LIMIT 300000
     `).catch(async () => {
       return await recPool!.query(`
-        SELECT mac, serial_number, codigo 
+        SELECT * 
         FROM recebimento 
         WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
            OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
@@ -3444,6 +3444,10 @@ async function syncRecPreAlertaToScanOnu() {
 
     if (!resRec || !resRec.rows || resRec.rows.length === 0) {
       return 0;
+    }
+
+    if (resRec.rows.length > 0) {
+      console.log(`[Rec-pre-alerta Sync] Colunas encontradas em Recebimento:`, Object.keys(resRec.rows[0]).join(', '));
     }
 
     let totalUpdatedCount = 0;
@@ -3456,37 +3460,54 @@ async function syncRecPreAlertaToScanOnu() {
 
         let dbUpdatedCount = 0;
         for (const item of resRec.rows) {
-          const cleanMac = String(item.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-          const serial = String(item.serial_number || '').trim().toUpperCase();
-          const codigo = String(item.codigo || '').trim().toUpperCase();
+          const cleanMac = String(item.mac || item.mac_address || item.macaddress || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+          const codigo = String(item.codigo || item.sap || item.codigo_sap || item.cod_sap || '').trim().toUpperCase();
 
-          if ((!cleanMac || cleanMac === 'N/A' || cleanMac === 'NA' || cleanMac.length < 6) && 
-              (!serial || serial === 'N/A' || serial === 'NA' || serial.length < 4)) {
-            continue;
+          let cpeSn = String(
+            item.cpe_sn || item.cpe || item.sn_cpe || item.serial_cpe || item.ns_cpe || item.cpesn || item.serial_claro || item.numero_serie_cpe || ''
+          ).trim().toUpperCase();
+
+          let gponSn = String(
+            item.gpon_sn || item.gpon || item.sn_gpon || item.serial_gpon || item.ns_gpon || item.gponsn || ''
+          ).trim().toUpperCase();
+
+          const generalSerial = String(
+            item.serial_number || item.serial || item.sn || item.numero_serie || item.ns || ''
+          ).trim().toUpperCase();
+
+          if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
+            if (!cpeSn || cpeSn === 'N/A' || cpeSn === 'NA') cpeSn = generalSerial;
+            if (!gponSn || gponSn === 'N/A' || gponSn === 'NA') gponSn = generalSerial;
           }
 
-          const validSerial = (serial && serial !== 'N/A' && serial !== 'NA') ? serial : 'N/A';
+          const validCpe = (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && cpeSn.length >= 4) ? cpeSn : 'N/A';
+          const validGpon = (gponSn && gponSn !== 'N/A' && gponSn !== 'NA' && gponSn.length >= 4) ? gponSn : 'N/A';
           const validCodigo = (codigo && codigo !== 'N/A' && codigo !== 'NA') ? codigo : 'N/A';
           const validMac = (cleanMac && cleanMac !== 'N/A' && cleanMac !== 'NA' && cleanMac.length >= 6) ? cleanMac : 'N/A';
+
+          if (validCpe === 'N/A' && validGpon === 'N/A' && validMac === 'N/A') {
+            continue;
+          }
 
           const updateRes = await scanPool.query(`
             UPDATE etiquetas_scan_onu 
             SET 
               cpe_sn = CASE WHEN (cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
-              gpon_sn = CASE WHEN (gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $1 <> 'N/A' THEN $1 ELSE gpon_sn END,
-              sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A' THEN $2 ELSE sap END,
-              mac = CASE WHEN (mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $3 <> 'N/A' THEN $3 ELSE mac END
+              gpon_sn = CASE WHEN (gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $2 <> 'N/A' THEN $2 ELSE gpon_sn END,
+              sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $3 <> 'N/A' THEN $3 ELSE sap END,
+              mac = CASE WHEN (mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
-                ($3 <> 'N/A' AND LENGTH($3) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $3)
-                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND (UPPER(cpe_sn) = $1 OR UPPER(gpon_sn) = $1))
+                ($4 <> 'N/A' AND LENGTH($4) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $4)
+                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(cpe_sn) = $1)
+                OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(gpon_sn) = $2)
               )
               AND (
                 ((cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A')
-                OR ((gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $1 <> 'N/A')
-                OR ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A')
-                OR ((mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $3 <> 'N/A')
+                OR ((gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $2 <> 'N/A')
+                OR ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $3 <> 'N/A')
+                OR ((mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $4 <> 'N/A')
               )
-          `, [validSerial, validCodigo, validMac]);
+          `, [validCpe, validGpon, validCodigo, validMac]);
 
           if (updateRes.rowCount && updateRes.rowCount > 0) {
             dbUpdatedCount += updateRes.rowCount;
@@ -3530,6 +3551,34 @@ app.get('/api/admin/sync-rec-pre-alerta', async (req: any, res: any) => {
     return res.send('Sincronização com Rec-pré-alerta concluída! ' + count + ' registros enriquecidos.');
   } catch (err: any) {
     return res.send('Erro na sincronização: ' + (err.message || err));
+  }
+});
+
+app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
+  try {
+    let recPool: any = null;
+    const possibleNames = ['Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    for (const name of possibleNames) {
+      try {
+        const testPool = getPoolForDatabase(name);
+        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
+        recPool = testPool;
+        break;
+      } catch (e) {}
+    }
+    if (!recPool) recPool = getPoolForDatabase('Rec-pre-alerta');
+
+    let resRec = await recPool.query('SELECT * FROM "Recebimento" ORDER BY id DESC LIMIT 5').catch(async () => {
+      return await recPool.query('SELECT * FROM recebimento ORDER BY id DESC LIMIT 5');
+    });
+
+    return res.json({
+      success: true,
+      columns: resRec.rows.length > 0 ? Object.keys(resRec.rows[0]) : [],
+      sampleRows: resRec.rows
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || err });
   }
 });
 
