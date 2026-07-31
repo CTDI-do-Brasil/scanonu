@@ -459,6 +459,8 @@ export default function App() {
   const [activeCloudPrinters, setActiveCloudPrinters] = useState<any[]>([]);
   const [queryResults, setQueryResults] = useState<any[]>([]);
   const [isQuerying, setIsQuerying] = useState(false);
+  const [isSyncingRec, setIsSyncingRec] = useState(false);
+  const [isFixingKaon, setIsFixingKaon] = useState(false);
   const [searchTriggered, setSearchTriggered] = useState(false);
   const [fieldsData, setFieldsData] = useState<any>({});
   const [isPrinting, setIsPrinting] = useState(false);
@@ -1270,6 +1272,54 @@ export default function App() {
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
       alert('Erro ao exportar planilha Excel: ' + (err.message || err));
+    }
+  };
+
+  const handleSyncRecPreAlerta = async () => {
+    setIsSyncingRec(true);
+    try {
+      const res = await fetch('/api/admin/sync-rec-pre-alerta', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(`✅ Sincronização e Enriquecimento Concluídos com Sucesso!\n\n${json.updatedCount} registros em ScanONU foram preenchidos com S/N, MAC ou SAP vindos dos dados antigos do banco Rec-Pré-Alerta.`);
+        handleSearchLabels();
+      } else {
+        alert('❌ Erro na sincronização: ' + (json.error || 'Erro desconhecido'));
+      }
+    } catch (e: any) {
+      alert('❌ Erro ao conectar ao servidor: ' + e.message);
+    } finally {
+      setIsSyncingRec(false);
+    }
+  };
+
+  const handleFixKaonPg2447 = async () => {
+    setIsFixingKaon(true);
+    try {
+      const res = await fetch('/api/admin/fix-kaon-pg2447', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+        }
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(`✅ Padronização Kaon PG2447 Concluída com Sucesso!\n\n${json.updatedCount} registros foram padronizados para Fabricante: Kaon e Modelo: PG2447.`);
+        handleSearchLabels();
+      } else {
+        alert('❌ Erro na padronização: ' + (json.error || 'Erro desconhecido'));
+      }
+    } catch (e: any) {
+      alert('❌ Erro ao conectar ao servidor: ' + e.message);
+    } finally {
+      setIsFixingKaon(false);
     }
   };
 
@@ -3745,6 +3795,7 @@ export default function App() {
                     <span>Buscar no Banco</span>
                   </button>
                   {user?.role !== 'consulta' && (
+                  <>
                   <button
                     onClick={handleExportExcel}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-750 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
@@ -3752,6 +3803,25 @@ export default function App() {
                     <Download className="w-4 h-4" />
                     <span>Baixar Planilha Excel (XLSX)</span>
                   </button>
+                  <button
+                    onClick={handleSyncRecPreAlerta}
+                    disabled={isSyncingRec}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                    title="Enriquecer registros existentes com MAC/SN do Rec-Pré-Alerta (Opção A)"
+                  >
+                    {isSyncingRec ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    <span>Sincronizar Rec-Pré-Alerta</span>
+                  </button>
+                  <button
+                    onClick={handleFixKaonPg2447}
+                    disabled={isFixingKaon}
+                    className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-xs"
+                    title="Padronizar todos os registros do modelo PG2447 para Fabricante: Kaon e Modelo: PG2447"
+                  >
+                    {isFixingKaon ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    <span>Padronizar Kaon PG2447</span>
+                  </button>
+                  </>
                   )}
                 </div>
               </div>

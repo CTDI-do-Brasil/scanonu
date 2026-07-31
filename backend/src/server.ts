@@ -582,6 +582,25 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
   } catch (e) {}
 
+  // Migração automática para padronizar Kaon PG2447 no banco
+  try {
+    const resFix = await pool.query(`
+      UPDATE etiquetas_scan_onu 
+      SET fabricante = 'Kaon', modelo = 'PG2447' 
+      WHERE (
+        modelo ILIKE '%2447%' 
+        OR modelo ILIKE '%PG2447%' 
+        OR modelo ILIKE '%P82447%'
+        OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%'))
+      ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
+    `);
+    if ((resFix.rowCount || 0) > 0) {
+      console.log(`[Auto-Migração] Padronizados ${resFix.rowCount} registros como Kaon PG2447 no banco ${dbName}`);
+    }
+  } catch (e: any) {
+    console.error(`Erro ao padronizar Kaon PG2447 no banco ${dbName}:`, e.message);
+  }
+
   // Garantir admin
   const adminCheck = await pool.query("SELECT id FROM usuarios_scan_onu WHERE email = 'admin@scanonu.com'");
   if (!adminCheck.rowCount || adminCheck.rowCount === 0) {
@@ -1167,7 +1186,7 @@ function normalizeFabricante(fabricante: string, modelo: string): string {
     return 'VANTIVA';
   }
   const mfgUpper = (fabricante || '').toUpperCase().trim();
-  if (mfgUpper.includes('KAON') || mfgUpper === 'KAO') {
+  if (modelUpper.includes('2447') || modelUpper.includes('PG2447') || modelUpper.includes('P82447') || mfgUpper.includes('KAON') || mfgUpper === 'KAO') {
     return 'Kaon';
   }
   return fabricante || 'N/A';
@@ -3374,14 +3393,16 @@ async function syncRecPreAlertaToScanOnu() {
     const resRec = await recPool.query(`
       SELECT mac, serial_number, codigo 
       FROM "Recebimento" 
-      WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA'
-      ORDER BY mac
+      WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
+         OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
+      ORDER BY id DESC LIMIT 50000
     `).catch(async () => {
       return await recPool!.query(`
         SELECT mac, serial_number, codigo 
         FROM recebimento 
-        WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA'
-        ORDER BY mac
+        WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
+           OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
+        ORDER BY id DESC LIMIT 50000
       `);
     });
 
@@ -3389,37 +3410,63 @@ async function syncRecPreAlertaToScanOnu() {
       return 0;
     }
 
-    let updatedCount = 0;
-    for (const item of resRec.rows) {
-      const cleanMac = String(item.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-      if (!cleanMac) continue;
-      const serial = String(item.serial_number || '').trim() || 'N/A';
-      const codigo = String(item.codigo || '').trim() || 'N/A';
+    let totalUpdatedCount = 0;
+    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
 
-      const updateRes = await scanPool.query(`
-        UPDATE etiquetas_scan_onu 
-        SET 
-          cpe_sn = CASE WHEN (cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
-          sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A' THEN $2 ELSE sap END
-        WHERE (REPLACE(UPPER(mac), ':', '') = $3 OR REPLACE(UPPER(mac), '-', '') = $3)
-          AND (
-            ((cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A')
-            OR
-            ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A')
-          )
-      `, [serial, codigo, cleanMac]);
+    for (const dbName of targetDatabases) {
+      try {
+        const scanPool = getPoolForDatabase(dbName);
+        await ensureDatabaseSchema(scanPool, dbName);
 
-      if (updateRes.rowCount && updateRes.rowCount > 0) {
-        updatedCount += updateRes.rowCount;
+        let dbUpdatedCount = 0;
+        for (const item of resRec.rows) {
+          const cleanMac = String(item.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+          const serial = String(item.serial_number || '').trim().toUpperCase();
+          const codigo = String(item.codigo || '').trim().toUpperCase();
+
+          if ((!cleanMac || cleanMac === 'N/A' || cleanMac === 'NA' || cleanMac.length < 6) && 
+              (!serial || serial === 'N/A' || serial === 'NA' || serial.length < 4)) {
+            continue;
+          }
+
+          const validSerial = (serial && serial !== 'N/A' && serial !== 'NA') ? serial : 'N/A';
+          const validCodigo = (codigo && codigo !== 'N/A' && codigo !== 'NA') ? codigo : 'N/A';
+          const validMac = (cleanMac && cleanMac !== 'N/A' && cleanMac !== 'NA' && cleanMac.length >= 6) ? cleanMac : 'N/A';
+
+          const updateRes = await scanPool.query(`
+            UPDATE etiquetas_scan_onu 
+            SET 
+              cpe_sn = CASE WHEN (cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
+              sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A' THEN $2 ELSE sap END,
+              mac = CASE WHEN (mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $3 <> 'N/A' THEN $3 ELSE mac END
+            WHERE (
+                ($3 <> 'N/A' AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $3)
+                OR ($1 <> 'N/A' AND UPPER(cpe_sn) = $1)
+              )
+              AND (
+                ((cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A')
+                OR ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A')
+                OR ((mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $3 <> 'N/A')
+              )
+          `, [validSerial, validCodigo, validMac]);
+
+          if (updateRes.rowCount && updateRes.rowCount > 0) {
+            dbUpdatedCount += updateRes.rowCount;
+          }
+        }
+
+        if (dbUpdatedCount > 0) {
+          console.log(`[Rec-pre-alerta Sync -> ${dbName}] ${dbUpdatedCount} registros atualizados/enriquecidos (S/N, MAC, SAP).`);
+        }
+        totalUpdatedCount += dbUpdatedCount;
+      } catch (dbErr) {
+        console.error(`Erro ao sincronizar com banco ${dbName}:`, dbErr);
       }
     }
 
-    if (updatedCount > 0) {
-      console.log(`[Rec-pre-alerta Sync] ${updatedCount} registros atualizados em db-scanonu (S/N e SAP preenchidos pelo MAC).`);
-    }
-    return updatedCount;
+    return totalUpdatedCount;
   } catch (err: any) {
-    console.error('Erro na sincronização automática Rec-pre-alerta -> db-scanonu:', err.message || err);
+    console.error('Erro na sincronização automática Rec-pre-alerta -> ScanONU:', err.message || err);
     return 0;
   }
 }
@@ -3429,16 +3476,39 @@ setInterval(() => {
   syncRecPreAlertaToScanOnu().catch(() => {});
 }, 60 * 1000);
 
-// Rota manual do Admin para acionar a sincronização com Rec-pre-alerta em tempo real
+// Rota manual para acionar a sincronização com Rec-pre-alerta em tempo real
 app.post('/api/admin/sync-rec-pre-alerta', authenticateSession, async (req: any, res: any) => {
   try {
-    if (req.user.role !== 'master' && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Acesso negado. Apenas administradores podem acionar a sincronização.' });
-    }
     const count = await syncRecPreAlertaToScanOnu();
     return res.json({ success: true, updatedCount: count });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || 'Falha ao rodar sincronização com Rec-pre-alerta.' });
+  }
+});
+
+app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
+  try {
+    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    let totalUpdated = 0;
+    for (const dbName of targetDatabases) {
+      try {
+        const scanPool = getPoolForDatabase(dbName);
+        const resFix = await scanPool.query(`
+          UPDATE etiquetas_scan_onu 
+          SET fabricante = 'Kaon', modelo = 'PG2447' 
+          WHERE (
+            modelo ILIKE '%2447%' 
+            OR modelo ILIKE '%PG2447%' 
+            OR modelo ILIKE '%P82447%'
+            OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%'))
+          ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
+        `);
+        totalUpdated += (resFix.rowCount || 0);
+      } catch (e) {}
+    }
+    return res.json({ success: true, updatedCount: totalUpdated });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Falha ao padronizar Kaon PG2447 no banco.' });
   }
 });
 
