@@ -2082,7 +2082,7 @@ export default function App() {
       console.log('Tentando detectar código de barras localmente...');
       const localDetection = await detectBarcodeLocally(base64Image);
       
-      if (localDetection) {
+      if (localDetection && !fast5670QrData) {
         const lookupValue = localDetection.gpon_sn || localDetection.mac;
         if (lookupValue) {
           console.log(`Buscando no banco por GPON/MAC: ${lookupValue}...`);
@@ -2100,21 +2100,6 @@ export default function App() {
                 console.log('Equipamento com dados completos encontrado no banco localmente (0 tokens gastos!).');
                 setData(prevData => {
                   const merged = { ...prevData, ...safeDb } as any;
-
-            if (fast5670QrData) {
-              merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
-              merged.mac = fast5670QrData.mac || merged.mac;
-              merged.gpon_sn = fast5670QrData.gpon_sn || merged.gpon_sn;
-              merged.modelo = 'F@ST 5670';
-              merged.fabricante = 'Sagemcom';
-              
-              setTimeout(() => {
-                setFast5670ConfirmData(merged);
-                setShowFast5670ConfirmModal(true);
-                setScreen('idle');
-              }, 100);
-              return merged;
-            }
 
                   Object.keys(dbResult.data).forEach(key => {
                     const newVal = (dbResult.data as any)[key];
@@ -2157,31 +2142,33 @@ export default function App() {
         if (safeScanned.reimpressa && !fast5670QrData) {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
-         if (result.existsInDb && safeExisting) {
+        if (fast5670QrData) {
+          setData(prevData => {
+            const merged = { ...prevData, ...safeScanned } as any;
+            merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
+            merged.mac = fast5670QrData.mac || merged.mac;
+            merged.gpon_sn = fast5670QrData.gpon_sn || merged.gpon_sn;
+            merged.modelo = 'F@ST 5670';
+            merged.fabricante = 'Sagemcom';
+            
+            const applied = applyMacSsidRules(merged);
+            
+            setTimeout(() => {
+              setFast5670ConfirmData(applied);
+              setShowFast5670ConfirmModal(true);
+              setScreen('idle');
+            }, 100);
+            
+            return applied;
+          });
+        } else if (result.existsInDb && safeExisting) {
           setData(prevData => {
             const merged = mergeExistingAndScannedData(safeExisting, safeScanned || prevData);
-            if (fast5670QrData) {
-              merged.cpe_sn = fast5670QrData.cpe_sn || merged.cpe_sn;
-              merged.mac = fast5670QrData.mac || merged.mac;
-              merged.gpon_sn = fast5670QrData.gpon_sn || merged.gpon_sn;
-              merged.modelo = 'F@ST 5670';
-              merged.fabricante = 'Sagemcom';
-            }
-            
-            if (fast5670QrData) {
-              setTimeout(() => {
-                setFast5670ConfirmData(merged);
-                setShowFast5670ConfirmModal(true);
-                setScreen('idle');
-              }, 100);
-            } else {
-              setTimeout(() => {
-                setEquipmentExistsInDb(true);
-                setExistingEquipmentData(safeExisting);
-                setShowDuplicateModal(true);
-              }, 100);
-            }
-            
+            setTimeout(() => {
+              setEquipmentExistsInDb(true);
+              setExistingEquipmentData(safeExisting);
+              setShowDuplicateModal(true);
+            }, 100);
             return merged;
           });
         } else {
@@ -2198,25 +2185,9 @@ export default function App() {
             });
             const applied = applyMacSsidRules(merged);
             
-            if (fast5670QrData) {
-              applied.cpe_sn = fast5670QrData.cpe_sn || applied.cpe_sn;
-              applied.mac = fast5670QrData.mac || applied.mac;
-              applied.gpon_sn = fast5670QrData.gpon_sn || applied.gpon_sn;
-              applied.modelo = 'F@ST 5670';
-              applied.fabricante = 'Sagemcom';
-            }
-            
-            if (fast5670QrData) {
-              setTimeout(() => {
-                setFast5670ConfirmData(applied);
-                setShowFast5670ConfirmModal(true);
-                setScreen('idle');
-              }, 100);
-            } else {
-              setTimeout(() => {
-                setScreen('result');
-              }, 100);
-            }
+            setTimeout(() => {
+              setScreen('result');
+            }, 100);
             
             return applied;
           });
