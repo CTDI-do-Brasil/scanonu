@@ -69,6 +69,34 @@ app.get('/api/admin/padronizar-5657', async (req, res) => {
     }
   });
 
+  // Rota para padronizar todos os registros Kaon PG2447 no banco (via navegador ou GET)
+  app.get('/api/admin/padronizar-kaon', async (req, res) => {
+    try {
+      if (!dbPool) return res.send('Banco não conectado.');
+      const result = await dbPool.query(`
+        UPDATE etiquetas_scan_onu 
+        SET fabricante = 'Kaon', modelo = 'PG2447' 
+        WHERE (
+          modelo ILIKE '%2447%' 
+          OR modelo ILIKE '%PG2447%' 
+          OR modelo ILIKE '%P82447%'
+          OR gpon_sn ILIKE 'KAON%'
+          OR cpe_sn ILIKE 'KAON%'
+          OR gpon_sn ILIKE '%KAON%'
+          OR cpe_sn ILIKE '%KAON%'
+          OR mac ILIKE '1834AF%'
+          OR mac ILIKE '24E4CE%'
+          OR mac ILIKE '18:34:AF%'
+          OR mac ILIKE '24:E4:CE%'
+          OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
+        ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
+      `);
+      res.send('Padronização concluída com sucesso! ' + (result.rowCount || 0) + ' registros atualizados para Fabricante: Kaon e Modelo: PG2447. Você já pode fechar esta aba.');
+    } catch (e: any) {
+      res.send('Erro: ' + e.message);
+    }
+  });
+
 app.get('/api/admin/limpar-lixo', async (req, res) => {
   try {
     if (!dbPool) return res.send('Banco não conectado.');
@@ -591,7 +619,15 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         modelo ILIKE '%2447%' 
         OR modelo ILIKE '%PG2447%' 
         OR modelo ILIKE '%P82447%'
-        OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%'))
+        OR gpon_sn ILIKE 'KAON%'
+        OR cpe_sn ILIKE 'KAON%'
+        OR gpon_sn ILIKE '%KAON%'
+        OR cpe_sn ILIKE '%KAON%'
+        OR mac ILIKE '1834AF%'
+        OR mac ILIKE '24E4CE%'
+        OR mac ILIKE '18:34:AF%'
+        OR mac ILIKE '24:E4:CE%'
+        OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
       ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
     `);
     if ((resFix.rowCount || 0) > 0) {
@@ -3395,14 +3431,14 @@ async function syncRecPreAlertaToScanOnu() {
       FROM "Recebimento" 
       WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
          OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
-      ORDER BY id DESC LIMIT 50000
+      ORDER BY id DESC LIMIT 300000
     `).catch(async () => {
       return await recPool!.query(`
         SELECT mac, serial_number, codigo 
         FROM recebimento 
         WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
            OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
-        ORDER BY id DESC LIMIT 50000
+        ORDER BY id DESC LIMIT 300000
       `);
     });
 
@@ -3437,14 +3473,16 @@ async function syncRecPreAlertaToScanOnu() {
             UPDATE etiquetas_scan_onu 
             SET 
               cpe_sn = CASE WHEN (cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
+              gpon_sn = CASE WHEN (gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $1 <> 'N/A' THEN $1 ELSE gpon_sn END,
               sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A' THEN $2 ELSE sap END,
               mac = CASE WHEN (mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $3 <> 'N/A' THEN $3 ELSE mac END
             WHERE (
-                ($3 <> 'N/A' AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $3)
-                OR ($1 <> 'N/A' AND UPPER(cpe_sn) = $1)
+                ($3 <> 'N/A' AND LENGTH($3) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $3)
+                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND (UPPER(cpe_sn) = $1 OR UPPER(gpon_sn) = $1))
               )
               AND (
                 ((cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A')
+                OR ((gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $1 <> 'N/A')
                 OR ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $2 <> 'N/A')
                 OR ((mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $3 <> 'N/A')
               )
@@ -3486,6 +3524,15 @@ app.post('/api/admin/sync-rec-pre-alerta', authenticateSession, async (req: any,
   }
 });
 
+app.get('/api/admin/sync-rec-pre-alerta', async (req: any, res: any) => {
+  try {
+    const count = await syncRecPreAlertaToScanOnu();
+    return res.send('Sincronização com Rec-pré-alerta concluída! ' + count + ' registros enriquecidos.');
+  } catch (err: any) {
+    return res.send('Erro na sincronização: ' + (err.message || err));
+  }
+});
+
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
     const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
@@ -3500,7 +3547,15 @@ app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res
             modelo ILIKE '%2447%' 
             OR modelo ILIKE '%PG2447%' 
             OR modelo ILIKE '%P82447%'
-            OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%'))
+            OR gpon_sn ILIKE 'KAON%'
+            OR cpe_sn ILIKE 'KAON%'
+            OR gpon_sn ILIKE '%KAON%'
+            OR cpe_sn ILIKE '%KAON%'
+            OR mac ILIKE '1834AF%'
+            OR mac ILIKE '24E4CE%'
+            OR mac ILIKE '18:34:AF%'
+            OR mac ILIKE '24:E4:CE%'
+            OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
           ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
         `);
         totalUpdated += (resFix.rowCount || 0);
