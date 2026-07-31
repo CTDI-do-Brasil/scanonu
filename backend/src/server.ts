@@ -1920,24 +1920,16 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalWebKey = (resolvedWebKey && resolvedWebKey !== dbRow.web_key) ? resolvedWebKey : ((dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A'));
             finalUsuario = (usuario && usuario !== dbRow.usuario) ? usuario : (dbRow.usuario || 'N/A');
 
-            if (gpon_sn && gpon_sn !== dbRow.gpon_sn) {
+            const isValidNewGpon = gpon_sn && 
+              gpon_sn.trim() !== '' && 
+              gpon_sn.toUpperCase() !== 'N/A' && 
+              gpon_sn.toUpperCase() !== 'NA' && 
+              !gpon_sn.toUpperCase().startsWith('N/A_');
+
+            if (isValidNewGpon && gpon_sn !== dbRow.gpon_sn) {
               finalGpon = gpon_sn;
             } else {
-              // Cenário A vs B para o GPON
-              const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-              const scanCpeClean = (cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-              const dbMacClean = (dbRow.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-              const scanMacClean = (mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-
-              const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
-              const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
-              const bothMatch = cpeMatches && macMatches;
-
-              if (bothMatch) {
-                finalGpon = (dbRow.gpon_sn && !dbRow.gpon_sn.toUpperCase().startsWith('N/A')) ? dbRow.gpon_sn : (gpon_sn || 'N/A');
-              } else {
-                finalGpon = dbRow.gpon_sn || 'N/A';
-              }
+              finalGpon = dbRow.gpon_sn || ('N/A_' + (mac && mac !== 'N/A' ? mac : Math.random().toString(36).substring(2, 10).toUpperCase()));
             }
           } else {
             // NP5454T (Mantém 100% estrito do banco)
@@ -1950,22 +1942,16 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalWifiKey = (wifi_key && wifi_key.trim() !== '' && wifi_key.toUpperCase() !== 'N/A' && wifi_key.toUpperCase() !== 'NA') ? wifi_key : (dbRow.wifi_key || 'N/A');
             finalWebKey = (resolvedWebKey && resolvedWebKey.trim() !== '' && resolvedWebKey.toUpperCase() !== 'N/A' && resolvedWebKey.toUpperCase() !== 'NA') ? resolvedWebKey : (dbRow.web_key || 'N/A');
 
-            // Cenário A vs B para o GPON
-            const dbCpeClean = (dbRow.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-            const scanCpeClean = (cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-            const dbMacClean = (dbRow.mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-            const scanMacClean = (mac || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            const isValidNewGpon = gpon_sn && 
+              gpon_sn.trim() !== '' && 
+              gpon_sn.toUpperCase() !== 'N/A' && 
+              gpon_sn.toUpperCase() !== 'NA' && 
+              !gpon_sn.toUpperCase().startsWith('N/A_');
 
-            const cpeMatches = dbCpeClean === scanCpeClean && dbCpeClean !== '' && dbCpeClean !== 'NA' && dbCpeClean !== 'N/A';
-            const macMatches = dbMacClean === scanMacClean && dbMacClean !== '' && dbMacClean !== 'NA' && dbMacClean !== 'N/A';
-            const bothMatch = cpeMatches && macMatches;
-
-            if (bothMatch) {
-              // Cenário A: Completar GPON SN se não tiver no banco
-              finalGpon = (dbRow.gpon_sn && !dbRow.gpon_sn.toUpperCase().startsWith('N/A')) ? dbRow.gpon_sn : (gpon_sn || 'N/A');
+            if (isValidNewGpon && gpon_sn !== dbRow.gpon_sn) {
+              finalGpon = gpon_sn;
             } else {
-              // Cenário B: Manter GPON SN inalterado (manter o que está no banco)
-              finalGpon = dbRow.gpon_sn || 'N/A';
+              finalGpon = dbRow.gpon_sn || ('N/A_' + (mac && mac !== 'N/A' ? mac : Math.random().toString(36).substring(2, 10).toUpperCase()));
             }
 
             // SSIDs baseados nos 4 últimos dígitos do S/N final (apenas para o NP5454T)

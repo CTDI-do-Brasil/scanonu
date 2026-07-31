@@ -2261,7 +2261,10 @@ export default function App() {
         },
         body: JSON.stringify(fast5670ConfirmData)
       });
-      if (!response.ok) throw new Error('Erro ao salvar no banco');
+      const resJson = await response.json().catch(() => ({}));
+      if (!response.ok || !resJson.success) {
+        throw new Error(resJson.error || resJson.details || 'Erro ao salvar no banco');
+      }
     } catch(err: any) {
       alert('Falha ao salvar. ' + err.message);
     }
