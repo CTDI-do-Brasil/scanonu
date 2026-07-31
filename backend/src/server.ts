@@ -1794,25 +1794,36 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     const isReconcileModel = normalizedModelo === 'NP5454T' || normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
 
-    if (isReconcileModel) {
+    const cleanMac = mac ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : '';
+    const cleanCpe = cpe_sn ? cpe_sn.trim().toUpperCase() : '';
+    const cleanGpon = gpon_sn ? gpon_sn.trim().toUpperCase() : '';
+
+    const checkQueries: string[] = [];
+    const checkParams: any[] = [];
+    let paramIndex = 1;
+
+    if (cleanGpon && cleanGpon !== 'N/A' && cleanGpon !== 'NA' && !cleanGpon.startsWith('N/A_')) {
+      checkQueries.push(`gpon_sn = $${paramIndex++}`);
+      checkParams.push(gpon_sn);
+    }
+    if (cleanMac && cleanMac !== 'N/A' && cleanMac !== 'NA' && cleanMac.length >= 6) {
+      checkQueries.push(`REPLACE(REPLACE(mac, ':', ''), '-', '') = $${paramIndex++}`);
+      checkParams.push(cleanMac);
+    }
+    if (cleanCpe && cleanCpe !== 'N/A' && cleanCpe !== 'NA' && cleanCpe.length >= 4) {
+      checkQueries.push(`cpe_sn = $${paramIndex++}`);
+      checkParams.push(cpe_sn);
+    }
+
+    if (checkQueries.length > 0) {
       checkRes = await pool.query(
-        "SELECT * FROM etiquetas_scan_onu WHERE (modelo = 'NP5454T' OR modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
-        [cpe_sn, mac]
+        `SELECT * FROM etiquetas_scan_onu WHERE ${checkQueries.join(' OR ')} LIMIT 1`,
+        checkParams
       );
-      duplicateType = 'MAC ou S/N';
-    } else if (gpon_sn && gpon_sn.toUpperCase() !== 'N/A' && gpon_sn.toUpperCase() !== 'NA') {
-      if (mac && mac.toUpperCase() !== 'N/A' && mac.toUpperCase() !== 'NA') {
-        checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR mac = $2', [gpon_sn, mac]);
-        duplicateType = 'GPON ou MAC';
-      } else {
-        checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
-      }
-    } else if (mac && mac.toUpperCase() !== 'N/A' && mac.toUpperCase() !== 'NA') {
-      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE mac = $1', [mac]);
-      duplicateType = 'MAC';
+      duplicateType = 'GPON, MAC ou S/N';
     } else if (wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE wifi_ssid = $1', [wifi_ssid]);
-      duplicateType = 'SSID da Rede (pois não há GPON na etiqueta)';
+      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE wifi_ssid = $1 LIMIT 1', [wifi_ssid]);
+      duplicateType = 'SSID da Rede';
     }
 
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
@@ -2033,6 +2044,21 @@ app.post('/api/save-label', async (req: any, res: any) => {
       const insertQuery = `
         INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ON CONFLICT (gpon_sn) DO UPDATE SET
+          fabricante = EXCLUDED.fabricante,
+          modelo = EXCLUDED.modelo,
+          cpe_sn = COALESCE(NULLIF(EXCLUDED.cpe_sn, 'N/A'), etiquetas_scan_onu.cpe_sn),
+          mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
+          wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
+          wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
+          wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
+          usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
+          web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
+          password_router = COALESCE(NULLIF(EXCLUDED.password_router, 'N/A'), etiquetas_scan_onu.password_router),
+          operador_email = EXCLUDED.operador_email,
+          imagem_url = COALESCE(EXCLUDED.imagem_url, etiquetas_scan_onu.imagem_url),
+          operacao = EXCLUDED.operacao,
+          data_leitura = CURRENT_TIMESTAMP
       `;
       if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
