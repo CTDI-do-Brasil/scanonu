@@ -2960,11 +2960,15 @@ app.post('/api/admin/import-excel', authenticateSession, async (req: any, res: a
     let successCount = 0;
     let errorCount = 0;
     
-    // Função auxiliar para mapear chaves com flexibilidade
-        const getVal = (row: any, keys: string[]) => {
+    // Função auxiliar para mapear chaves com flexibilidade total (ignora _, - e espaços)
+    const getVal = (row: any, keys: string[]) => {
       const rowKeys = Object.keys(row);
       for (const k of keys) {
-        const matchingKey = rowKeys.find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
+        const matchingKey = rowKeys.find(rk => {
+          const normRk = rk.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normK = k.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          return normRk === normK;
+        });
         if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) {
           return String(row[matchingKey]).trim();
         }
@@ -3134,7 +3138,11 @@ app.post('/api/admin/parse-excel', authenticateSession, async (req: any, res: an
     const getVal = (row: any, keys: string[]) => {
       const rowKeys = Object.keys(row);
       for (const k of keys) {
-        const matchingKey = rowKeys.find(rk => rk.trim().toLowerCase() === k.trim().toLowerCase());
+        const matchingKey = rowKeys.find(rk => {
+          const normRk = rk.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normK = k.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          return normRk === normK;
+        });
         if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) {
           return String(row[matchingKey]).trim();
         }
