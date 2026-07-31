@@ -75,7 +75,10 @@ app.get('/api/admin/padronizar-5657', async (req, res) => {
       if (!dbPool) return res.send('Banco não conectado.');
       const result = await dbPool.query(`
         UPDATE etiquetas_scan_onu 
-        SET fabricante = 'Kaon', modelo = 'PG2447' 
+        SET 
+          fabricante = 'Kaon', 
+          modelo = 'PG2447',
+          cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND gpon_sn IS NOT NULL AND UPPER(TRIM(gpon_sn)) NOT IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED') THEN gpon_sn ELSE cpe_sn END
         WHERE (
           modelo ILIKE '%2447%' 
           OR modelo ILIKE '%PG2447%' 
@@ -89,9 +92,13 @@ app.get('/api/admin/padronizar-5657', async (req, res) => {
           OR mac ILIKE '18:34:AF%'
           OR mac ILIKE '24:E4:CE%'
           OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
-        ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
+        ) AND (
+          fabricante IS DISTINCT FROM 'Kaon' 
+          OR modelo IS DISTINCT FROM 'PG2447'
+          OR (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A'))
+        )
       `);
-      res.send('Padronização concluída com sucesso! ' + (result.rowCount || 0) + ' registros atualizados para Fabricante: Kaon e Modelo: PG2447. Você já pode fechar esta aba.');
+      res.send('Padronização concluída com sucesso! ' + (result.rowCount || 0) + ' registros atualizados para Fabricante: Kaon e Modelo: PG2447 (e CPE_SN preenchido com S/N). Você já pode fechar esta aba.');
     } catch (e: any) {
       res.send('Erro: ' + e.message);
     }
@@ -610,11 +617,14 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
   } catch (e) {}
 
-  // Migração automática para padronizar Kaon PG2447 no banco
+  // Migração automática para padronizar Kaon PG2447 no banco (e preencher cpe_sn se vazio/NA)
   try {
     const resFix = await pool.query(`
       UPDATE etiquetas_scan_onu 
-      SET fabricante = 'Kaon', modelo = 'PG2447' 
+      SET 
+        fabricante = 'Kaon', 
+        modelo = 'PG2447',
+        cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND gpon_sn IS NOT NULL AND UPPER(TRIM(gpon_sn)) NOT IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED') THEN gpon_sn ELSE cpe_sn END
       WHERE (
         modelo ILIKE '%2447%' 
         OR modelo ILIKE '%PG2447%' 
@@ -628,7 +638,11 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         OR mac ILIKE '18:34:AF%'
         OR mac ILIKE '24:E4:CE%'
         OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
-      ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
+      ) AND (
+        fabricante IS DISTINCT FROM 'Kaon' 
+        OR modelo IS DISTINCT FROM 'PG2447'
+        OR (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A'))
+      )
     `);
     if ((resFix.rowCount || 0) > 0) {
       console.log(`[Auto-Migração] Padronizados ${resFix.rowCount} registros como Kaon PG2447 no banco ${dbName}`);
@@ -3492,20 +3506,20 @@ async function syncRecPreAlertaToScanOnu() {
           const updateRes = await scanPool.query(`
             UPDATE etiquetas_scan_onu 
             SET 
-              cpe_sn = CASE WHEN (cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
-              gpon_sn = CASE WHEN (gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $2 <> 'N/A' THEN $2 ELSE gpon_sn END,
-              sap = CASE WHEN (sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $3 <> 'N/A' THEN $3 ELSE sap END,
-              mac = CASE WHEN (mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $4 <> 'N/A' THEN $4 ELSE mac END
+              cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
+              gpon_sn = CASE WHEN (gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $2 <> 'N/A' THEN $2 ELSE gpon_sn END,
+              sap = CASE WHEN (sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $3 <> 'N/A' THEN $3 ELSE sap END,
+              mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
                 ($4 <> 'N/A' AND LENGTH($4) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $4)
-                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(cpe_sn) = $1)
-                OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(gpon_sn) = $2)
+                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(TRIM(cpe_sn)) = $1)
+                OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(TRIM(gpon_sn)) = $2)
               )
               AND (
-                ((cpe_sn IS NULL OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn = '') AND $1 <> 'N/A')
-                OR ((gpon_sn IS NULL OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn = '') AND $2 <> 'N/A')
-                OR ((sap IS NULL OR sap = 'N/A' OR sap = 'NA' OR sap = '') AND $3 <> 'N/A')
-                OR ((mac IS NULL OR mac = 'N/A' OR mac = 'NA' OR mac = '') AND $4 <> 'N/A')
+                ((cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $1 <> 'N/A')
+                OR ((gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $2 <> 'N/A')
+                OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $3 <> 'N/A')
+                OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $4 <> 'N/A')
               )
           `, [validCpe, validGpon, validCodigo, validMac]);
 
@@ -3591,7 +3605,10 @@ app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res
         const scanPool = getPoolForDatabase(dbName);
         const resFix = await scanPool.query(`
           UPDATE etiquetas_scan_onu 
-          SET fabricante = 'Kaon', modelo = 'PG2447' 
+          SET 
+            fabricante = 'Kaon', 
+            modelo = 'PG2447',
+            cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND gpon_sn IS NOT NULL AND UPPER(TRIM(gpon_sn)) NOT IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED') THEN gpon_sn ELSE cpe_sn END
           WHERE (
             modelo ILIKE '%2447%' 
             OR modelo ILIKE '%PG2447%' 
@@ -3605,7 +3622,11 @@ app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res
             OR mac ILIKE '18:34:AF%'
             OR mac ILIKE '24:E4:CE%'
             OR (fabricante ILIKE '%Kaon%' AND (modelo ILIKE '%PG%' OR modelo ILIKE '%P8%' OR modelo = 'N/A' OR modelo = '' OR modelo IS NULL))
-          ) AND (fabricante IS DISTINCT FROM 'Kaon' OR modelo IS DISTINCT FROM 'PG2447')
+          ) AND (
+            fabricante IS DISTINCT FROM 'Kaon' 
+            OR modelo IS DISTINCT FROM 'PG2447'
+            OR (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A'))
+          )
         `);
         totalUpdated += (resFix.rowCount || 0);
       } catch (e) {}
