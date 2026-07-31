@@ -3650,6 +3650,91 @@ app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res
   }
 });
 
+app.post('/api/admin/importar-cpe-planilha', authenticateSession, async (req: any, res: any) => {
+  try {
+    if (req.user.role !== 'master' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
+    const { targetDb, rows, fileBase64 } = req.body;
+    let dataRows: any[] = [];
+
+    if (Array.isArray(rows)) {
+      dataRows = rows;
+    } else if (fileBase64) {
+      const buf = Buffer.from(fileBase64, 'base64');
+      const workbook = XLSX.read(buf, { type: 'buffer' });
+      const firstSheet = workbook.SheetNames[0];
+      dataRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+    } else {
+      return res.status(400).json({ error: 'Nenhum dado ou arquivo enviado.' });
+    }
+
+    const pool = targetDb ? getPoolForDatabase(String(targetDb)) : dbPool;
+    if (!pool) {
+      return res.status(500).json({ error: 'Banco de dados offline ou inválido.' });
+    }
+
+    let totalProcessed = 0;
+    let updatedCount = 0;
+    let matchedCount = 0;
+    const notFoundMacs: string[] = [];
+
+    for (const row of dataRows) {
+      const cleanMac = String(
+        row.mac || row.MAC || row.mac_address || row.macAddress || row['Endereço MAC'] || row['Endereco MAC'] || row['MAC ADDRESS'] || row['MAC Address'] || ''
+      ).trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+
+      const cpeSn = String(
+        row.cpe_sn || row.cpe || row.CPE || row.CPE_SN || row['CPE Serial Number'] || row['CPE Serial'] || row.cpeSn || row.serial || row.SERIAL || row.serial_number || row['Serial Number'] || ''
+      ).trim().toUpperCase();
+
+      if (!cleanMac || cleanMac.length < 6 || !cpeSn || cpeSn === 'N/A' || cpeSn === 'NA') {
+        continue;
+      }
+
+      totalProcessed++;
+
+      const resUpdate = await pool.query(`
+        UPDATE etiquetas_scan_onu 
+        SET cpe_sn = $1 
+        WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $2
+          AND (cpe_sn IS DISTINCT FROM $1)
+      `, [cpeSn, cleanMac]);
+
+      if ((resUpdate.rowCount || 0) > 0) {
+        updatedCount += (resUpdate.rowCount || 0);
+        matchedCount += (resUpdate.rowCount || 0);
+      } else {
+        const resCheck = await pool.query(`
+          SELECT 1 FROM etiquetas_scan_onu 
+          WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $1 LIMIT 1
+        `, [cleanMac]);
+
+        if ((resCheck.rowCount || 0) > 0) {
+          matchedCount++;
+        } else {
+          if (notFoundMacs.length < 20) {
+            notFoundMacs.push(cleanMac);
+          }
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      totalProcessed,
+      updatedCount,
+      matchedCount,
+      notFoundMacs,
+      message: `Processadas ${totalProcessed} linhas. Atualizados ${updatedCount} registros (MACs localizados no banco: ${matchedCount}).`
+    });
+  } catch (err: any) {
+    console.error('Erro na importação CPE planilha:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao importar planilha CPE.' });
+  }
+});
+
 import fs from 'fs';
 import path from 'path';
 import { mapping } from './kaon_mac_mapping';
