@@ -3431,12 +3431,12 @@ async function syncRecPreAlertaToScanOnu() {
           SELECT mac 
           FROM etiquetas_scan_onu 
           WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA' AND (
-            cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%'
-            OR gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%'
-            OR sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%'
+            cpe_sn IS NULL OR cpe_sn = '' OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn LIKE 'N/A%'
+            OR gpon_sn IS NULL OR gpon_sn = '' OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn LIKE 'N/A%'
+            OR sap IS NULL OR sap = '' OR sap = 'N/A' OR sap = 'NA' OR sap LIKE 'N/A%'
           )
           ORDER BY data_leitura DESC
-          LIMIT 2000
+          LIMIT 300
         `);
 
         for (const row of resMissing.rows) {
@@ -3715,12 +3715,12 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
           SELECT mac 
           FROM etiquetas_scan_onu 
           WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA' AND (
-            cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%'
-            OR gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%'
-            OR sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%'
+            cpe_sn IS NULL OR cpe_sn = '' OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn LIKE 'N/A%'
+            OR gpon_sn IS NULL OR gpon_sn = '' OR gpon_sn = 'N/A' OR gpon_sn = 'NA' OR gpon_sn LIKE 'N/A%'
+            OR sap IS NULL OR sap = '' OR sap = 'N/A' OR sap = 'NA' OR sap LIKE 'N/A%'
           )
           ORDER BY data_leitura DESC
-          LIMIT 2000
+          LIMIT 300
         `);
 
         steps.push({ dbName, missingCount: resMissing.rows.length, sampleMissing: resMissing.rows.slice(0, 5) });
