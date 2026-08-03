@@ -3408,15 +3408,53 @@ app.post('/api/admin/import-excel-batch', authenticateSession, async (req: any, 
 async function syncRecPreAlertaToScanOnu() {
   try {
     if (!dbConnected) return 0;
-    const scanPool = getPoolForDatabase('db-scanonu');
-    await ensureDatabaseSchema(scanPool, 'db-scanonu');
 
+    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    const macsToLookupSet = new Set<string>();
+
+    // 1. Coletar os MACs que precisam de enriquecimento nas duas bases
+    for (const dbName of targetDatabases) {
+      try {
+        const scanPool = getPoolForDatabase(dbName);
+        await ensureDatabaseSchema(scanPool, dbName);
+
+        const resMissing = await scanPool.query(`
+          SELECT mac 
+          FROM etiquetas_scan_onu 
+          WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA' AND (
+            cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%'
+            OR gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%'
+            OR sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%'
+          )
+        `);
+
+        for (const row of resMissing.rows) {
+          const cleanMac = String(row.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+          if (cleanMac && cleanMac.length >= 6) {
+            macsToLookupSet.add(cleanMac);
+          }
+        }
+      } catch (dbErr) {
+        console.error(`Erro ao listar MACs pendentes no banco ${dbName}:`, dbErr);
+      }
+    }
+
+    if (macsToLookupSet.size === 0) {
+      return 0;
+    }
+
+    let macsToLookup = Array.from(macsToLookupSet);
+    if (macsToLookup.length > 5000) {
+      macsToLookup = macsToLookup.slice(0, 5000);
+    }
+
+    // 2. Conectar ao banco Rec-Pre-Alerta
     let recPool: Pool | null = null;
     const possibleNames = ['Rec-Pre-Alerta', 'Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
     for (const name of possibleNames) {
       try {
         const testPool = getPoolForDatabase(name);
-        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
+        await testPool.query('SELECT 1 FROM "recebimentos" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimentos LIMIT 1'));
         recPool = testPool;
         break;
       } catch (e) {}
@@ -3426,20 +3464,22 @@ async function syncRecPreAlertaToScanOnu() {
       recPool = getPoolForDatabase('Rec-Pre-Alerta');
     }
 
+    // 3. Buscar os registros de recebimentos correspondentes aos MACs pendentes
+    const placeholders = macsToLookup.map((_, idx) => `$${idx + 1}`).join(', ');
     const resRec = await recPool.query(`
       SELECT * 
       FROM "recebimentos" 
-      WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
-         OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
-      ORDER BY id DESC LIMIT 2000000
-    `).catch(async () => {
+      WHERE (
+        mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
+      )
+    `, macsToLookup).catch(async () => {
       return await recPool!.query(`
         SELECT * 
         FROM recebimentos 
-        WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
-           OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
-        ORDER BY id DESC LIMIT 2000000
-      `);
+        WHERE (
+          mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
+        )
+      `, macsToLookup);
     });
 
     if (!resRec || !resRec.rows || resRec.rows.length === 0) {
@@ -3447,18 +3487,17 @@ async function syncRecPreAlertaToScanOnu() {
     }
 
     if (resRec.rows.length > 0) {
-      console.log(`[Rec-pre-alerta Sync] Colunas encontradas em Recebimento:`, Object.keys(resRec.rows[0]).join(', '));
+      console.log(`[Rec-pre-alerta Sync] Encontrados ${resRec.rows.length} registros correspondentes em recebimentos.`);
     }
 
+    // 4. Executar os updates apenas para os registros encontrados
     let totalUpdatedCount = 0;
-    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
 
     for (const dbName of targetDatabases) {
       try {
         const scanPool = getPoolForDatabase(dbName);
-        await ensureDatabaseSchema(scanPool, dbName);
-
         let dbUpdatedCount = 0;
+
         for (const item of resRec.rows) {
           const cleanMac = String(item.mac || item.mac_address || item.macaddress || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
           const codigo = String(item.codigo || item.sap || item.codigo_sap || item.cod_sap || '').trim().toUpperCase();
