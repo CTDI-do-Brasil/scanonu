@@ -3695,6 +3695,83 @@ app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
   }
 });
 
+app.get('/api/admin/db-status', async (req: any, res: any) => {
+  try {
+    const status: any = {};
+    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    for (const dbName of targetDatabases) {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        
+        // Count rows
+        const countRes = await pool.query('SELECT COUNT(*) FROM etiquetas_scan_onu');
+        
+        // Get indexes
+        const idxRes = await pool.query(`
+          SELECT indexname, indexdef 
+          FROM pg_indexes 
+          WHERE tablename = 'etiquetas_scan_onu'
+        `);
+        
+        // Get active queries in pg_stat_activity
+        const actRes = await pool.query(`
+          SELECT pid, state, query, age(clock_timestamp(), query_start) as duration, wait_event_type, wait_event
+          FROM pg_stat_activity 
+          WHERE query NOT LIKE '%pg_stat_activity%' AND state = 'active'
+        `);
+        
+        status[dbName] = {
+          success: true,
+          rowCount: countRes.rows[0]?.count,
+          indexes: idxRes.rows,
+          activeQueries: actRes.rows
+        };
+      } catch (err: any) {
+        status[dbName] = { success: false, error: err.message || err };
+      }
+    }
+    
+    // Also check Rec-Pre-Alerta
+    try {
+      let recPool: Pool | null = null;
+      const possibleNames = ['Rec-Pre-Alerta', 'Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+      for (const name of possibleNames) {
+        try {
+          const testPool = getPoolForDatabase(name);
+          await testPool.query('SELECT 1 FROM "recebimentos" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimentos LIMIT 1'));
+          recPool = testPool;
+          break;
+        } catch (e) {}
+      }
+      if (recPool) {
+        const idxRes = await recPool.query(`
+          SELECT indexname, indexdef 
+          FROM pg_indexes 
+          WHERE tablename = 'recebimentos'
+        `);
+        const actRes = await recPool.query(`
+          SELECT pid, state, query, age(clock_timestamp(), query_start) as duration, wait_event_type, wait_event
+          FROM pg_stat_activity 
+          WHERE query NOT LIKE '%pg_stat_activity%' AND state = 'active'
+        `);
+        status['Rec-Pre-Alerta'] = {
+          success: true,
+          indexes: idxRes.rows,
+          activeQueries: actRes.rows
+        };
+      } else {
+        status['Rec-Pre-Alerta'] = { success: false, error: 'Could not connect to Rec-Pre-Alerta' };
+      }
+    } catch (err: any) {
+      status['Rec-Pre-Alerta'] = { success: false, error: err.message || err };
+    }
+    
+    return res.json(status);
+  } catch (e: any) {
+    return res.status(500).json({ success: false, error: e.message || e });
+  }
+});
+
 app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
   const steps: any[] = [];
   try {
