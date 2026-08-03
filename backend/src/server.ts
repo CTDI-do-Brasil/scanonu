@@ -3561,15 +3561,13 @@ app.get('/api/admin/sync-rec-pre-alerta', async (req: any, res: any) => {
 app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
   try {
     const recPool = getPoolForDatabase('Rec-Pre-Alerta');
-    const tablesResult = await recPool.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `);
-    const tableNames = tablesResult.rows.map((r: any) => r.table_name);
+    const resRec = await recPool.query('SELECT * FROM "recebimentos" ORDER BY id DESC LIMIT 5').catch(async () => {
+      return await recPool.query('SELECT * FROM recebimentos ORDER BY id DESC LIMIT 5');
+    });
     return res.json({
       success: true,
-      tables: tableNames
+      columns: resRec.rows.length > 0 ? Object.keys(resRec.rows[0]) : [],
+      sampleRows: resRec.rows
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || err });
