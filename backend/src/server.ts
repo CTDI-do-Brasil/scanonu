@@ -1419,7 +1419,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
   - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 dígitos hexadecimais (ex: '95C8'), compare com os últimos 4 dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
 
     let response: any;
-    const maxAttempts = 2; // Increased to 2 attempts per model to handle 503
+    const maxAttempts = 1; // 1 attempt per model to prevent API billing spikes
     const errorsMap: Record<string, string> = {};
 
     // Use os modelos preferenciais com fallback para 503 e 404 (modelo não existente)

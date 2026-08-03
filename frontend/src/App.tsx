@@ -1542,7 +1542,7 @@ export default function App() {
     setScreen('idle');
   };
 
-  const compressImageForUpload = (dataUrl: string, maxDim = 1600, quality = 0.85): Promise<string> => {
+  const compressImageForUpload = (dataUrl: string, maxDim = 1024, quality = 0.75): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -1640,7 +1640,7 @@ export default function App() {
         }
       }
 
-      const maxDim = 1600;
+      const maxDim = 1024;
       let width = sW;
       let height = sH;
       if (width > maxDim || height > maxDim) {
@@ -1664,7 +1664,7 @@ export default function App() {
           
           let base64 = '';
           try {
-            base64 = canvas.toDataURL('image/jpeg', 0.85);
+            base64 = canvas.toDataURL('image/jpeg', 0.75);
           } catch (e) {
             base64 = canvas.toDataURL('image/png');
           }
