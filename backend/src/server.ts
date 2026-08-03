@@ -3613,7 +3613,7 @@ app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
     if (macs.length > 0) {
       try {
         const pool1 = getPoolForDatabase('db-scanonu');
-        const r1 = await pool1.query(`SELECT id, mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
+        const r1 = await pool1.query(`SELECT mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
         dbScanonuRows = r1.rows;
       } catch (e: any) {
         dbScanonuRows = [{ error: e.message }];
@@ -3621,7 +3621,7 @@ app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
 
       try {
         const pool2 = getPoolForDatabase('ScanONU_Claro');
-        const r2 = await pool2.query(`SELECT id, mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
+        const r2 = await pool2.query(`SELECT mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
         dbClaroRows = r2.rows;
       } catch (e: any) {
         dbClaroRows = [{ error: e.message }];
