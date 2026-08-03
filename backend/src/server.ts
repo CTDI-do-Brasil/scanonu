@@ -3496,20 +3496,20 @@ async function syncRecPreAlertaToScanOnu() {
           const updateRes = await scanPool.query(`
             UPDATE etiquetas_scan_onu 
             SET 
-              cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
-              gpon_sn = CASE WHEN (gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $2 <> 'N/A' THEN $2 ELSE gpon_sn END,
-              sap = CASE WHEN (sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $3 <> 'N/A' THEN $3 ELSE sap END,
-              mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $4 <> 'N/A' THEN $4 ELSE mac END
+              cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
+              gpon_sn = CASE WHEN (gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%') AND $2 <> 'N/A' THEN $2 ELSE gpon_sn END,
+              sap = CASE WHEN (sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A' THEN $3 ELSE sap END,
+              mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
                 ($4 <> 'N/A' AND LENGTH($4) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $4)
                 OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(TRIM(cpe_sn)) = $1)
                 OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(TRIM(gpon_sn)) = $2)
               )
               AND (
-                ((cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $1 <> 'N/A')
-                OR ((gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $2 <> 'N/A')
-                OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $3 <> 'N/A')
-                OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A')) AND $4 <> 'N/A')
+                ((cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%') AND $1 <> 'N/A')
+                OR ((gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%') AND $2 <> 'N/A')
+                OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A')
+                OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A')
               )
           `, [validCpe, validGpon, validCodigo, validMac]);
 
