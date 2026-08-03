@@ -4118,6 +4118,39 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
   }
 });
 
+app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, res: any) => {
+  try {
+    const { mac, wifi_key, targetDb } = req.body;
+    
+    if (!mac || !wifi_key) {
+      return res.status(400).json({ success: false, error: 'MAC e WIFI_KEY são obrigatórios.' });
+    }
+
+    const pool = targetDb ? getPoolForDatabase(String(targetDb)) : dbPool;
+    if (!pool) {
+      return res.status(500).json({ success: false, error: 'Banco de dados não conectado.' });
+    }
+
+    const result = await pool.query(
+      "UPDATE etiquetas_scan_onu SET wifi_key = $1 WHERE mac = $2 AND modelo = 'PG2447'",
+      [wifi_key, mac]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Nenhum equipamento modelo PG2447 encontrado com este MAC.' });
+    }
+
+    return res.json({ 
+      success: true, 
+      message: `WIFI_KEY atualizado com sucesso para o MAC ${mac}.`,
+      updatedCount: result.rowCount 
+    });
+  } catch (err: any) {
+    console.error('Erro na API wifi-key PG2447:', err);
+    return res.status(500).json({ success: false, error: err.message || err });
+  }
+});
+
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
     const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
