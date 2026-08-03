@@ -4126,24 +4126,41 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
       return res.status(400).json({ success: false, error: 'MAC e WIFI_KEY são obrigatórios.' });
     }
 
-    const pool = targetDb ? getPoolForDatabase(String(targetDb)) : dbPool;
-    if (!pool) {
-      return res.status(500).json({ success: false, error: 'Banco de dados não conectado.' });
+    // Se targetDb for fornecido, usa apenas ele. Senão tenta em ambos os bancos de dados padrões
+    const targetDbs = targetDb ? [String(targetDb)] : ['db-scanonu', 'ScanONU_Claro'];
+    let totalUpdated = 0;
+    const dbErrors: string[] = [];
+
+    for (const dbName of targetDbs) {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        if (!pool) {
+          dbErrors.push(`Banco ${dbName} não conectado.`);
+          continue;
+        }
+
+        // Limpa pontuações do MAC e compara de forma case-insensitive, e filtra pelo modelo PG2447
+        const result = await pool.query(
+          "UPDATE etiquetas_scan_onu SET wifi_key = $1 WHERE UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = UPPER(REGEXP_REPLACE($2, '[^A-Z0-9]', '', 'g')) AND modelo = 'PG2447'",
+          [wifi_key, mac]
+        );
+        totalUpdated += result.rowCount || 0;
+      } catch (err: any) {
+        dbErrors.push(`Erro no banco ${dbName}: ${err.message || err}`);
+      }
     }
 
-    const result = await pool.query(
-      "UPDATE etiquetas_scan_onu SET wifi_key = $1 WHERE mac = $2 AND modelo = 'PG2447'",
-      [wifi_key, mac]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, error: 'Nenhum equipamento modelo PG2447 encontrado com este MAC.' });
+    if (totalUpdated === 0) {
+      const errorMsg = dbErrors.length > 0 
+        ? `Nenhum equipamento modelo PG2447 encontrado com este MAC. Erros: ${dbErrors.join(', ')}`
+        : 'Nenhum equipamento modelo PG2447 encontrado com este MAC nas bases de dados.';
+      return res.status(404).json({ success: false, error: errorMsg });
     }
 
     return res.json({ 
       success: true, 
       message: `WIFI_KEY atualizado com sucesso para o MAC ${mac}.`,
-      updatedCount: result.rowCount 
+      updatedCount: totalUpdated 
     });
   } catch (err: any) {
     console.error('Erro na API wifi-key PG2447:', err);
