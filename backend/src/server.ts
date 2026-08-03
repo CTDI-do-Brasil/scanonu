@@ -1253,6 +1253,40 @@ function correctMacPrefix(mac: string): string {
   return cleanMac;
 }
 
+function cleanAndNormalizePG2447Serial(serial: string): string | null {
+  if (!serial) return null;
+  const upper = serial.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  
+  // Encontrar se contém alguma das assinaturas conhecidas
+  const gIdx = upper.indexOf('GPO');
+  if (gIdx !== -1) {
+    return 'GPO' + upper.substring(gIdx + 3);
+  }
+  
+  const gp0Idx = upper.indexOf('GP0');
+  if (gp0Idx !== -1) {
+    return 'GPO' + upper.substring(gp0Idx + 3);
+  }
+  
+  const gpIdx = upper.indexOf('GP');
+  if (gpIdx !== -1) {
+    return 'GPO' + upper.substring(gpIdx + 2);
+  }
+  
+  const n70Idx = upper.indexOf('N70');
+  if (n70Idx !== -1) {
+    return 'GPO' + upper.substring(n70Idx + 3);
+  }
+  
+  const n7Idx = upper.indexOf('N7');
+  if (n7Idx !== -1) {
+    return 'GPO' + upper.substring(n7Idx + 2);
+  }
+
+  // Se não contiver nenhuma assinatura válida, retorna null
+  return null;
+}
+
 function normalizeFabricante(fabricante: string, modelo: string): string {
   const modelUpper = (modelo || '').toUpperCase().trim();
   if (modelUpper.includes('FGA2232TIB')) {
@@ -1577,23 +1611,11 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const modelUpper = modelNormTemp.toUpperCase();
 
     if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || fabricanteNorm.toUpperCase().includes('KAON')) {
-      let actualGpon = '';
-      if (gponNorm && (gponNorm.toUpperCase().startsWith('GPO') || gponNorm.toUpperCase().startsWith('GP0'))) {
-        actualGpon = 'GPO' + gponNorm.substring(3);
-      } else if (gponNorm && gponNorm.toUpperCase().startsWith('GP')) {
-        actualGpon = 'GPO' + gponNorm.substring(2);
-      } else if (geminiData.cpe_sn && (geminiData.cpe_sn.toUpperCase().startsWith('GPO') || geminiData.cpe_sn.toUpperCase().startsWith('GP0'))) {
-        actualGpon = 'GPO' + geminiData.cpe_sn.substring(3);
-      } else if (geminiData.cpe_sn && geminiData.cpe_sn.toUpperCase().startsWith('GP')) {
-        actualGpon = 'GPO' + geminiData.cpe_sn.substring(2);
-      } else if (cpeNorm && cpeNorm.toUpperCase().startsWith('N7')) {
-        actualGpon = 'GPO' + cpeNorm.substring(2);
-      } else if (gponNorm && gponNorm.toUpperCase().startsWith('N7')) {
-        actualGpon = 'GPO' + gponNorm.substring(2);
-      }
-
+      let actualGpon = cleanAndNormalizePG2447Serial(gponNorm) || 
+                       cleanAndNormalizePG2447Serial(geminiData.cpe_sn || '') || 
+                       cleanAndNormalizePG2447Serial(cpeNorm);
       if (actualGpon) {
-        gponNorm = actualGpon.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+        gponNorm = actualGpon;
       }
       cpeNorm = 'N/A';
     }
@@ -1784,42 +1806,17 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     // Ajuste/Validação Restritiva do Modelo PG2447 (GPO obrigatório)
     if (normalizedModelo === 'PG2447') {
-      let realSerial = '';
-      const upperGpon = (gpon_sn || '').toUpperCase();
-      const upperCpe = (cpe_sn || '').toUpperCase();
-
-      if (upperGpon.startsWith('GPO') || upperGpon.startsWith('GP0') || upperGpon.startsWith('GP') || upperGpon.startsWith('N7')) {
-        realSerial = upperGpon;
-      } else if (upperCpe.startsWith('GPO') || upperCpe.startsWith('GP0') || upperCpe.startsWith('GP') || upperCpe.startsWith('N7')) {
-        realSerial = upperCpe;
-      }
-
-      if (!realSerial && cpe_sn && upperCpe !== 'N/A' && upperCpe !== 'NA') {
-        realSerial = upperCpe;
-      }
-      if (!realSerial && gpon_sn && upperGpon !== 'N/A' && upperGpon !== 'NA' && !upperGpon.startsWith('N/A_')) {
-        realSerial = upperGpon;
-      }
-
-      if (realSerial) {
-        // Normalização automática de GP0 / GP / N7 para GPO
-        if (realSerial.startsWith('GP0') || realSerial.startsWith('GPO')) {
-          realSerial = 'GPO' + realSerial.substring(3);
-        } else if (realSerial.startsWith('GP')) {
-          realSerial = 'GPO' + realSerial.substring(2);
-        } else if (realSerial.startsWith('N7')) {
-          realSerial = 'GPO' + realSerial.substring(2);
-        }
-        cpe_sn = realSerial.replace(/[^A-Z0-9]/ig, '').toUpperCase();
-      }
+      let realSerial = cleanAndNormalizePG2447Serial(cpe_sn) || cleanAndNormalizePG2447Serial(gpon_sn);
 
       // Validação estrita: Aceitar somente quando for GPO...
-      if (!cpe_sn || !cpe_sn.toUpperCase().startsWith('GPO')) {
+      if (!realSerial) {
         return res.status(400).json({ 
           success: false, 
-          error: `O serial do modelo PG2447 é inválido (digitado: "${cpe_sn || 'N/A'}"). O sistema aceita apenas seriais que iniciam com o prefixo correto "GPO".` 
+          error: `O serial do modelo PG2447 é inválido (digitado: "${cpe_sn || gpon_sn || 'N/A'}"). O sistema aceita apenas seriais que iniciam com o prefixo correto "GPO".` 
         });
       }
+
+      cpe_sn = realSerial;
 
       // Para o PG2447, o cpe_sn é o serial real. O gpon_sn deve ser o N/A_MAC dummy
       const cleanMac = mac ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : '';
@@ -3633,15 +3630,16 @@ async function syncRecPreAlertaToScanOnu() {
 
           // Verificar se o registro atual na base destino é PG2447
           let isPG2447 = false;
+          const validMacWithColons = formatMacWithColons(validMac);
           try {
             const checkModelRes = await scanPool.query(`
               SELECT modelo, fabricante 
               FROM etiquetas_scan_onu 
-              WHERE (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1 AND $1 <> 'N/A')
+              WHERE (mac IN ($1, $4) AND $1 <> 'N/A')
                  OR (gpon_sn = $2 AND $2 <> 'N/A')
                  OR (cpe_sn = $3 AND $3 <> 'N/A')
               LIMIT 1
-            `, [validMac, validGpon, validCpe]);
+            `, [validMac, validGpon, validCpe, validMacWithColons]);
             if (checkModelRes.rowCount && checkModelRes.rowCount > 0) {
               const r = checkModelRes.rows[0];
               const mdl = String(r.modelo || '').toUpperCase();
@@ -3658,30 +3656,12 @@ async function syncRecPreAlertaToScanOnu() {
           let finalGpon = validGpon;
 
           if (isPG2447) {
-            let realSerial = '';
-            if (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && !cpeSn.startsWith('N/A_')) {
-              realSerial = cpeSn;
-            } else if (gponSn && gponSn !== 'N/A' && gponSn !== 'NA' && !gponSn.startsWith('N/A_')) {
-              realSerial = gponSn;
-            } else if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
-              realSerial = generalSerial;
-            }
+            let normalized = cleanAndNormalizePG2447Serial(cpeSn) || 
+                             cleanAndNormalizePG2447Serial(gponSn) || 
+                             cleanAndNormalizePG2447Serial(generalSerial);
 
-            if (realSerial) {
-              if (realSerial.startsWith('GP0') || realSerial.startsWith('GPO')) {
-                realSerial = 'GPO' + realSerial.substring(3);
-              } else if (realSerial.startsWith('GP')) {
-                realSerial = 'GPO' + realSerial.substring(2);
-              } else if (realSerial.startsWith('N7')) {
-                realSerial = 'GPO' + realSerial.substring(2);
-              } else if (!realSerial.toUpperCase().startsWith('GPO')) {
-                realSerial = 'GPO' + realSerial;
-              }
-              realSerial = realSerial.replace(/[^A-Z0-9]/ig, '').toUpperCase();
-            }
-
-            if (realSerial && realSerial.toUpperCase().startsWith('GPO')) {
-              finalCpe = realSerial;
+            if (normalized) {
+              finalCpe = normalized;
             } else {
               finalCpe = 'N/A';
             }
@@ -3699,7 +3679,7 @@ async function syncRecPreAlertaToScanOnu() {
               mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
                 (gpon_sn = $2 AND $2 <> 'N/A')
-                OR (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $4 AND $4 <> 'N/A')
+                OR (mac IN ($4, $5) AND $4 <> 'N/A')
                 OR (cpe_sn = $1 AND $1 <> 'N/A')
               )
               AND (
@@ -3708,7 +3688,7 @@ async function syncRecPreAlertaToScanOnu() {
                 OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A')
                 OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A')
               )
-          `, [finalCpe, finalGpon, validCodigo, validMac]);
+          `, [finalCpe, finalGpon, validCodigo, validMac, validMacWithColons]);
 
           if (updateRes.rowCount && updateRes.rowCount > 0) {
             dbUpdatedCount += updateRes.rowCount;
@@ -4048,15 +4028,16 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
 
           // Verificar se o registro atual na base destino é PG2447
           let isPG2447 = false;
+          const validMacWithColons = formatMacWithColons(validMac);
           try {
             const checkModelRes = await scanPool.query(`
               SELECT modelo, fabricante 
               FROM etiquetas_scan_onu 
-              WHERE (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1 AND $1 <> 'N/A')
+              WHERE (mac IN ($1, $4) AND $1 <> 'N/A')
                  OR (gpon_sn = $2 AND $2 <> 'N/A')
                  OR (cpe_sn = $3 AND $3 <> 'N/A')
               LIMIT 1
-            `, [validMac, validGpon, validCpe]);
+            `, [validMac, validGpon, validCpe, validMacWithColons]);
             if (checkModelRes.rowCount && checkModelRes.rowCount > 0) {
               const r = checkModelRes.rows[0];
               const mdl = String(r.modelo || '').toUpperCase();
@@ -4073,30 +4054,12 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
           let finalGpon = validGpon;
 
           if (isPG2447) {
-            let realSerial = '';
-            if (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && !cpeSn.startsWith('N/A_')) {
-              realSerial = cpeSn;
-            } else if (gponSn && gponSn !== 'N/A' && gponSn !== 'NA' && !gponSn.startsWith('N/A_')) {
-              realSerial = gponSn;
-            } else if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
-              realSerial = generalSerial;
-            }
+            let normalized = cleanAndNormalizePG2447Serial(cpeSn) || 
+                             cleanAndNormalizePG2447Serial(gponSn) || 
+                             cleanAndNormalizePG2447Serial(generalSerial);
 
-            if (realSerial) {
-              if (realSerial.startsWith('GP0') || realSerial.startsWith('GPO')) {
-                realSerial = 'GPO' + realSerial.substring(3);
-              } else if (realSerial.startsWith('GP')) {
-                realSerial = 'GPO' + realSerial.substring(2);
-              } else if (realSerial.startsWith('N7')) {
-                realSerial = 'GPO' + realSerial.substring(2);
-              } else if (!realSerial.toUpperCase().startsWith('GPO')) {
-                realSerial = 'GPO' + realSerial;
-              }
-              realSerial = realSerial.replace(/[^A-Z0-9]/ig, '').toUpperCase();
-            }
-
-            if (realSerial && realSerial.toUpperCase().startsWith('GPO')) {
-              finalCpe = realSerial;
+            if (normalized) {
+              finalCpe = normalized;
             } else {
               finalCpe = 'N/A';
             }
@@ -4114,7 +4077,7 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
               mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
                 (gpon_sn = $2 AND $2 <> 'N/A')
-                OR (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $4 AND $4 <> 'N/A')
+                OR (mac IN ($4, $5) AND $4 <> 'N/A')
                 OR (cpe_sn = $1 AND $1 <> 'N/A')
               )
               AND (
@@ -4123,7 +4086,7 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
                 OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A')
                 OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A')
               )
-          `, [finalCpe, finalGpon, validCodigo, validMac]);
+          `, [finalCpe, finalGpon, validCodigo, validMac, validMacWithColons]);
 
           updateLogs.push({
             dbName,
