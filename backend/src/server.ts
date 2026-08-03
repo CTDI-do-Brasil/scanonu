@@ -3418,6 +3418,7 @@ async function syncRecPreAlertaToScanOnu() {
         const scanPool = getPoolForDatabase(dbName);
         await ensureDatabaseSchema(scanPool, dbName);
 
+        // Limitamos para os 2000 registros mais recentes para evitar buscas lentas
         const resMissing = await scanPool.query(`
           SELECT mac 
           FROM etiquetas_scan_onu 
@@ -3426,6 +3427,8 @@ async function syncRecPreAlertaToScanOnu() {
             OR gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%'
             OR sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%'
           )
+          ORDER BY data_leitura DESC
+          LIMIT 2000
         `);
 
         for (const row of resMissing.rows) {
@@ -3444,8 +3447,8 @@ async function syncRecPreAlertaToScanOnu() {
     }
 
     let macsToLookup = Array.from(macsToLookupSet);
-    if (macsToLookup.length > 5000) {
-      macsToLookup = macsToLookup.slice(0, 5000);
+    if (macsToLookup.length > 500) {
+      macsToLookup = macsToLookup.slice(0, 500);
     }
 
     // 2. Conectar ao banco Rec-Pre-Alerta
@@ -3464,22 +3467,37 @@ async function syncRecPreAlertaToScanOnu() {
       recPool = getPoolForDatabase('Rec-Pre-Alerta');
     }
 
-    // 3. Buscar os registros de recebimentos correspondentes aos MACs pendentes
-    const placeholders = macsToLookup.map((_, idx) => `$${idx + 1}`).join(', ');
+    // 3. Buscar os registros de recebimentos correspondentes aos MACs pendentes usando index query
+    const formatMacWithColons = (m: string) => {
+      const clean = m.replace(/[^0-9A-Fa-f]/g, '');
+      if (clean.length !== 12) return m;
+      const parts = [];
+      for (let i = 0; i < 12; i += 2) parts.push(clean.slice(i, i + 2));
+      return parts.join(':').toUpperCase();
+    };
+
+    const queryParams: string[] = [];
+    for (const mac of macsToLookup) {
+      queryParams.push(mac);
+      const withColons = formatMacWithColons(mac);
+      if (withColons !== mac) queryParams.push(withColons);
+      const lower = mac.toLowerCase();
+      if (lower !== mac) queryParams.push(lower);
+      const lowerWithColons = withColons.toLowerCase();
+      if (lowerWithColons !== withColons) queryParams.push(lowerWithColons);
+    }
+
+    const placeholders = queryParams.map((_, idx) => `$${idx + 1}`).join(', ');
     const resRec = await recPool.query(`
       SELECT * 
       FROM "recebimentos" 
-      WHERE (
-        mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
-      )
-    `, macsToLookup).catch(async () => {
+      WHERE mac IN (${placeholders})
+    `, queryParams).catch(async () => {
       return await recPool!.query(`
         SELECT * 
         FROM recebimentos 
-        WHERE (
-          mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
-        )
-      `, macsToLookup);
+        WHERE mac IN (${placeholders})
+      `, queryParams);
     });
 
     if (!resRec || !resRec.rows || resRec.rows.length === 0) {
@@ -3693,6 +3711,8 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
             OR gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%'
             OR sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%'
           )
+          ORDER BY data_leitura DESC
+          LIMIT 2000
         `);
 
         steps.push({ dbName, missingCount: resMissing.rows.length, sampleMissing: resMissing.rows.slice(0, 5) });
@@ -3732,21 +3752,36 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
     }
 
     // 3. Buscar os registros de recebimentos correspondentes aos MACs
-    const placeholders = macsToLookup.map((_, idx) => `$${idx + 1}`).join(', ');
+    const formatMacWithColons = (m: string) => {
+      const clean = m.replace(/[^0-9A-Fa-f]/g, '');
+      if (clean.length !== 12) return m;
+      const parts = [];
+      for (let i = 0; i < 12; i += 2) parts.push(clean.slice(i, i + 2));
+      return parts.join(':').toUpperCase();
+    };
+
+    const queryParams: string[] = [];
+    for (const mac of macsToLookup) {
+      queryParams.push(mac);
+      const withColons = formatMacWithColons(mac);
+      if (withColons !== mac) queryParams.push(withColons);
+      const lower = mac.toLowerCase();
+      if (lower !== mac) queryParams.push(lower);
+      const lowerWithColons = withColons.toLowerCase();
+      if (lowerWithColons !== withColons) queryParams.push(lowerWithColons);
+    }
+
+    const placeholders = queryParams.map((_, idx) => `$${idx + 1}`).join(', ');
     const resRec = await recPool.query(`
       SELECT * 
       FROM "recebimentos" 
-      WHERE (
-        mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
-      )
-    `, macsToLookup).catch(async () => {
+      WHERE mac IN (${placeholders})
+    `, queryParams).catch(async () => {
       return await recPool!.query(`
         SELECT * 
         FROM recebimentos 
-        WHERE (
-          mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
-        )
-      `, macsToLookup);
+        WHERE mac IN (${placeholders})
+      `, queryParams);
     });
 
     steps.push({ recebimentosCount: resRec.rows.length, recebimentos: resRec.rows });
