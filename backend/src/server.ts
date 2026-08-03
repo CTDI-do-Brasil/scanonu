@@ -3637,7 +3637,7 @@ async function syncRecPreAlertaToScanOnu() {
             const checkModelRes = await scanPool.query(`
               SELECT modelo, fabricante 
               FROM etiquetas_scan_onu 
-              WHERE (mac = $1 AND $1 <> 'N/A')
+              WHERE (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1 AND $1 <> 'N/A')
                  OR (gpon_sn = $2 AND $2 <> 'N/A')
                  OR (cpe_sn = $3 AND $3 <> 'N/A')
               LIMIT 1
@@ -3699,7 +3699,7 @@ async function syncRecPreAlertaToScanOnu() {
               mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
                 (gpon_sn = $2 AND $2 <> 'N/A')
-                OR (mac = $4 AND $4 <> 'N/A')
+                OR (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $4 AND $4 <> 'N/A')
                 OR (cpe_sn = $1 AND $1 <> 'N/A')
               )
               AND (
@@ -4042,6 +4042,69 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
           const validCodigo = (codigo && codigo !== 'N/A' && codigo !== 'NA') ? codigo : 'N/A';
           const validMac = (cleanMac && cleanMac !== 'N/A' && cleanMac !== 'NA' && cleanMac.length >= 6) ? cleanMac : 'N/A';
 
+          if (validCpe === 'N/A' && validGpon === 'N/A' && validMac === 'N/A') {
+            continue;
+          }
+
+          // Verificar se o registro atual na base destino é PG2447
+          let isPG2447 = false;
+          try {
+            const checkModelRes = await scanPool.query(`
+              SELECT modelo, fabricante 
+              FROM etiquetas_scan_onu 
+              WHERE (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1 AND $1 <> 'N/A')
+                 OR (gpon_sn = $2 AND $2 <> 'N/A')
+                 OR (cpe_sn = $3 AND $3 <> 'N/A')
+              LIMIT 1
+            `, [validMac, validGpon, validCpe]);
+            if (checkModelRes.rowCount && checkModelRes.rowCount > 0) {
+              const r = checkModelRes.rows[0];
+              const mdl = String(r.modelo || '').toUpperCase();
+              const fbg = String(r.fabricante || '').toUpperCase();
+              if (mdl.includes('PG2447') || mdl.includes('P82447') || fbg.includes('KAON')) {
+                isPG2447 = true;
+              }
+            }
+          } catch (errCheck) {
+            console.error('Erro ao verificar se modelo e PG2447 no sync endpoint:', errCheck);
+          }
+
+          let finalCpe = validCpe;
+          let finalGpon = validGpon;
+
+          if (isPG2447) {
+            let realSerial = '';
+            if (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && !cpeSn.startsWith('N/A_')) {
+              realSerial = cpeSn;
+            } else if (gponSn && gponSn !== 'N/A' && gponSn !== 'NA' && !gponSn.startsWith('N/A_')) {
+              realSerial = gponSn;
+            } else if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
+              realSerial = generalSerial;
+            }
+
+            if (realSerial) {
+              if (realSerial.startsWith('GP0') || realSerial.startsWith('GPO')) {
+                realSerial = 'GPO' + realSerial.substring(3);
+              } else if (realSerial.startsWith('GP')) {
+                realSerial = 'GPO' + realSerial.substring(2);
+              } else if (realSerial.startsWith('N7')) {
+                realSerial = 'GPO' + realSerial.substring(2);
+              } else if (!realSerial.toUpperCase().startsWith('GPO')) {
+                realSerial = 'GPO' + realSerial;
+              }
+              realSerial = realSerial.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            }
+
+            if (realSerial && realSerial.toUpperCase().startsWith('GPO')) {
+              finalCpe = realSerial;
+            } else {
+              finalCpe = 'N/A';
+            }
+
+            // Para o PG2447, o gpon_sn é sempre o N/A_MAC dummy
+            finalGpon = 'N/A_' + (validMac !== 'N/A' ? validMac : Math.random().toString(36).substring(2, 10).toUpperCase());
+          }
+
           const updateRes = await scanPool.query(`
             UPDATE etiquetas_scan_onu 
             SET 
@@ -4051,7 +4114,7 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
               mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
                 (gpon_sn = $2 AND $2 <> 'N/A')
-                OR (mac = $4 AND $4 <> 'N/A')
+                OR (UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $4 AND $4 <> 'N/A')
                 OR (cpe_sn = $1 AND $1 <> 'N/A')
               )
               AND (
@@ -4060,7 +4123,7 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
                 OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A')
                 OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A')
               )
-          `, [validCpe, validGpon, validCodigo, validMac]);
+          `, [finalCpe, finalGpon, validCodigo, validMac]);
 
           updateLogs.push({
             dbName,
