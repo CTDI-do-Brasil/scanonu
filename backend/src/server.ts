@@ -3560,26 +3560,12 @@ app.get('/api/admin/sync-rec-pre-alerta', async (req: any, res: any) => {
 
 app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
   try {
-    let recPool: any = null;
-    const possibleNames = ['Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
-    for (const name of possibleNames) {
-      try {
-        const testPool = getPoolForDatabase(name);
-        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
-        recPool = testPool;
-        break;
-      } catch (e) {}
-    }
-    if (!recPool) recPool = getPoolForDatabase('Rec-pre-alerta');
-
-    let resRec = await recPool.query('SELECT * FROM "Recebimento" ORDER BY id DESC LIMIT 5').catch(async () => {
-      return await recPool.query('SELECT * FROM recebimento ORDER BY id DESC LIMIT 5');
-    });
-
+    const scanPool = getPoolForDatabase('db-scanonu');
+    const dbsResult = await scanPool.query('SELECT datname FROM pg_database WHERE datistemplate = false');
+    const dbNames = dbsResult.rows.map((r: any) => r.datname);
     return res.json({
       success: true,
-      columns: resRec.rows.length > 0 ? Object.keys(resRec.rows[0]) : [],
-      sampleRows: resRec.rows
+      databases: dbNames
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || err });
