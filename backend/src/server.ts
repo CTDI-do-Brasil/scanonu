@@ -3428,14 +3428,14 @@ async function syncRecPreAlertaToScanOnu() {
 
     const resRec = await recPool.query(`
       SELECT * 
-      FROM "Recebimento" 
+      FROM "recebimentos" 
       WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
          OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
       ORDER BY id DESC LIMIT 2000000
     `).catch(async () => {
       return await recPool!.query(`
         SELECT * 
-        FROM recebimento 
+        FROM recebimentos 
         WHERE (mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA')
            OR (serial_number IS NOT NULL AND serial_number <> '' AND serial_number <> 'N/A' AND serial_number <> 'NA')
         ORDER BY id DESC LIMIT 2000000
@@ -3468,7 +3468,7 @@ async function syncRecPreAlertaToScanOnu() {
           ).trim().toUpperCase();
 
           let gponSn = String(
-            item.gpon_sn || item.gpon || item.sn_gpon || item.serial_gpon || item.ns_gpon || item.gponsn || ''
+            item.gpon_id || item.gpon_sn || item.gpon || item.sn_gpon || item.serial_gpon || item.ns_gpon || item.gponsn || ''
           ).trim().toUpperCase();
 
           const generalSerial = String(
@@ -3583,20 +3583,20 @@ app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
     for (const name of possibleNames) {
       try {
         const testPool = getPoolForDatabase(name);
-        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
+        await testPool.query('SELECT 1 FROM "recebimentos" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimentos LIMIT 1'));
         recPool = testPool;
         break;
       } catch (e) {}
     }
     if (!recPool) recPool = getPoolForDatabase('Rec-Pre-Alerta');
     const sql = `
-      SELECT * FROM "Recebimento" 
+      SELECT * FROM "recebimentos" 
       WHERE 
-        mac ILIKE $1 OR serial_number ILIKE $1 OR gpon_sn ILIKE $1 OR cpe_sn ILIKE $1 
+        mac ILIKE $1 OR serial_number ILIKE $1 OR gpon_id ILIKE $1 
       LIMIT 50
     `;
     let result = await recPool.query(sql, [`%${q}%`]).catch(async () => {
-      return await recPool.query(`SELECT * FROM recebimento WHERE mac ILIKE $1 OR serial_number ILIKE $1 OR gpon_sn ILIKE $1 OR cpe_sn ILIKE $1 LIMIT 50`, [`%${q}%`]);
+      return await recPool.query(`SELECT * FROM recebimentos WHERE mac ILIKE $1 OR serial_number ILIKE $1 OR gpon_id ILIKE $1 LIMIT 50`, [`%${q}%`]);
     });
     return res.json({ success: true, count: result.rows.length, rows: result.rows });
   } catch (e: any) {
