@@ -3669,6 +3669,177 @@ app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
   }
 });
 
+app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
+  const steps: any[] = [];
+  try {
+    if (!dbConnected) {
+      return res.json({ success: false, error: 'Database not connected' });
+    }
+
+    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    const macsToLookupSet = new Set<string>();
+
+    // 1. Coletar os MACs que precisam de enriquecimento nas duas bases
+    for (const dbName of targetDatabases) {
+      try {
+        const scanPool = getPoolForDatabase(dbName);
+        await ensureDatabaseSchema(scanPool, dbName);
+
+        const resMissing = await scanPool.query(`
+          SELECT mac 
+          FROM etiquetas_scan_onu 
+          WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA' AND (
+            cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%'
+            OR gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%'
+            OR sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%'
+          )
+        `);
+
+        steps.push({ dbName, missingCount: resMissing.rows.length, sampleMissing: resMissing.rows.slice(0, 5) });
+
+        for (const row of resMissing.rows) {
+          const cleanMac = String(row.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+          if (cleanMac && cleanMac.length >= 6) {
+            macsToLookupSet.add(cleanMac);
+          }
+        }
+      } catch (dbErr: any) {
+        steps.push({ error: `Erro no banco ${dbName}: ${dbErr.message}` });
+      }
+    }
+
+    const macsToLookup = Array.from(macsToLookupSet);
+    steps.push({ macsToLookupCount: macsToLookup.length, macsToLookup });
+
+    if (macsToLookup.length === 0) {
+      return res.json({ success: true, message: 'No MACs to lookup', steps });
+    }
+
+    // 2. Conectar ao banco Rec-Pre-Alerta
+    let recPool: Pool | null = null;
+    const possibleNames = ['Rec-Pre-Alerta', 'Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    for (const name of possibleNames) {
+      try {
+        const testPool = getPoolForDatabase(name);
+        await testPool.query('SELECT 1 FROM "recebimentos" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimentos LIMIT 1'));
+        recPool = testPool;
+        break;
+      } catch (e) {}
+    }
+
+    if (!recPool) {
+      recPool = getPoolForDatabase('Rec-Pre-Alerta');
+    }
+
+    // 3. Buscar os registros de recebimentos correspondentes aos MACs
+    const placeholders = macsToLookup.map((_, idx) => `$${idx + 1}`).join(', ');
+    const resRec = await recPool.query(`
+      SELECT * 
+      FROM "recebimentos" 
+      WHERE (
+        mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
+      )
+    `, macsToLookup).catch(async () => {
+      return await recPool!.query(`
+        SELECT * 
+        FROM recebimentos 
+        WHERE (
+          mac IS NOT NULL AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})
+        )
+      `, macsToLookup);
+    });
+
+    steps.push({ recebimentosCount: resRec.rows.length, recebimentos: resRec.rows });
+
+    // 4. Executar os updates
+    let totalUpdatedCount = 0;
+    const updateLogs: any[] = [];
+
+    for (const dbName of targetDatabases) {
+      try {
+        const scanPool = getPoolForDatabase(dbName);
+        let dbUpdatedCount = 0;
+
+        for (const item of resRec.rows) {
+          const cleanMac = String(item.mac || item.mac_address || item.macaddress || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+          const codigo = String(item.codigo || item.sap || item.codigo_sap || item.cod_sap || '').trim().toUpperCase();
+
+          let cpeSn = String(
+            item.cpe_sn || item.cpe || item.sn_cpe || item.serial_cpe || item.ns_cpe || item.cpesn || item.serial_claro || item.numero_serie_cpe || ''
+          ).trim().toUpperCase();
+
+          let gponSn = String(
+            item.gpon_id || item.gpon_sn || item.gpon || item.sn_gpon || item.serial_gpon || item.ns_gpon || item.gponsn || ''
+          ).trim().toUpperCase();
+
+          const generalSerial = String(
+            item.serial_number || item.serial || item.sn || item.numero_serie || item.ns || ''
+          ).trim().toUpperCase();
+
+          if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
+            if (generalSerial.startsWith('GPO')) {
+              cpeSn = generalSerial;
+            } else {
+              if (!cpeSn || cpeSn === 'N/A' || cpeSn === 'NA') cpeSn = generalSerial;
+              if (!gponSn || gponSn === 'N/A' || gponSn === 'NA') gponSn = generalSerial;
+            }
+          }
+
+          const validCpe = (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && cpeSn.length >= 4) ? cpeSn : 'N/A';
+          const validGpon = (gponSn && gponSn !== 'N/A' && gponSn !== 'NA' && gponSn.length >= 4) ? gponSn : 'N/A';
+          const validCodigo = (codigo && codigo !== 'N/A' && codigo !== 'NA') ? codigo : 'N/A';
+          const validMac = (cleanMac && cleanMac !== 'N/A' && cleanMac !== 'NA' && cleanMac.length >= 6) ? cleanMac : 'N/A';
+
+          const updateRes = await scanPool.query(`
+            UPDATE etiquetas_scan_onu 
+            SET 
+              cpe_sn = CASE WHEN (cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%') AND $1 <> 'N/A' THEN $1 ELSE cpe_sn END,
+              gpon_sn = CASE WHEN (gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%') AND $2 <> 'N/A' THEN $2 ELSE gpon_sn END,
+              sap = CASE WHEN (sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A' THEN $3 ELSE sap END,
+              mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
+            WHERE (
+                ($4 <> 'N/A' AND LENGTH($4) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $4)
+                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(TRIM(cpe_sn)) = $1)
+                OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(TRIM(gpon_sn)) = $2)
+              )
+              AND (
+                ((cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%') AND $1 <> 'N/A')
+                OR ((gpon_sn IS NULL OR UPPER(TRIM(gpon_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(gpon_sn)) LIKE 'N/A%') AND $2 <> 'N/A')
+                OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A')
+                OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A')
+              )
+          `, [validCpe, validGpon, validCodigo, validMac]);
+
+          updateLogs.push({
+            dbName,
+            mac: cleanMac,
+            validCpe,
+            validGpon,
+            rowCount: updateRes.rowCount
+          });
+
+          if (updateRes.rowCount && updateRes.rowCount > 0) {
+            dbUpdatedCount += updateRes.rowCount;
+          }
+        }
+        totalUpdatedCount += dbUpdatedCount;
+      } catch (dbErr: any) {
+        updateLogs.push({ dbName, error: dbErr.message });
+      }
+    }
+
+    return res.json({
+      success: true,
+      totalUpdatedCount,
+      steps,
+      updateLogs
+    });
+
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || err, steps });
+  }
+});
+
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
     const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
