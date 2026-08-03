@@ -3498,16 +3498,16 @@ async function syncRecPreAlertaToScanOnu() {
 
     const targetDatabases = getActiveDatabases();
     const macsToLookupSet = new Set<string>();
+    const serialsToLookupSet = new Set<string>();
 
-    // 1. Coletar os MACs que precisam de enriquecimento nas duas bases
+    // 1. Coletar os MACs e Números de Série que precisam de enriquecimento nas bases
     for (const dbName of targetDatabases) {
       try {
         const scanPool = getPoolForDatabase(dbName);
         await ensureDatabaseSchema(scanPool, dbName);
 
-        // Limitamos para os 2000 registros mais recentes para evitar buscas lentas
         const resMissing = await scanPool.query(`
-          SELECT mac 
+          SELECT mac, cpe_sn, gpon_sn 
           FROM etiquetas_scan_onu 
           WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA' AND (
             cpe_sn IS NULL OR cpe_sn = '' OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn LIKE 'N/A%'
@@ -3523,19 +3523,31 @@ async function syncRecPreAlertaToScanOnu() {
           if (cleanMac && cleanMac.length >= 6) {
             macsToLookupSet.add(cleanMac);
           }
+          const cleanCpe = String(row.cpe_sn || '').trim().toUpperCase();
+          if (cleanCpe && cleanCpe !== 'N/A' && cleanCpe !== 'NA' && !cleanCpe.startsWith('N/A_')) {
+            serialsToLookupSet.add(cleanCpe);
+          }
+          const cleanGpon = String(row.gpon_sn || '').trim().toUpperCase();
+          if (cleanGpon && cleanGpon !== 'N/A' && cleanGpon !== 'NA' && !cleanGpon.startsWith('N/A_')) {
+            serialsToLookupSet.add(cleanGpon);
+          }
         }
       } catch (dbErr) {
-        console.error(`Erro ao listar MACs pendentes no banco ${dbName}:`, dbErr);
+        console.error(`Erro ao listar MACs/Seriais pendentes no banco ${dbName}:`, dbErr);
       }
-    }
-
-    if (macsToLookupSet.size === 0) {
-      return 0;
     }
 
     let macsToLookup = Array.from(macsToLookupSet);
     if (macsToLookup.length > 500) {
       macsToLookup = macsToLookup.slice(0, 500);
+    }
+    let serialsToLookup = Array.from(serialsToLookupSet);
+    if (serialsToLookup.length > 500) {
+      serialsToLookup = serialsToLookup.slice(0, 500);
+    }
+
+    if (macsToLookup.length === 0 && serialsToLookup.length === 0) {
+      return 0;
     }
 
     // 2. Conectar ao banco Rec-Pre-Alerta
@@ -3554,7 +3566,7 @@ async function syncRecPreAlertaToScanOnu() {
       recPool = getPoolForDatabase('Rec-Pre-Alerta');
     }
 
-    // 3. Buscar os registros de recebimentos correspondentes aos MACs pendentes usando index query
+    // 3. Buscar os registros de recebimentos correspondentes aos MACs/Seriais pendentes
     const formatMacWithColons = (m: string) => {
       const clean = m.replace(/[^0-9A-Fa-f]/g, '');
       if (clean.length !== 12) return m;
@@ -3564,27 +3576,55 @@ async function syncRecPreAlertaToScanOnu() {
     };
 
     const queryParams: string[] = [];
+    const macPlaceholdersList: string[] = [];
+    const serialPlaceholdersList: string[] = [];
+
     for (const mac of macsToLookup) {
       queryParams.push(mac);
+      macPlaceholdersList.push(`$${queryParams.length}`);
       const withColons = formatMacWithColons(mac);
-      if (withColons !== mac) queryParams.push(withColons);
+      if (withColons !== mac) {
+        queryParams.push(withColons);
+        macPlaceholdersList.push(`$${queryParams.length}`);
+      }
       const lower = mac.toLowerCase();
-      if (lower !== mac) queryParams.push(lower);
+      if (lower !== mac) {
+        queryParams.push(lower);
+        macPlaceholdersList.push(`$${queryParams.length}`);
+      }
       const lowerWithColons = withColons.toLowerCase();
-      if (lowerWithColons !== withColons) queryParams.push(lowerWithColons);
+      if (lowerWithColons !== withColons) {
+        queryParams.push(lowerWithColons);
+        macPlaceholdersList.push(`$${queryParams.length}`);
+      }
     }
 
-    const placeholders = queryParams.map((_, idx) => `$${idx + 1}`).join(', ');
-    const resRec = await recPool.query(`
+    for (const serial of serialsToLookup) {
+      queryParams.push(serial);
+      serialPlaceholdersList.push(`$${queryParams.length}`);
+      const lower = serial.toLowerCase();
+      if (lower !== serial) {
+        queryParams.push(lower);
+        serialPlaceholdersList.push(`$${queryParams.length}`);
+      }
+    }
+
+    const macCondition = macPlaceholdersList.length > 0 ? `mac IN (${macPlaceholdersList.join(', ')})` : 'FALSE';
+    const serialCondition = serialPlaceholdersList.length > 0 ? `serial_number IN (${serialPlaceholdersList.join(', ')}) OR gpon_id IN (${serialPlaceholdersList.join(', ')})` : 'FALSE';
+
+    const queryStr = `
       SELECT * 
       FROM "recebimentos" 
-      WHERE mac IN (${placeholders})
-    `, queryParams).catch(async () => {
-      return await recPool!.query(`
-        SELECT * 
-        FROM recebimentos 
-        WHERE mac IN (${placeholders})
-      `, queryParams);
+      WHERE (${macCondition}) OR (${serialCondition})
+    `;
+    const queryStrFallback = `
+      SELECT * 
+      FROM recebimentos 
+      WHERE (${macCondition}) OR (${serialCondition})
+    `;
+
+    const resRec = await recPool.query(queryStr, queryParams).catch(async () => {
+      return await recPool!.query(queryStrFallback, queryParams);
     });
 
     if (!resRec || !resRec.rows || resRec.rows.length === 0) {
@@ -3639,15 +3679,16 @@ async function syncRecPreAlertaToScanOnu() {
 
           // Verificar se o registro atual na base destino é PG2447
           let isPG2447 = false;
+          let databaseMac = 'N/A';
           const validMacWithColons = formatMacWithColons(validMac);
           try {
             const checkModelRes = await scanPool.query(`
-              SELECT modelo, fabricante 
-              FROM etiquetas_scan_onu 
-              WHERE (mac IN ($1, $4) AND $1 <> 'N/A')
-                 OR (gpon_sn = $2 AND $2 <> 'N/A')
-                 OR (cpe_sn = $3 AND $3 <> 'N/A')
-              LIMIT 1
+               SELECT modelo, fabricante, mac 
+               FROM etiquetas_scan_onu 
+               WHERE (mac IN ($1, $4) AND $1 <> 'N/A')
+                  OR (gpon_sn = $2 AND $2 <> 'N/A')
+                  OR (cpe_sn = $3 AND $3 <> 'N/A')
+               LIMIT 1
             `, [validMac, validGpon, validCpe, validMacWithColons]);
             if (checkModelRes.rowCount && checkModelRes.rowCount > 0) {
               const r = checkModelRes.rows[0];
@@ -3655,6 +3696,9 @@ async function syncRecPreAlertaToScanOnu() {
               const fbg = String(r.fabricante || '').toUpperCase();
               if (mdl.includes('PG2447') || mdl.includes('P82447') || fbg.includes('KAON')) {
                 isPG2447 = true;
+              }
+              if (r.mac && r.mac !== 'N/A' && r.mac !== 'NA') {
+                databaseMac = String(r.mac).trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
               }
             }
           } catch (errCheck) {
@@ -3676,7 +3720,8 @@ async function syncRecPreAlertaToScanOnu() {
             }
 
             // Para o PG2447, o gpon_sn é sempre o N/A_MAC dummy
-            finalGpon = 'N/A_' + (validMac !== 'N/A' ? validMac : Math.random().toString(36).substring(2, 10).toUpperCase());
+            const macToUseForGpon = validMac !== 'N/A' ? validMac : databaseMac;
+            finalGpon = 'N/A_' + (macToUseForGpon !== 'N/A' ? macToUseForGpon : Math.random().toString(36).substring(2, 10).toUpperCase());
           }
 
           const updateRes = await scanPool.query(`
@@ -3895,15 +3940,16 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
 
     const targetDatabases = getActiveDatabases();
     const macsToLookupSet = new Set<string>();
+    const serialsToLookupSet = new Set<string>();
 
-    // 1. Coletar os MACs que precisam de enriquecimento nas duas bases
+    // 1. Coletar os MACs e Números de Série que precisam de enriquecimento nas bases
     for (const dbName of targetDatabases) {
       try {
         const scanPool = getPoolForDatabase(dbName);
         await ensureDatabaseSchema(scanPool, dbName);
 
         const resMissing = await scanPool.query(`
-          SELECT mac 
+          SELECT mac, cpe_sn, gpon_sn 
           FROM etiquetas_scan_onu 
           WHERE mac IS NOT NULL AND mac <> '' AND mac <> 'N/A' AND mac <> 'NA' AND (
             cpe_sn IS NULL OR cpe_sn = '' OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn LIKE 'N/A%'
@@ -3921,17 +3967,33 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
           if (cleanMac && cleanMac.length >= 6) {
             macsToLookupSet.add(cleanMac);
           }
+          const cleanCpe = String(row.cpe_sn || '').trim().toUpperCase();
+          if (cleanCpe && cleanCpe !== 'N/A' && cleanCpe !== 'NA' && !cleanCpe.startsWith('N/A_')) {
+            serialsToLookupSet.add(cleanCpe);
+          }
+          const cleanGpon = String(row.gpon_sn || '').trim().toUpperCase();
+          if (cleanGpon && cleanGpon !== 'N/A' && cleanGpon !== 'NA' && !cleanGpon.startsWith('N/A_')) {
+            serialsToLookupSet.add(cleanGpon);
+          }
         }
       } catch (dbErr: any) {
         steps.push({ error: `Erro no banco ${dbName}: ${dbErr.message}` });
       }
     }
 
-    const macsToLookup = Array.from(macsToLookupSet);
-    steps.push({ macsToLookupCount: macsToLookup.length, macsToLookup });
+    let macsToLookup = Array.from(macsToLookupSet);
+    if (macsToLookup.length > 500) {
+      macsToLookup = macsToLookup.slice(0, 500);
+    }
+    let serialsToLookup = Array.from(serialsToLookupSet);
+    if (serialsToLookup.length > 500) {
+      serialsToLookup = serialsToLookup.slice(0, 500);
+    }
 
-    if (macsToLookup.length === 0) {
-      return res.json({ success: true, message: 'No MACs to lookup', steps });
+    steps.push({ macsToLookupCount: macsToLookup.length, macsToLookup, serialsToLookupCount: serialsToLookup.length, serialsToLookup });
+
+    if (macsToLookup.length === 0 && serialsToLookup.length === 0) {
+      return res.json({ success: true, message: 'No MACs or Serials to lookup', steps });
     }
 
     // 2. Conectar ao banco Rec-Pre-Alerta
@@ -3950,7 +4012,7 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
       recPool = getPoolForDatabase('Rec-Pre-Alerta');
     }
 
-    // 3. Buscar os registros de recebimentos correspondentes aos MACs
+    // 3. Buscar os registros de recebimentos correspondentes
     const formatMacWithColons = (m: string) => {
       const clean = m.replace(/[^0-9A-Fa-f]/g, '');
       if (clean.length !== 12) return m;
@@ -3960,27 +4022,55 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
     };
 
     const queryParams: string[] = [];
+    const macPlaceholdersList: string[] = [];
+    const serialPlaceholdersList: string[] = [];
+
     for (const mac of macsToLookup) {
       queryParams.push(mac);
+      macPlaceholdersList.push(`$${queryParams.length}`);
       const withColons = formatMacWithColons(mac);
-      if (withColons !== mac) queryParams.push(withColons);
+      if (withColons !== mac) {
+        queryParams.push(withColons);
+        macPlaceholdersList.push(`$${queryParams.length}`);
+      }
       const lower = mac.toLowerCase();
-      if (lower !== mac) queryParams.push(lower);
+      if (lower !== mac) {
+        queryParams.push(lower);
+        macPlaceholdersList.push(`$${queryParams.length}`);
+      }
       const lowerWithColons = withColons.toLowerCase();
-      if (lowerWithColons !== withColons) queryParams.push(lowerWithColons);
+      if (lowerWithColons !== withColons) {
+        queryParams.push(lowerWithColons);
+        macPlaceholdersList.push(`$${queryParams.length}`);
+      }
     }
 
-    const placeholders = queryParams.map((_, idx) => `$${idx + 1}`).join(', ');
-    const resRec = await recPool.query(`
+    for (const serial of serialsToLookup) {
+      queryParams.push(serial);
+      serialPlaceholdersList.push(`$${queryParams.length}`);
+      const lower = serial.toLowerCase();
+      if (lower !== serial) {
+        queryParams.push(lower);
+        serialPlaceholdersList.push(`$${queryParams.length}`);
+      }
+    }
+
+    const macCondition = macPlaceholdersList.length > 0 ? `mac IN (${macPlaceholdersList.join(', ')})` : 'FALSE';
+    const serialCondition = serialPlaceholdersList.length > 0 ? `serial_number IN (${serialPlaceholdersList.join(', ')}) OR gpon_id IN (${serialPlaceholdersList.join(', ')})` : 'FALSE';
+
+    const queryStr = `
       SELECT * 
       FROM "recebimentos" 
-      WHERE mac IN (${placeholders})
-    `, queryParams).catch(async () => {
-      return await recPool!.query(`
-        SELECT * 
-        FROM recebimentos 
-        WHERE mac IN (${placeholders})
-      `, queryParams);
+      WHERE (${macCondition}) OR (${serialCondition})
+    `;
+    const queryStrFallback = `
+      SELECT * 
+      FROM recebimentos 
+      WHERE (${macCondition}) OR (${serialCondition})
+    `;
+
+    const resRec = await recPool.query(queryStr, queryParams).catch(async () => {
+      return await recPool!.query(queryStrFallback, queryParams);
     });
 
     steps.push({ recebimentosCount: resRec.rows.length, recebimentos: resRec.rows });
@@ -4030,15 +4120,16 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
 
           // Verificar se o registro atual na base destino é PG2447
           let isPG2447 = false;
+          let databaseMac = 'N/A';
           const validMacWithColons = formatMacWithColons(validMac);
           try {
             const checkModelRes = await scanPool.query(`
-              SELECT modelo, fabricante 
-              FROM etiquetas_scan_onu 
-              WHERE (mac IN ($1, $4) AND $1 <> 'N/A')
-                 OR (gpon_sn = $2 AND $2 <> 'N/A')
-                 OR (cpe_sn = $3 AND $3 <> 'N/A')
-              LIMIT 1
+               SELECT modelo, fabricante, mac 
+               FROM etiquetas_scan_onu 
+               WHERE (mac IN ($1, $4) AND $1 <> 'N/A')
+                  OR (gpon_sn = $2 AND $2 <> 'N/A')
+                  OR (cpe_sn = $3 AND $3 <> 'N/A')
+               LIMIT 1
             `, [validMac, validGpon, validCpe, validMacWithColons]);
             if (checkModelRes.rowCount && checkModelRes.rowCount > 0) {
               const r = checkModelRes.rows[0];
@@ -4046,6 +4137,9 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
               const fbg = String(r.fabricante || '').toUpperCase();
               if (mdl.includes('PG2447') || mdl.includes('P82447') || fbg.includes('KAON')) {
                 isPG2447 = true;
+              }
+              if (r.mac && r.mac !== 'N/A' && r.mac !== 'NA') {
+                databaseMac = String(r.mac).trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
               }
             }
           } catch (errCheck) {
@@ -4067,7 +4161,8 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
             }
 
             // Para o PG2447, o gpon_sn é sempre o N/A_MAC dummy
-            finalGpon = 'N/A_' + (validMac !== 'N/A' ? validMac : Math.random().toString(36).substring(2, 10).toUpperCase());
+            const macToUseForGpon = validMac !== 'N/A' ? validMac : databaseMac;
+            finalGpon = 'N/A_' + (macToUseForGpon !== 'N/A' ? macToUseForGpon : Math.random().toString(36).substring(2, 10).toUpperCase());
           }
 
           const updateRes = await scanPool.query(`
