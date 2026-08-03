@@ -2342,7 +2342,7 @@ app.get('/api/public/label/:query', async (req, res) => {
         data: {
           fabricante: foundRecord.fabricante,
           modelo: foundRecord.modelo,
-          gpon_sn: foundRecord.gpon_sn,
+          gpon_sn: (foundRecord.gpon_sn && foundRecord.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : foundRecord.gpon_sn,
           mac: foundRecord.mac,
           usuario: foundRecord.usuario,
           senha: foundRecord.web_key,
@@ -2900,7 +2900,7 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
         .ele('fabricante').txt(row.fabricante || '').up()
         .ele('modelo').txt(row.modelo || '').up()
         .ele('cpe_sn').txt(row.cpe_sn || '').up()
-        .ele('gpon_sn').txt(row.gpon_sn || '').up()
+        .ele('gpon_sn').txt((row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || '')).up()
         .ele('mac').txt(row.mac || '').up()
         .ele('wifi_ssid').txt(row.wifi_ssid || '').up()
         .ele('wifi_ssid_5g').txt(row.wifi_ssid_5g || '').up()
@@ -2976,7 +2976,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
       'Fabricante': row.fabricante || '',
       'Modelo': row.modelo || '',
       'CPE Serial Number': row.cpe_sn || '',
-      'GPON Serial Number': row.gpon_sn || '',
+      'GPON Serial Number': (row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || ''),
       'Endereço MAC': row.mac || '',
       'SSID Wi-Fi 2.4G / Único': row.wifi_ssid || '',
       'SSID Wi-Fi 5G': row.wifi_ssid_5g || '',

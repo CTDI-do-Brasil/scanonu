@@ -61,12 +61,13 @@ export async function uploadZplToMinio(data: any): Promise<string | null> {
     if (!isBucketReady) return null;
 
     // Gerar o conteúdo do ZPL
+    const gponDisplay = (data.gpon_sn && data.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (data.gpon_sn || 'N/A');
     const zplContent = `^XA
 ^FX --- DADOS DA ONU ---
 ^CF0,30
 ^FO50,50^FDFabricante: ${data.fabricante || 'N/A'}^FS
 ^FO50,90^FDModelo: ${data.modelo || 'N/A'}^FS
-^FO50,130^FDGPON: ${data.gpon_sn || 'N/A'}^FS
+^FO50,130^FDGPON: ${gponDisplay}^FS
 ^FO50,170^FDMAC: ${data.mac || 'N/A'}^FS
 ^FO50,210^FDSSID: ${data.wifi_ssid || 'N/A'}^FS
 ^FO50,250^FDSSID 5G: ${data.wifi_ssid_5g || 'N/A'}^FS

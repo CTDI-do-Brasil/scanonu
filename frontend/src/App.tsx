@@ -84,6 +84,13 @@ const DEFAULT_SCAN_DATA: ScanData = {
   reimpressa: false
 };
 
+const formatGponForDisplay = (gpon: string | null | undefined): string => {
+  if (!gpon) return 'N/A';
+  const gStr = String(gpon).trim();
+  if (gStr.toUpperCase().startsWith('N/A_')) return 'N/A';
+  return gStr;
+};
+
 function applyMacSsidRules(currentData: ScanData): ScanData {
   const dataCopy = { ...currentData };
   const modelUpper = (dataCopy.modelo || '').toUpperCase();
@@ -2506,9 +2513,9 @@ export default function App() {
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">GPON Serial (S/N)</span>
                       <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono">
-                        <span className="text-slate-700 font-bold">{publicQueryResult.gpon_sn}</span>
+                        <span className="text-slate-700 font-bold">{formatGponForDisplay(publicQueryResult.gpon_sn)}</span>
                         <button
-                          onClick={() => copyPublicField('gpon', publicQueryResult.gpon_sn)}
+                          onClick={() => copyPublicField('gpon', formatGponForDisplay(publicQueryResult.gpon_sn))}
                           className="text-slate-400 hover:text-[#003865] transition-colors p-1"
                         >
                           {copiedPublicField === 'gpon' ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -3927,10 +3934,10 @@ export default function App() {
                               </td>
                               <td className="px-4 py-3.5 space-y-1 font-mono">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-slate-700">{item.gpon_sn}</span>
+                                  <span className="font-bold text-slate-700">{formatGponForDisplay(item.gpon_sn)}</span>
                                   <button 
                                     onClick={() => {
-                                      navigator.clipboard.writeText(item.gpon_sn);
+                                      navigator.clipboard.writeText(formatGponForDisplay(item.gpon_sn));
                                       setCopiedField(`gpon_${idx}`);
                                       setTimeout(() => setCopiedField(null), 1500);
                                     }}
@@ -4709,7 +4716,7 @@ export default function App() {
                       <div>
                         <div className="font-semibold text-xs text-slate-700 truncate max-w-[150px] sm:max-w-xs">{item.fileName}</div>
                         {item.data.gpon_sn && (
-                          <div className="text-[10px] text-slate-400 font-mono">GPON: {item.data.gpon_sn}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">GPON: {formatGponForDisplay(item.data.gpon_sn)}</div>
                         )}
                         {item.errorMsg && (
                           <div className="text-[10px] text-red-500 mt-0.5 max-w-[150px] sm:max-w-xs break-words whitespace-normal">{item.errorMsg}</div>
@@ -5346,7 +5353,7 @@ export default function App() {
             </h3>
             
             <p className="text-slate-600 text-xs text-center leading-relaxed">
-              O GPON <strong className="text-slate-800 font-semibold">{data.gpon_sn}</strong> já está cadastrado. Deseja fazer algum ajuste? Você pode editar as informações na tela e salvá-las diretamente.
+              O GPON <strong className="text-slate-800 font-semibold">{formatGponForDisplay(data.gpon_sn)}</strong> já está cadastrado. Deseja fazer algum ajuste? Você pode editar as informações na tela e salvá-las diretamente.
             </p>
             
             <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">
@@ -5609,7 +5616,7 @@ export default function App() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold">PON ID</span>
-                  <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.gpon_sn}</div>
+                  <div className="font-mono text-sm text-slate-700">{formatGponForDisplay(fast5670ConfirmData.gpon_sn)}</div>
                 </div>
               </div>
 
