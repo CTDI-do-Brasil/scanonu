@@ -259,7 +259,7 @@ ${rawZpl}`;
 
     let response: any;
     // Use the preferred Gemini models as requested, with fallback for 503
-    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
+    for (const modelName of ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash']) {
       try {
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
@@ -1503,7 +1503,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const errorsMap: Record<string, string> = {};
 
     // Use os modelos preferenciais com fallback para 503 e 404 (modelo não existente)
-    for (const modelName of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
+    for (const modelName of ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash']) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);

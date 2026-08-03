@@ -1549,7 +1549,7 @@ export default function App() {
     setScreen('idle');
   };
 
-  const compressImageForUpload = (dataUrl: string, maxDim = 1024, quality = 0.75): Promise<string> => {
+  const compressImageForUpload = (dataUrl: string, maxDim = 768, quality = 0.75): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -1647,7 +1647,7 @@ export default function App() {
         }
       }
 
-      const maxDim = 1024;
+      const maxDim = 768;
       let width = sW;
       let height = sH;
       if (width > maxDim || height > maxDim) {
@@ -1751,11 +1751,12 @@ export default function App() {
             await new Promise(resolve => setTimeout(resolve, 4500));
           }
           
-          const base64 = await new Promise<string>((resolve) => {
+          const rawBase64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(file);
           });
+          const base64 = await compressImageForUpload(rawBase64);
 
           setBatchResults(prev => prev.map((item, idx) => idx === i ? { ...item, image: base64, status: 'processing' } : item));
 
@@ -1777,7 +1778,10 @@ export default function App() {
                 if (dbResponse.ok) {
                   const dbResult = await dbResponse.json();
                   if (dbResult.success && dbResult.data) {
-                    const hasCompleteWifi = dbResult.data.wifi_ssid && dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A';
+                    const hasCompleteWifi = dbResult.data.wifi_ssid && (
+                      (dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A' && dbResult.data.wifi_key !== 'NA') ||
+                      (dbResult.data.wifi_ssid === 'N/A' || dbResult.data.wifi_ssid === 'NA')
+                    );
                     if (hasCompleteWifi) {
                       result = {
                         success: true,
@@ -2208,7 +2212,10 @@ export default function App() {
             const dbResult = await dbResponse.json();
             if (dbResult.success && dbResult.data) {
               const safeDb = sanitizeData(dbResult.data);
-              const hasCompleteWifi = safeDb.wifi_ssid && safeDb.wifi_ssid !== 'N/A' && safeDb.wifi_ssid !== 'NA' && safeDb.wifi_key && safeDb.wifi_key !== 'N/A';
+              const hasCompleteWifi = safeDb.wifi_ssid && (
+                (safeDb.wifi_ssid !== 'N/A' && safeDb.wifi_ssid !== 'NA' && safeDb.wifi_key && safeDb.wifi_key !== 'N/A' && safeDb.wifi_key !== 'NA') ||
+                (safeDb.wifi_ssid === 'N/A' || safeDb.wifi_ssid === 'NA')
+              );
               if (hasCompleteWifi) {
                 console.log('Equipamento com dados completos encontrado no banco localmente (0 tokens gastos!).');
                 setData(prevData => {
