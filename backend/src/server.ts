@@ -3600,13 +3600,39 @@ app.get('/api/admin/sync-rec-pre-alerta', async (req: any, res: any) => {
 app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
   try {
     const recPool = getPoolForDatabase('Rec-Pre-Alerta');
-    const resRec = await recPool.query('SELECT * FROM "recebimentos" ORDER BY id DESC LIMIT 5').catch(async () => {
-      return await recPool.query('SELECT * FROM recebimentos ORDER BY id DESC LIMIT 5');
+    const resRec = await recPool.query('SELECT * FROM "recebimentos" ORDER BY id DESC LIMIT 10').catch(async () => {
+      return await recPool.query('SELECT * FROM recebimentos ORDER BY id DESC LIMIT 10');
     });
+
+    const macs = resRec.rows.map((r: any) => String(r.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase()).filter(Boolean);
+    const placeholders = macs.map((_, idx) => `$${idx + 1}`).join(', ');
+
+    let dbScanonuRows: any[] = [];
+    let dbClaroRows: any[] = [];
+
+    if (macs.length > 0) {
+      try {
+        const pool1 = getPoolForDatabase('db-scanonu');
+        const r1 = await pool1.query(`SELECT id, mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
+        dbScanonuRows = r1.rows;
+      } catch (e: any) {
+        dbScanonuRows = [{ error: e.message }];
+      }
+
+      try {
+        const pool2 = getPoolForDatabase('ScanONU_Claro');
+        const r2 = await pool2.query(`SELECT id, mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
+        dbClaroRows = r2.rows;
+      } catch (e: any) {
+        dbClaroRows = [{ error: e.message }];
+      }
+    }
+
     return res.json({
       success: true,
-      columns: resRec.rows.length > 0 ? Object.keys(resRec.rows[0]) : [],
-      sampleRows: resRec.rows
+      recebimentos: resRec.rows,
+      db_scanonu: dbScanonuRows,
+      scanonu_claro: dbClaroRows
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || err });
