@@ -447,7 +447,15 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   `;
   await pool.query(createTableQuery);
 
-  // Criar tabela de usuários
+  // Criar índices na tabela etiquetas_scan_onu
+  try {
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_mac ON etiquetas_scan_onu(mac)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_cpe_sn ON etiquetas_scan_onu(cpe_sn)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_data_leitura ON etiquetas_scan_onu(data_leitura)');
+  } catch (err) {
+    console.error('Erro ao criar índices em etiquetas_scan_onu:', err);
+  }
+
   const createUsersTableQuery = `
     CREATE TABLE IF NOT EXISTS usuarios_scan_onu (
       id SERIAL PRIMARY KEY,
@@ -3558,9 +3566,9 @@ async function syncRecPreAlertaToScanOnu() {
               sap = CASE WHEN (sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A' THEN $3 ELSE sap END,
               mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
-                ($4 <> 'N/A' AND LENGTH($4) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $4)
-                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(TRIM(cpe_sn)) = $1)
-                OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(TRIM(gpon_sn)) = $2)
+                (gpon_sn = $2 AND $2 <> 'N/A')
+                OR (mac = $4 AND $4 <> 'N/A')
+                OR (cpe_sn = $1 AND $1 <> 'N/A')
               )
               AND (
                 ((cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%') AND $1 <> 'N/A')
@@ -3833,9 +3841,9 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
               sap = CASE WHEN (sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A' THEN $3 ELSE sap END,
               mac = CASE WHEN (mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A' THEN $4 ELSE mac END
             WHERE (
-                ($4 <> 'N/A' AND LENGTH($4) >= 6 AND REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = $4)
-                OR ($1 <> 'N/A' AND LENGTH($1) >= 4 AND UPPER(TRIM(cpe_sn)) = $1)
-                OR ($2 <> 'N/A' AND LENGTH($2) >= 4 AND UPPER(TRIM(gpon_sn)) = $2)
+                (gpon_sn = $2 AND $2 <> 'N/A')
+                OR (mac = $4 AND $4 <> 'N/A')
+                OR (cpe_sn = $1 AND $1 <> 'N/A')
               )
               AND (
                 ((cpe_sn IS NULL OR UPPER(TRIM(cpe_sn)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(cpe_sn)) LIKE 'N/A%') AND $1 <> 'N/A')
