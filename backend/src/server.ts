@@ -379,6 +379,15 @@ function getDefaultDatabaseName(): string {
   }
 }
 
+function getActiveDatabases(): string[] {
+  const defaultDb = getDefaultDatabaseName();
+  const list = ['db-scanonu', 'ScanONU_Claro'];
+  if (defaultDb && !list.includes(defaultDb)) {
+    list.push(defaultDb);
+  }
+  return list;
+}
+
 function getPoolForDatabase(dbName: string): Pool {
   const baseConnectionString = process.env.DATABASE_URL;
   if (!baseConnectionString) {
@@ -1859,7 +1868,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     // Determinar em qual banco de dados salvar
     let chosenDb = targetDb;
-    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    const databases = getActiveDatabases();
     
     if (!chosenDb) {
       // Procurar em qual banco o registro já existe
@@ -2246,7 +2255,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
     }
 
     const cleanQuery = gpon_sn.toUpperCase().trim();
-    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    const databases = getActiveDatabases();
     let foundRecord = null;
     let foundDb = '';
 
@@ -2301,7 +2310,7 @@ app.get('/api/public/label/:query', async (req, res) => {
     }
 
     const cleanQuery = query.toUpperCase().trim();
-    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    const databases = getActiveDatabases();
     let foundRecord = null;
     let foundDb = '';
 
@@ -2770,7 +2779,7 @@ app.get('/api/admin/stats', authenticateSession, async (req: any, res: any) => {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
-    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    const databases = getActiveDatabases();
     let totalLabels = 0;
     
     let mfgMap: Record<string, number> = {};
@@ -3487,7 +3496,7 @@ async function syncRecPreAlertaToScanOnu() {
   try {
     if (!dbConnected) return 0;
 
-    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    const targetDatabases = getActiveDatabases();
     const macsToLookupSet = new Set<string>();
 
     // 1. Coletar os MACs que precisam de enriquecimento nas duas bases
@@ -3745,32 +3754,25 @@ app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
     const macs = resRec.rows.map((r: any) => String(r.mac || '').trim().replace(/[^0-9A-Za-z]/g, '').toUpperCase()).filter(Boolean);
     const placeholders = macs.map((_, idx) => `$${idx + 1}`).join(', ');
 
-    let dbScanonuRows: any[] = [];
-    let dbClaroRows: any[] = [];
+    const resultsByDb: Record<string, any[]> = {};
 
     if (macs.length > 0) {
-      try {
-        const pool1 = getPoolForDatabase('db-scanonu');
-        const r1 = await pool1.query(`SELECT mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
-        dbScanonuRows = r1.rows;
-      } catch (e: any) {
-        dbScanonuRows = [{ error: e.message }];
-      }
-
-      try {
-        const pool2 = getPoolForDatabase('ScanONU_Claro');
-        const r2 = await pool2.query(`SELECT mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
-        dbClaroRows = r2.rows;
-      } catch (e: any) {
-        dbClaroRows = [{ error: e.message }];
+      const activeDbs = getActiveDatabases();
+      for (const dbName of activeDbs) {
+        try {
+          const pool = getPoolForDatabase(dbName);
+          const r = await pool.query(`SELECT mac, cpe_sn, gpon_sn, sap, modelo FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') IN (${placeholders})`, macs);
+          resultsByDb[dbName] = r.rows;
+        } catch (e: any) {
+          resultsByDb[dbName] = [{ error: e.message }];
+        }
       }
     }
 
     return res.json({
       success: true,
       recebimentos: resRec.rows,
-      db_scanonu: dbScanonuRows,
-      scanonu_claro: dbClaroRows
+      resultsByDb
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || err });
@@ -3810,7 +3812,7 @@ app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
 app.get('/api/admin/db-status', async (req: any, res: any) => {
   try {
     const status: any = {};
-    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    const targetDatabases = getActiveDatabases();
     for (const dbName of targetDatabases) {
       try {
         const pool = getPoolForDatabase(dbName);
@@ -3891,7 +3893,7 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
       return res.json({ success: false, error: 'Database not connected' });
     }
 
-    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    const targetDatabases = getActiveDatabases();
     const macsToLookupSet = new Set<string>();
 
     // 1. Coletar os MACs que precisam de enriquecimento nas duas bases
@@ -4127,7 +4129,7 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
     }
 
     // Se targetDb for fornecido, usa apenas ele. Senão tenta em ambos os bancos de dados padrões
-    const targetDbs = targetDb ? [String(targetDb)] : ['db-scanonu', 'ScanONU_Claro'];
+    const targetDbs = targetDb ? [String(targetDb)] : getActiveDatabases();
     let totalUpdated = 0;
     const dbErrors: string[] = [];
 
@@ -4390,7 +4392,7 @@ app.post('/api/external/delete-manufacturer', async (req, res) => {
     `;
 
     let totalDeleted = 0;
-    const databases = ['db-scanonu', 'ScanONU_Claro'];
+    const databases = getActiveDatabases();
     for (const dbName of databases) {
       try {
         const pool = getPoolForDatabase(dbName);
