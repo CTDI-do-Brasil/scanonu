@@ -244,7 +244,9 @@ function sanitizeData(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   const cleaned: any = { ...obj };
   Object.keys(cleaned).forEach(key => {
-    if (cleaned[key] !== null && cleaned[key] !== undefined) {
+    if (typeof cleaned[key] === 'boolean') {
+      // Manter valor booleano original intacto
+    } else if (cleaned[key] !== null && cleaned[key] !== undefined) {
       cleaned[key] = String(cleaned[key]).trim();
     } else {
       cleaned[key] = '';
@@ -2243,7 +2245,7 @@ export default function App() {
       if (result.success && result.data) {
         const safeScanned = sanitizeData(result.data);
         const safeExisting = result.existingData ? sanitizeData(result.existingData) : null;
-        if (safeScanned.reimpressa && !fast5670QrData) {
+        if (result.data.reimpressa === true && !fast5670QrData) {
           throw new Error('A etiqueta enviada foi identificada como REIMPRESSA e o envio foi bloqueado.');
         }
         if (fast5670QrData) {
