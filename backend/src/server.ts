@@ -3412,7 +3412,7 @@ async function syncRecPreAlertaToScanOnu() {
     await ensureDatabaseSchema(scanPool, 'db-scanonu');
 
     let recPool: Pool | null = null;
-    const possibleNames = ['Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    const possibleNames = ['Rec-Pre-Alerta', 'Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
     for (const name of possibleNames) {
       try {
         const testPool = getPoolForDatabase(name);
@@ -3423,7 +3423,7 @@ async function syncRecPreAlertaToScanOnu() {
     }
 
     if (!recPool) {
-      recPool = getPoolForDatabase('Rec-pre-alerta');
+      recPool = getPoolForDatabase('Rec-Pre-Alerta');
     }
 
     const resRec = await recPool.query(`
@@ -3560,12 +3560,26 @@ app.get('/api/admin/sync-rec-pre-alerta', async (req: any, res: any) => {
 
 app.get('/api/admin/debug-rec-pre-alerta', async (req: any, res: any) => {
   try {
-    const scanPool = getPoolForDatabase('db-scanonu');
-    const dbsResult = await scanPool.query('SELECT datname FROM pg_database WHERE datistemplate = false');
-    const dbNames = dbsResult.rows.map((r: any) => r.datname);
+    let recPool: any = null;
+    const possibleNames = ['Rec-Pre-Alerta', 'Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    for (const name of possibleNames) {
+      try {
+        const testPool = getPoolForDatabase(name);
+        await testPool.query('SELECT 1 FROM "Recebimento" LIMIT 1').catch(() => testPool.query('SELECT 1 FROM recebimento LIMIT 1'));
+        recPool = testPool;
+        break;
+      } catch (e) {}
+    }
+    if (!recPool) recPool = getPoolForDatabase('Rec-Pre-Alerta');
+
+    let resRec = await recPool.query('SELECT * FROM "Recebimento" ORDER BY id DESC LIMIT 5').catch(async () => {
+      return await recPool.query('SELECT * FROM recebimento ORDER BY id DESC LIMIT 5');
+    });
+
     return res.json({
       success: true,
-      databases: dbNames
+      columns: resRec.rows.length > 0 ? Object.keys(resRec.rows[0]) : [],
+      sampleRows: resRec.rows
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message || err });
@@ -3577,7 +3591,7 @@ app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
     const q = String(req.query.q || '').trim();
     if (!q) return res.send('Informe ?q=... (ex: ?q=1834AF53C44A ou ?q=GPO)');
     let recPool: any = null;
-    const possibleNames = ['Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
+    const possibleNames = ['Rec-Pre-Alerta', 'Rec-pre-alerta', 'rec-pre-alerta', 'rec_pre_alerta'];
     for (const name of possibleNames) {
       try {
         const testPool = getPoolForDatabase(name);
@@ -3586,7 +3600,7 @@ app.get('/api/admin/buscar-recebimento', async (req: any, res: any) => {
         break;
       } catch (e) {}
     }
-    if (!recPool) recPool = getPoolForDatabase('Rec-pre-alerta');
+    if (!recPool) recPool = getPoolForDatabase('Rec-Pre-Alerta');
     const sql = `
       SELECT * FROM "Recebimento" 
       WHERE 
