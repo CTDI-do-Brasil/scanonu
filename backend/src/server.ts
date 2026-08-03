@@ -586,7 +586,11 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
     await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS sap VARCHAR(100) DEFAULT 'N/A'");
-  } catch (e) {}
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_sap ON etiquetas_scan_onu(sap)');
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
+  } catch (e) {
+    console.error('Erro ao garantir colunas/indices adicionais:', e);
+  }
 
   // Migração para mover data_leitura para a última posição
   try {
@@ -683,6 +687,21 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     if (migrateGpoRes.rowCount !== null && migrateGpoRes.rowCount > 0) {
       console.log(`[${dbName}] Migração GP0/GPO concluída: ${migrateGpoRes.rowCount} registros atualizados.`);
     }
+    // Garantir prefixo GPO em cpe_sn do PG2447
+    await pool.query(`
+      UPDATE etiquetas_scan_onu
+      SET cpe_sn = CASE 
+        WHEN UPPER(cpe_sn) LIKE 'GP0%' THEN 'GPO' || SUBSTRING(cpe_sn FROM 4)
+        WHEN UPPER(cpe_sn) LIKE 'GP%' AND UPPER(cpe_sn) NOT LIKE 'GPO%' THEN 'GPO' || SUBSTRING(cpe_sn FROM 3)
+        WHEN UPPER(cpe_sn) LIKE 'N7%' THEN 'GPO' || SUBSTRING(cpe_sn FROM 3)
+        ELSE cpe_sn
+      END
+      WHERE modelo = 'PG2447' 
+        AND cpe_sn IS NOT NULL 
+        AND cpe_sn <> 'N/A' 
+        AND cpe_sn <> 'NA' 
+        AND NOT (cpe_sn LIKE 'GPO%')
+    `);
   } catch (e: any) {
     console.error(`[${dbName}] Erro ao migrar registros GP0/GPO para cpe_sn:`, e.message || e);
   }
@@ -690,36 +709,31 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   
   // Nova Migração: Corrigir gpon_sn com base na planilha de mapeamento MAC -> KAON
   try {
-    
-    console.log(`[${dbName}] Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon...`);
+    console.log(`[${dbName}] Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon em lote...`);
     let updatedCount = 0;
-    
-    // Podemos rodar os updates de forma eficiente
-    // Para evitar rodar centenas de queries individuais se nada mudou, podemos verificar
-    // se existem registros que precisam ser atualizados
-    let errorCount = 0;
-    for (const [correctGpon, mac] of mapping) {
-      try {
-        const res = await pool.query(
-          "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $2 AND gpon_sn != $1",
-          [correctGpon, mac]
-        );
-        if (res.rowCount && res.rowCount > 0) {
-          updatedCount += res.rowCount;
-        }
-      } catch (innerErr) {
-        errorCount++;
+    const chunkSize = 500;
+    for (let i = 0; i < mapping.length; i += chunkSize) {
+      const chunk = mapping.slice(i, i + chunkSize);
+      const valuesClause = chunk.map((_, idx) => `($${idx * 2 + 1}, $${idx * 2 + 2})`).join(', ');
+      const params = chunk.flat();
+      
+      const res = await pool.query(`
+        UPDATE etiquetas_scan_onu e
+        SET gpon_sn = t.gpon
+        FROM (VALUES ${valuesClause}) AS t(gpon, mac)
+        WHERE UPPER(REGEXP_REPLACE(e.mac, '[^a-zA-Z0-9]', '', 'g')) = t.mac
+          AND e.gpon_sn != t.gpon
+      `, params);
+      
+      if (res.rowCount !== null && res.rowCount > 0) {
+        updatedCount += res.rowCount;
       }
     }
-    if (errorCount > 0) {
-      console.warn(`Migração MAC->KAON: ${errorCount} falhas devido a constraints (ex: duplicados) ignoradas.`);
-    }
-    
     if (updatedCount > 0) {
-      console.log(`[${dbName}] Migração MAC->KAON concluída: ${updatedCount} registros atualizados.`);
+      console.log(`[${dbName}] Migração MAC->KAON concluída em lote: ${updatedCount} registros atualizados.`);
     }
   } catch (migErr: any) {
-    console.error(`[${dbName}] Erro na migração MAC->KAON:`, migErr.message || migErr);
+    console.error(`[${dbName}] Erro na migração MAC->KAON em lote:`, migErr.message || migErr);
   }
 
   // Nova Migração: Corrigir cpe_sn de N70... para GPO... para bancos secundários
@@ -1030,36 +1044,51 @@ async function connectToDatabase() {
           if (migrateGpoRes.rowCount !== null && migrateGpoRes.rowCount > 0) {
             console.log(`Migração GP0/GPO concluída na inicialização padrão: ${migrateGpoRes.rowCount} registros atualizados.`);
           }
+          // Garantir prefixo GPO em cpe_sn do PG2447 no boot
+          await dbPool.query(`
+            UPDATE etiquetas_scan_onu
+            SET cpe_sn = CASE 
+              WHEN UPPER(cpe_sn) LIKE 'GP0%' THEN 'GPO' || SUBSTRING(cpe_sn FROM 4)
+              WHEN UPPER(cpe_sn) LIKE 'GP%' AND UPPER(cpe_sn) NOT LIKE 'GPO%' THEN 'GPO' || SUBSTRING(cpe_sn FROM 3)
+              WHEN UPPER(cpe_sn) LIKE 'N7%' THEN 'GPO' || SUBSTRING(cpe_sn FROM 3)
+              ELSE cpe_sn
+            END
+            WHERE modelo = 'PG2447' 
+              AND cpe_sn IS NOT NULL 
+              AND cpe_sn <> 'N/A' 
+              AND cpe_sn <> 'NA' 
+              AND NOT (cpe_sn LIKE 'GPO%')
+          `);
         } catch (migErr: any) {
           console.error('Erro na migração de GP0/GPO no modelo PG2447 (boot):', migErr.message || migErr);
         }
         // Nova Migração: Corrigir gpon_sn com base no arquivo JSON (boot)
         try {
-          
-          console.log(`Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon no boot...`);
+          console.log(`Verificando e corrigindo gpon_sn para ${mapping.length} registros Kaon no boot em lote...`);
           let updatedCount = 0;
-          let errorCount = 0;
-          for (const [correctGpon, mac] of mapping) {
-            try {
-              const res = await dbPool.query(
-                "UPDATE etiquetas_scan_onu SET gpon_sn = $1 WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $2 AND gpon_sn != $1",
-                [correctGpon, mac]
-              );
-              if (res.rowCount !== null && res.rowCount > 0) {
-                updatedCount += res.rowCount;
-              }
-            } catch (innerErr) {
-              errorCount++;
+          const chunkSize = 500;
+          for (let i = 0; i < mapping.length; i += chunkSize) {
+            const chunk = mapping.slice(i, i + chunkSize);
+            const valuesClause = chunk.map((_, idx) => `($${idx * 2 + 1}, $${idx * 2 + 2})`).join(', ');
+            const params = chunk.flat();
+            
+            const res = await dbPool.query(`
+              UPDATE etiquetas_scan_onu e
+              SET gpon_sn = t.gpon
+              FROM (VALUES ${valuesClause}) AS t(gpon, mac)
+              WHERE UPPER(REGEXP_REPLACE(e.mac, '[^a-zA-Z0-9]', '', 'g')) = t.mac
+                AND e.gpon_sn != t.gpon
+            `, params);
+            
+            if (res.rowCount !== null && res.rowCount > 0) {
+              updatedCount += res.rowCount;
             }
           }
-          if (errorCount > 0) {
-            console.warn(`Migração MAC->KAON: ${errorCount} falhas devido a constraints (ex: duplicados) ignoradas no boot.`);
-          }
           if (updatedCount > 0) {
-            console.log(`Migração MAC->KAON concluída no boot: ${updatedCount} registros atualizados.`);
+            console.log(`Migração MAC->KAON concluída no boot em lote: ${updatedCount} registros atualizados.`);
           }
         } catch (migErr: any) {
-          console.error('Erro na migração MAC->KAON no boot:', migErr.message || migErr);
+          console.error('Erro na migração MAC->KAON no boot em lote:', migErr.message || migErr);
         }
 
         // Nova Migração: Corrigir cpe_sn de N70... para GPO... no boot do banco principal
@@ -1750,14 +1779,58 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     fabricante = normalizeFabricante(fabricante || 'N/A', modelo || '');
     // Gerar um GPON SN único se vier como N/A para não violar a UNIQUE constraint no PostgreSQL
-    const normalizedModelo = normalizeModel(modelo, fabricante);
+    let normalizedModelo = normalizeModel(modelo, fabricante);
     const isFast5670 = normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
 
-    // Gerar um GPON SN unico se vier como N/A SEMPRE para não violar UNIQUE constraint
-      if (!gpon_sn || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
-        const suffix = (mac && mac.toUpperCase() !== 'N/A') ? mac : Math.random().toString(36).substring(2, 10).toUpperCase();
-        gpon_sn = 'N/A_' + suffix;
+    // Ajuste/Validação Restritiva do Modelo PG2447 (GPO obrigatório)
+    if (normalizedModelo === 'PG2447') {
+      let realSerial = '';
+      const upperGpon = (gpon_sn || '').toUpperCase();
+      const upperCpe = (cpe_sn || '').toUpperCase();
+
+      if (upperGpon.startsWith('GPO') || upperGpon.startsWith('GP0') || upperGpon.startsWith('GP') || upperGpon.startsWith('N7')) {
+        realSerial = upperGpon;
+      } else if (upperCpe.startsWith('GPO') || upperCpe.startsWith('GP0') || upperCpe.startsWith('GP') || upperCpe.startsWith('N7')) {
+        realSerial = upperCpe;
       }
+
+      if (!realSerial && cpe_sn && upperCpe !== 'N/A' && upperCpe !== 'NA') {
+        realSerial = upperCpe;
+      }
+      if (!realSerial && gpon_sn && upperGpon !== 'N/A' && upperGpon !== 'NA' && !upperGpon.startsWith('N/A_')) {
+        realSerial = upperGpon;
+      }
+
+      if (realSerial) {
+        // Normalização automática de GP0 / GP / N7 para GPO
+        if (realSerial.startsWith('GP0') || realSerial.startsWith('GPO')) {
+          realSerial = 'GPO' + realSerial.substring(3);
+        } else if (realSerial.startsWith('GP')) {
+          realSerial = 'GPO' + realSerial.substring(2);
+        } else if (realSerial.startsWith('N7')) {
+          realSerial = 'GPO' + realSerial.substring(2);
+        }
+        cpe_sn = realSerial.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+      }
+
+      // Validação estrita: Aceitar somente quando for GPO...
+      if (!cpe_sn || !cpe_sn.toUpperCase().startsWith('GPO')) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `O serial do modelo PG2447 é inválido (digitado: "${cpe_sn || 'N/A'}"). O sistema aceita apenas seriais que iniciam com o prefixo correto "GPO".` 
+        });
+      }
+
+      // Para o PG2447, o cpe_sn é o serial real. O gpon_sn deve ser o N/A_MAC dummy
+      const cleanMac = mac ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : '';
+      gpon_sn = 'N/A_' + (cleanMac || Math.random().toString(36).substring(2, 10).toUpperCase());
+    }
+
+    // Gerar um GPON SN unico se vier como N/A SEMPRE para não violar UNIQUE constraint
+    if (!gpon_sn || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
+      const suffix = (mac && mac.toUpperCase() !== 'N/A') ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : Math.random().toString(36).substring(2, 10).toUpperCase();
+      gpon_sn = 'N/A_' + suffix;
+    }
 
     const resolvedWebKey = senha !== undefined ? senha : web_key;
     let resolvedWifiSsid5g = wifi_ssid_5g || 'N/A';
@@ -3558,6 +3631,65 @@ async function syncRecPreAlertaToScanOnu() {
             continue;
           }
 
+          // Verificar se o registro atual na base destino é PG2447
+          let isPG2447 = false;
+          try {
+            const checkModelRes = await scanPool.query(`
+              SELECT modelo, fabricante 
+              FROM etiquetas_scan_onu 
+              WHERE (mac = $1 AND $1 <> 'N/A')
+                 OR (gpon_sn = $2 AND $2 <> 'N/A')
+                 OR (cpe_sn = $3 AND $3 <> 'N/A')
+              LIMIT 1
+            `, [validMac, validGpon, validCpe]);
+            if (checkModelRes.rowCount && checkModelRes.rowCount > 0) {
+              const r = checkModelRes.rows[0];
+              const mdl = String(r.modelo || '').toUpperCase();
+              const fbg = String(r.fabricante || '').toUpperCase();
+              if (mdl.includes('PG2447') || mdl.includes('P82447') || fbg.includes('KAON')) {
+                isPG2447 = true;
+              }
+            }
+          } catch (errCheck) {
+            console.error('Erro ao verificar se modelo e PG2447 no sync:', errCheck);
+          }
+
+          let finalCpe = validCpe;
+          let finalGpon = validGpon;
+
+          if (isPG2447) {
+            let realSerial = '';
+            if (cpeSn && cpeSn !== 'N/A' && cpeSn !== 'NA' && !cpeSn.startsWith('N/A_')) {
+              realSerial = cpeSn;
+            } else if (gponSn && gponSn !== 'N/A' && gponSn !== 'NA' && !gponSn.startsWith('N/A_')) {
+              realSerial = gponSn;
+            } else if (generalSerial && generalSerial !== 'N/A' && generalSerial !== 'NA') {
+              realSerial = generalSerial;
+            }
+
+            if (realSerial) {
+              if (realSerial.startsWith('GP0') || realSerial.startsWith('GPO')) {
+                realSerial = 'GPO' + realSerial.substring(3);
+              } else if (realSerial.startsWith('GP')) {
+                realSerial = 'GPO' + realSerial.substring(2);
+              } else if (realSerial.startsWith('N7')) {
+                realSerial = 'GPO' + realSerial.substring(2);
+              } else if (!realSerial.toUpperCase().startsWith('GPO')) {
+                realSerial = 'GPO' + realSerial;
+              }
+              realSerial = realSerial.replace(/[^A-Z0-9]/ig, '').toUpperCase();
+            }
+
+            if (realSerial && realSerial.toUpperCase().startsWith('GPO')) {
+              finalCpe = realSerial;
+            } else {
+              finalCpe = 'N/A';
+            }
+
+            // Para o PG2447, o gpon_sn é sempre o N/A_MAC dummy
+            finalGpon = 'N/A_' + (validMac !== 'N/A' ? validMac : Math.random().toString(36).substring(2, 10).toUpperCase());
+          }
+
           const updateRes = await scanPool.query(`
             UPDATE etiquetas_scan_onu 
             SET 
@@ -3576,7 +3708,7 @@ async function syncRecPreAlertaToScanOnu() {
                 OR ((sap IS NULL OR UPPER(TRIM(sap)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(sap)) LIKE 'N/A%') AND $3 <> 'N/A')
                 OR ((mac IS NULL OR UPPER(TRIM(mac)) IN ('N/A', 'NA', '', 'NULL', 'UNDEFINED', 'N / A') OR UPPER(TRIM(mac)) LIKE 'N/A%') AND $4 <> 'N/A')
               )
-          `, [validCpe, validGpon, validCodigo, validMac]);
+          `, [finalCpe, finalGpon, validCodigo, validMac]);
 
           if (updateRes.rowCount && updateRes.rowCount > 0) {
             dbUpdatedCount += updateRes.rowCount;
