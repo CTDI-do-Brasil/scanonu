@@ -29,8 +29,7 @@ import {
   Menu,
   BarChart3,
   Printer,
-  Monitor,
-  MapPin,
+
   Trash2,
   MonitorPlay,
   Edit,
@@ -434,13 +433,10 @@ export default function App() {
   const [editingIptvModel, setEditingIptvModel] = useState<any>(null);
   const [showIptvModelModal, setShowIptvModelModal] = useState(false);
   const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '', tecnologia: 'IPTV' });
-  const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<any>(null);
   const [printerFormData, setPrinterFormData] = useState({
     nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ'
   });
-  const [printerError, setPrinterError] = useState<string | null>(null);
-  const [isUpdatingPrinter, setIsUpdatingPrinter] = useState(false);
 
   // Modo Bipador Direto (SN + MAC sem Câmera)
   const [showBipadorModal, setShowBipadorModal] = useState(false);
@@ -1105,39 +1101,6 @@ export default function App() {
     }
   };
 
-  const handleSavePrinter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || (user.role !== 'master' && user.role !== 'admin')) return;
-    setPrinterError(null);
-    setIsUpdatingPrinter(true);
-
-    try {
-      const url = editingPrinter ? `/api/admin/printers/${editingPrinter.id}` : '/api/admin/printers';
-      const method = editingPrinter ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
-        },
-        body: JSON.stringify(printerFormData)
-      });
-      const result = await response.json();
-      if (response.ok && result.success) {
-        setAdminMessage({ type: 'success', text: editingPrinter ? 'Impressora atualizada com sucesso!' : 'Impressora cadastrada com sucesso!' });
-        setEditingPrinter(null);
-        setPrinterFormData({ nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ' });
-        fetchPrinters();
-      } else {
-        setPrinterError(result.error || 'Erro ao salvar impressora.');
-      }
-    } catch (err) {
-      setPrinterError('Erro de conexão com o servidor.');
-    } finally {
-      setIsUpdatingPrinter(false);
-    }
-  };
 
   const handleChangeUserPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1181,25 +1144,6 @@ export default function App() {
     }
   };
 
-  const handleDeletePrinter = async (id: number) => {
-    if (!user || user.role !== 'master') return;
-    if (!window.confirm('Tem certeza que deseja remover esta impressora?')) return;
-
-    try {
-      const response = await fetch(`/api/admin/printers/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
-        }
-      });
-      if (response.ok) {
-        setAdminMessage({ type: 'success', text: 'Impressora removida com sucesso!' });
-        fetchPrinters();
-      }
-    } catch (err) {
-      console.error('Erro ao remover impressora:', err);
-    }
-  };
 
   const handleSearchLabels = async () => {
     if (!user || (user.role !== 'master' && user.role !== 'admin' && user.role !== 'consulta')) return;
