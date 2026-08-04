@@ -2634,8 +2634,7 @@ export default function App() {
                 <Cpu className="w-12 h-12 text-[#003865]" />
               </div>
               <div className="text-center">
-                <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo GPON</h2>
-                <p className="text-sm text-slate-500 font-medium">Captura e Auditoria de ONUs</p>
+                <h2 className="text-2xl font-bold text-slate-800 mb-1">Captura e Edição de ONUs</h2>
               </div>
             </button>
           )}
