@@ -666,10 +666,7 @@ export default function App() {
   const [targetDatabase, setTargetDatabase] = useState<'db-scanonu' | 'ScanONU_Claro'>('db-scanonu');
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Estados para importação de planilha de CPE (MAC -> CPE_SN)
-  const [isImportingCpeExcel, setIsImportingCpeExcel] = useState(false);
-  const [importCpeExcelMessage, setImportCpeExcelMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const importCpeFileInputRef = useRef<HTMLInputElement | null>(null);
+
 
 
   // Carrega estado de autenticação do localStorage ao iniciar
@@ -1375,52 +1372,6 @@ export default function App() {
     }
   };
 
-  const handleImportCpeExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImportingCpeExcel(true);
-    setImportCpeExcelMessage(null);
-
-    try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const base64 = (event.target?.result as string).split(',')[1];
-          const response = await fetch('/api/admin/importar-cpe-planilha', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
-            },
-            body: JSON.stringify({ fileBase64: base64, targetDb: targetDatabase })
-          });
-
-          const result = await response.json();
-          if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Erro ao processar a planilha de MAC / CPE_SN.');
-          }
-
-          setImportCpeExcelMessage({
-            type: 'success',
-            text: result.message || `Sucesso! Atualizados: ${result.updatedCount} (Encontrados: ${result.matchedCount}).`
-          });
-          fetchStats();
-        } catch (err: any) {
-          setImportCpeExcelMessage({ type: 'error', text: err.message || 'Erro no envio do arquivo.' });
-        } finally {
-          setIsImportingCpeExcel(false);
-          if (e.target) {
-            e.target.value = '';
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      setImportCpeExcelMessage({ type: 'error', text: err.message || 'Erro ao ler arquivo da planilha.' });
-      setIsImportingCpeExcel(false);
-    }
-  };
 
 
     const startCamera = async () => {
@@ -4027,63 +3978,7 @@ export default function App() {
               </div>
               )}
 
-              {/* Importar Planilha de Atualização de CPE_SN por MAC */}
-              {user?.role === 'master' && (
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-fadeIn mt-4">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-purple-50 text-purple-700 p-2.5 rounded-xl border border-purple-100">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-800">Atualizar CPE SN por MAC (Planilha Excel)</h4>
-                      <p className="text-[11px] text-slate-400">Envie uma planilha XLSX com colunas MAC e CPE_SN para completar/atualizar os registros no banco</p>
-                    </div>
-                  </div>
 
-                  {importCpeExcelMessage && (
-                    <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
-                      importCpeExcelMessage.type === 'success' 
-                        ? 'bg-blue-50 border-blue-200 text-blue-800' 
-                        : 'bg-red-50 border-red-200 text-red-800'
-                    }`}>
-                      {importCpeExcelMessage.type === 'success' ? (
-                        <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                      )}
-                      <span>{importCpeExcelMessage.text}</span>
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center w-full space-y-3">
-                    <input 
-                      type="file"
-                      accept=".xlsx, .xls, .csv"
-                      ref={importCpeFileInputRef}
-                      onChange={handleImportCpeExcel}
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => importCpeFileInputRef.current?.click()}
-                      disabled={isImportingCpeExcel}
-                      className="w-full bg-purple-50 hover:bg-purple-100 active:bg-purple-200 disabled:bg-purple-50/60 text-purple-800 font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all text-xs border border-purple-200 shadow-sm"
-                    >
-                      {isImportingCpeExcel ? (
-                        <div className="w-4 h-4 border-2 border-purple-400 border-t-purple-800 rounded-full animate-spin"></div>
-                      ) : (
-                        <Upload className="w-4 h-4 text-purple-600" />
-                      )}
-                      <span>{isImportingCpeExcel ? 'Processando e Atualizando CPE SN...' : 'Selecionar e Importar Planilha de MAC / CPE_SN (.XLSX)'}</span>
-                    </button>
-                    <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3.5 text-[10px] text-purple-900 flex items-start gap-2.5 leading-relaxed mt-2 text-left w-full">
-                      <Info className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold">Como funciona:</span> A planilha deve ter uma coluna <span className="font-semibold">MAC</span> e uma coluna <span className="font-semibold">CPE_SN</span> (ou Serial). O sistema busca o MAC na base de dados <span className="font-semibold">{targetDatabase}</span> e preenche a informação de CPE_SN automaticamente.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
 
