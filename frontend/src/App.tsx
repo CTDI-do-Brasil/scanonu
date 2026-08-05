@@ -2568,9 +2568,18 @@ export default function App() {
               onClick={() => setActiveModule('gpon')}
               className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
             >
-              <div className="bg-[#003865]/10 p-4 rounded-2xl group-hover:bg-[#003865]/20 transition-colors">
-                <Cpu className="w-12 h-12 text-[#003865]" />
-              </div>
+              <svg viewBox="0 0 340 120" className="h-16 w-auto my-2" xmlns="http://www.w3.org/2000/svg">
+                {/* TIM Red Trigram Symbol */}
+                <g fill="#E4022D">
+                  <rect x="10" y="25" width="100" height="20" />
+                  <rect x="10" y="55" width="42" height="20" />
+                  <rect x="68" y="55" width="42" height="20" />
+                  <rect x="10" y="85" width="42" height="20" />
+                  <rect x="68" y="85" width="42" height="20" />
+                </g>
+                {/* TIM Blue Wordmark */}
+                <text x="135" y="98" fontFamily="Arial, Helvetica, sans-serif" fontWeight="900" fontSize="94" fill="#004F9F" letterSpacing="-2">TIM</text>
+              </svg>
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-slate-800 mb-1">Captura e Edição de ONUs</h2>
               </div>
