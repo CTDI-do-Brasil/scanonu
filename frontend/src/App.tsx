@@ -433,10 +433,7 @@ export default function App() {
   const [editingIptvModel, setEditingIptvModel] = useState<any>(null);
   const [showIptvModelModal, setShowIptvModelModal] = useState(false);
   const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '', tecnologia: 'IPTV' });
-  const [editingPrinter, setEditingPrinter] = useState<any>(null);
-  const [printerFormData, setPrinterFormData] = useState({
-    nome: '', descricao: '', ip: '', porta: '6101', localizacao: 'CTDI MATRIZ'
-  });
+
 
   // Modo Bipador Direto (SN + MAC sem Câmera)
   const [showBipadorModal, setShowBipadorModal] = useState(false);
@@ -897,7 +894,6 @@ export default function App() {
 
   const fetchPrinters = async () => {
     if (!user || user.role !== 'master') return;
-    setIsLoadingPrinters(true);
     try {
       const response = await fetch('/api/admin/printers', {
         headers: {
@@ -910,8 +906,6 @@ export default function App() {
       }
     } catch (err) {
       console.error('Erro ao buscar impressoras:', err);
-    } finally {
-      setIsLoadingPrinters(false);
     }
   };
 
