@@ -1698,9 +1698,14 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             const candidatesRes = await dbPool.query(
               "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn NOT LIKE 'N/A%' AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)"
             );
-            const realMatchedRow = candidatesRes.rows.find((row: any) => 
-              matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid)
-            );
+            const realMatchedRow = candidatesRes.rows.find((row: any) => {
+              const candidateModel = (row.modelo || '').toUpperCase();
+              const scanModel = (scanResult.modelo || '').toUpperCase();
+              if (candidateModel && scanModel && !candidateModel.includes(scanModel) && !scanModel.includes(candidateModel)) {
+                return false;
+              }
+              return matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid);
+            });
             if (realMatchedRow) {
               // Mescla os dados do registro real (S/N, GPON, MAC) com os dados de senhas do registro temporário
               existingData = {
