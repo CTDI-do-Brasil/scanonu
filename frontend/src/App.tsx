@@ -2562,7 +2562,7 @@ export default function App() {
           <p className="text-blue-200/80 font-medium">Selecione o módulo de operação</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl">
+        <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl justify-center">
           {/* Módulo GPON - TIM */}
           {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
             <button
@@ -2571,22 +2571,24 @@ export default function App() {
                 setProvider('tim');
                 setTargetDatabase('db-scanonu');
               }}
-              className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
+              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
-              <svg viewBox="0 0 340 120" className="h-16 w-auto my-2" xmlns="http://www.w3.org/2000/svg">
-                {/* TIM Red Trigram Symbol */}
-                <g fill="#E4022D">
-                  <rect x="10" y="25" width="100" height="20" />
-                  <rect x="10" y="55" width="42" height="20" />
-                  <rect x="68" y="55" width="42" height="20" />
-                  <rect x="10" y="85" width="42" height="20" />
-                  <rect x="68" y="85" width="42" height="20" />
-                </g>
-                {/* TIM Blue Wordmark */}
-                <text x="135" y="98" fontFamily="Arial, Helvetica, sans-serif" fontWeight="900" fontSize="94" fill="#004F9F" letterSpacing="-2">TIM</text>
-              </svg>
+              <div className="h-16 flex items-center justify-center w-full">
+                <svg viewBox="0 0 340 120" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
+                  {/* TIM Red Trigram Symbol */}
+                  <g fill="#E4022D">
+                    <rect x="10" y="25" width="100" height="20" />
+                    <rect x="10" y="55" width="42" height="20" />
+                    <rect x="68" y="55" width="42" height="20" />
+                    <rect x="10" y="85" width="42" height="20" />
+                    <rect x="68" y="85" width="42" height="20" />
+                  </g>
+                  {/* TIM Blue Wordmark */}
+                  <text x="135" y="98" fontFamily="Arial, Helvetica, sans-serif" fontWeight="900" fontSize="94" fill="#004F9F" letterSpacing="-2">TIM</text>
+                </svg>
+              </div>
               <div className="text-center">
-                <h2 className="text-2xl font-bold text-slate-800 mb-1">Captura e Edição de ONUs</h2>
+                <h2 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h2>
               </div>
             </button>
           )}
@@ -2599,32 +2601,34 @@ export default function App() {
                 setProvider('brasil_tecpar');
                 setTargetDatabase('SmartScan_BrasilTecPar');
               }}
-              className="flex-1 bg-gradient-to-br from-[#2ba9c8] to-[#1f93af] hover:from-[#209bb8] hover:to-[#177e96] text-white transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-white/20"
+              className="w-full md:w-72 aspect-square bg-gradient-to-br from-[#2ba9c8] to-[#1f93af] hover:from-[#209bb8] hover:to-[#177e96] text-white transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-transparent"
             >
-              <svg viewBox="0 0 420 120" className="h-16 w-auto my-2" xmlns="http://www.w3.org/2000/svg">
-                {/* Symbol: White blocky shape */}
-                <g fill="#ffffff">
-                  <path d="M 50 15 
-                           C 70 15, 80 20, 88 35 
-                           L 105 65 
-                           C 112 78, 108 92, 95 100 
-                           L 75 110 
-                           C 62 118, 48 114, 40 102 
-                           L 15 65 
-                           C 8 55, 12 40, 22 30 
-                           L 40 20 
-                           C 44 17, 47 15, 50 15 Z" />
-                </g>
-                {/* Symbol Inner Chevron: outline */}
-                <g fill="none" stroke="#25b6e6" strokeWidth="8" strokeLinejoin="round" strokeLinecap="round">
-                  <path d="M 45 42 L 72 63 L 45 84 Z" />
-                </g>
-                {/* Text: Brasil TecPar in white */}
-                <text x="135" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="800" fontSize="54" fill="#ffffff">Brasil</text>
-                <text x="305" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="300" fontSize="54" fill="#ffffff">TecPar</text>
-              </svg>
+              <div className="h-16 flex items-center justify-center w-full">
+                <svg viewBox="0 0 520 120" className="h-10 w-auto" xmlns="http://www.w3.org/2000/svg">
+                  {/* Symbol: White blocky shape */}
+                  <g fill="#ffffff">
+                    <path d="M 50 15 
+                             C 70 15, 80 20, 88 35 
+                             L 105 65 
+                             C 112 78, 108 92, 95 100 
+                             L 75 110 
+                             C 62 118, 48 114, 40 102 
+                             L 15 65 
+                             C 8 55, 12 40, 22 30 
+                             L 40 20 
+                             C 44 17, 47 15, 50 15 Z" />
+                  </g>
+                  {/* Symbol Inner Chevron: outline */}
+                  <g fill="none" stroke="#25b6e6" strokeWidth="8" strokeLinejoin="round" strokeLinecap="round">
+                    <path d="M 45 42 L 72 63 L 45 84 Z" />
+                  </g>
+                  {/* Text: Brasil TecPar in white */}
+                  <text x="135" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="800" fontSize="54" fill="#ffffff">Brasil</text>
+                  <text x="305" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="300" fontSize="54" fill="#ffffff">TecPar</text>
+                </svg>
+              </div>
               <div className="text-center">
-                <h2 className="text-2xl font-bold text-white mb-1">Captura e Edição de ONUs</h2>
+                <h2 className="text-xl font-bold text-white leading-tight">Captura e Edição de ONUs</h2>
               </div>
             </button>
           )}
@@ -2633,14 +2637,16 @@ export default function App() {
           {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_reimpressao !== false) && (
             <button
               onClick={() => setActiveModule('iptv')}
-              className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-blue-500/20"
+              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
-              <div className="bg-blue-500/10 p-4 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
-                <Printer className="w-12 h-12 text-blue-600" />
+              <div className="h-16 flex items-center justify-center w-full">
+                <div className="bg-blue-500/10 p-3 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
+                  <Printer className="w-9 h-9 text-blue-600" />
+                </div>
               </div>
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-slate-800 mb-1">Módulo Reimpressão</h2>
-                <p className="text-sm text-slate-500 font-medium">IPTV e Setup Box</p>
+              <div className="text-center space-y-1">
+                <h2 className="text-xl font-bold text-slate-800 leading-tight">Módulo Reimpressão</h2>
+                <p className="text-xs text-slate-400 font-medium">IPTV e Setup Box</p>
               </div>
             </button>
           )}
