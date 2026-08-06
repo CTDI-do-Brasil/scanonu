@@ -2056,7 +2056,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
         let finalGpon = exists ? dbRow.gpon_sn : (reconciledGpon || gpon_sn);
 
         const isNP5454T = dbRow?.modelo === 'NP5454T';
-        const is5670 = dbRow?.modelo === 'F@ST 5670' || dbRow?.modelo === 'F@ST 5670V2';
+        const is5670 = 
+          (dbRow?.modelo && (dbRow.modelo.toUpperCase().includes('5670') || dbRow.modelo.toUpperCase().includes('5670V2'))) ||
+          normalizedModelo === 'F@ST 5670' || 
+          normalizedModelo === 'F@ST 5670V2';
 
         if (exists && dbRow && (isNP5454T || is5670)) {
           // Regras específicas do NP5454T e F@ST 5670:
