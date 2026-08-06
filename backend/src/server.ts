@@ -4287,6 +4287,86 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
   }
 });
 
+app.post('/api/equipamentos/fast5670/web-key', express.json(), async (req: any, res: any) => {
+  try {
+    const { mac, web_key, wifi_key, wifi_ssid, wifi_ssid_5g, targetDb } = req.body;
+    
+    if (!mac) {
+      return res.status(400).json({ success: false, error: 'O campo mac é obrigatório.' });
+    }
+
+    const updates: { col: string; val: any }[] = [];
+    if (web_key !== undefined) updates.push({ col: 'web_key', val: web_key });
+    if (wifi_key !== undefined) updates.push({ col: 'wifi_key', val: wifi_key });
+    if (wifi_ssid !== undefined) updates.push({ col: 'wifi_ssid', val: wifi_ssid });
+    if (wifi_ssid_5g !== undefined) updates.push({ col: 'wifi_ssid_5g', val: wifi_ssid_5g });
+
+    if (updates.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ao menos um campo para atualização (web_key, wifi_key, wifi_ssid ou wifi_ssid_5g) deve ser fornecido.' 
+      });
+    }
+
+    // Se targetDb for fornecido, usa apenas ele. Senão tenta em todos os bancos de dados padrões
+    const targetDbs = targetDb ? [String(targetDb)] : getActiveDatabases();
+    const dbErrors: string[] = [];
+
+    // Pre-limpa o MAC para coincidir com a comparação
+    const cleanMac = mac.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+    // Executa as atualizações em paralelo nos bancos de dados para otimizar tempo de resposta
+    const updatePromises = targetDbs.map(async (dbName) => {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        if (!pool) {
+          dbErrors.push(`Banco ${dbName} não conectado.`);
+          return 0;
+        }
+
+        const setClauses = updates.map((u, i) => `${u.col} = $${i + 1}`);
+        const queryParams = updates.map(u => u.val);
+        
+        queryParams.push(cleanMac);
+        const macParamIdx = queryParams.length;
+
+        // Limpa pontuações do MAC e compara utilizando a expressão exata do índice idx_etiquetas_scan_onu_clean_mac
+        const queryStr = `
+          UPDATE etiquetas_scan_onu 
+          SET ${setClauses.join(', ')} 
+          WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $${macParamIdx} 
+            AND modelo IN ('F@ST 5670', 'F@ST 5670V2')
+        `;
+
+        const result = await pool.query(queryStr, queryParams);
+        return result.rowCount || 0;
+      } catch (err: any) {
+        dbErrors.push(`Erro no banco ${dbName}: ${err.message || err}`);
+        return 0;
+      }
+    });
+
+    const results = await Promise.all(updatePromises);
+    const totalUpdated = results.reduce((a, b) => a + b, 0);
+
+    if (totalUpdated === 0) {
+      const errorMsg = dbErrors.length > 0 
+        ? `Nenhum equipamento modelo F@ST 5670/V2 encontrado com este MAC. Erros: ${dbErrors.join(', ')}`
+        : 'Nenhum equipamento modelo F@ST 5670/F@ST 5670V2 encontrado com este MAC nas bases de dados.';
+      return res.status(404).json({ success: false, error: errorMsg });
+    }
+
+    return res.json({ 
+      success: true, 
+      message: `Cadastro atualizado com sucesso para o MAC ${mac}.`,
+      updatedCount: totalUpdated 
+    });
+  } catch (err: any) {
+    console.error('Erro na API web-key F@ST 5670:', err);
+    return res.status(500).json({ success: false, error: err.message || err });
+  }
+});
+
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
     const targetDatabases = ['db-scanonu', 'ScanONU_Claro', 'SmartScan_BrasilTecPar'];
