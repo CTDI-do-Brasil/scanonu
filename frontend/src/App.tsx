@@ -2598,12 +2598,8 @@ export default function App() {
           {/* Módulo GPON - Brasil TecPar */}
           {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
             <button
-              onClick={() => {
-                setActiveModule('gpon');
-                setProvider('brasil_tecpar');
-                setTargetDatabase('SmartScan_BrasilTecPar');
-              }}
-              className="w-full md:w-72 aspect-square bg-gradient-to-br from-[#2ba9c8] to-[#1f93af] hover:from-[#209bb8] hover:to-[#177e96] text-white transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-transparent"
+              disabled
+              className="w-full md:w-72 aspect-square bg-slate-50/80 opacity-60 cursor-not-allowed rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-sm border border-slate-200/60 filter grayscale"
             >
               <div className="h-16 flex items-center justify-center w-full">
                 <svg viewBox="0 0 520 120" className="h-10 w-auto" xmlns="http://www.w3.org/2000/svg">
@@ -2630,7 +2626,8 @@ export default function App() {
                 </svg>
               </div>
               <div className="text-center">
-                <h2 className="text-xl font-bold text-white leading-tight">Captura e Edição de ONUs</h2>
+                <h2 className="text-xl font-bold text-slate-500 leading-tight">Captura e Edição de ONUs</h2>
+                <span className="text-xs font-bold text-red-500 mt-2 block uppercase tracking-wider">Indisponível</span>
               </div>
             </button>
           )}
