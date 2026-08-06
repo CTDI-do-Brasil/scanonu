@@ -375,6 +375,7 @@ export default function App() {
   // Autenticação
   const [user, setUser] = useState<{ email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string } | null>(null);
   const [activeModule, setActiveModule] = useState<'selection' | 'gpon' | 'iptv'>('selection');
+  const [provider, setProvider] = useState<'tim' | 'brasil_tecpar'>('tim');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -2562,10 +2563,14 @@ export default function App() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl">
-          {/* Módulo GPON */}
+          {/* Módulo GPON - TIM */}
           {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
             <button
-              onClick={() => setActiveModule('gpon')}
+              onClick={() => {
+                setActiveModule('gpon');
+                setProvider('tim');
+                setTargetDatabase('ScanONU_Claro');
+              }}
               className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
             >
               <svg viewBox="0 0 340 120" className="h-16 w-auto my-2" xmlns="http://www.w3.org/2000/svg">
@@ -2582,6 +2587,44 @@ export default function App() {
               </svg>
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-slate-800 mb-1">Captura e Edição de ONUs</h2>
+              </div>
+            </button>
+          )}
+
+          {/* Módulo GPON - Brasil TecPar */}
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
+            <button
+              onClick={() => {
+                setActiveModule('gpon');
+                setProvider('brasil_tecpar');
+                setTargetDatabase('db-scanonu');
+              }}
+              className="flex-1 bg-gradient-to-br from-[#2ba9c8] to-[#1f93af] hover:from-[#209bb8] hover:to-[#177e96] text-white transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-white/20"
+            >
+              <svg viewBox="0 0 420 120" className="h-16 w-auto my-2" xmlns="http://www.w3.org/2000/svg">
+                {/* Symbol: White blocky shape */}
+                <g fill="#ffffff">
+                  <path d="M 50 15 
+                           C 70 15, 80 20, 88 35 
+                           L 105 65 
+                           C 112 78, 108 92, 95 100 
+                           L 75 110 
+                           C 62 118, 48 114, 40 102 
+                           L 15 65 
+                           C 8 55, 12 40, 22 30 
+                           L 40 20 
+                           C 44 17, 47 15, 50 15 Z" />
+                </g>
+                {/* Symbol Inner Chevron: outline */}
+                <g fill="none" stroke="#25b6e6" strokeWidth="8" strokeLinejoin="round" strokeLinecap="round">
+                  <path d="M 45 42 L 72 63 L 45 84 Z" />
+                </g>
+                {/* Text: Brasil TecPar in white */}
+                <text x="135" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="800" fontSize="54" fill="#ffffff">Brasil</text>
+                <text x="305" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="300" fontSize="54" fill="#ffffff">TecPar</text>
+              </svg>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-white mb-1">Captura e Edição de ONUs</h2>
               </div>
             </button>
           )}
@@ -3207,7 +3250,9 @@ export default function App() {
               <div className="bg-[#003865] text-white p-1.5 rounded-lg">
                 <Cpu className="w-5 h-5" />
               </div>
-              <span className="font-extrabold text-lg tracking-tight text-slate-800">SMART SCAN</span>
+              <span className="font-extrabold text-lg tracking-tight text-slate-800">
+                {provider === 'brasil_tecpar' ? 'Brasil TecPar' : 'TIM'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <button 
@@ -3437,7 +3482,9 @@ export default function App() {
               <div className="bg-[#003865] text-white p-1.5 rounded-lg">
                 <Cpu className="w-5 h-5" />
               </div>
-              <span className="font-extrabold text-lg text-slate-800 tracking-tight">SMART SCAN</span>
+              <span className="font-extrabold text-lg text-slate-800 tracking-tight">
+                {provider === 'brasil_tecpar' ? 'Brasil TecPar' : 'TIM'}
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 font-medium mr-2 hidden sm:inline">{user?.email}</span>
