@@ -657,7 +657,7 @@ export default function App() {
   const [isImportingExcel, setIsImportingExcel] = useState(false);
   const [importExcelMessage, setImportExcelMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [targetDatabase, setTargetDatabase] = useState<'db-scanonu' | 'ScanONU_Claro'>('db-scanonu');
+  const [targetDatabase, setTargetDatabase] = useState<'db-scanonu' | 'ScanONU_Claro' | 'SmartScan_BrasilTecPar'>('db-scanonu');
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
 
@@ -2569,7 +2569,7 @@ export default function App() {
               onClick={() => {
                 setActiveModule('gpon');
                 setProvider('tim');
-                setTargetDatabase('ScanONU_Claro');
+                setTargetDatabase('db-scanonu');
               }}
               className="flex-1 bg-white hover:bg-slate-50 transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group"
             >
@@ -2597,7 +2597,7 @@ export default function App() {
               onClick={() => {
                 setActiveModule('gpon');
                 setProvider('brasil_tecpar');
-                setTargetDatabase('db-scanonu');
+                setTargetDatabase('SmartScan_BrasilTecPar');
               }}
               className="flex-1 bg-gradient-to-br from-[#2ba9c8] to-[#1f93af] hover:from-[#209bb8] hover:to-[#177e96] text-white transition-all rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border-2 border-transparent hover:border-white/20"
             >
@@ -3920,6 +3920,7 @@ export default function App() {
                   >
                     <option value="db-scanonu">db-scanonu (Padrão)</option>
                     <option value="ScanONU_Claro">ScanONU_Claro</option>
+                    <option value="SmartScan_BrasilTecPar">SmartScan_BrasilTecPar</option>
                   </select>
                 </div>
 

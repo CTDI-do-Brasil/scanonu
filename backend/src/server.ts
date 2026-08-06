@@ -381,7 +381,7 @@ function getDefaultDatabaseName(): string {
 
 function getActiveDatabases(): string[] {
   const defaultDb = getDefaultDatabaseName();
-  const list = ['db-scanonu', 'ScanONU_Claro'];
+  const list = ['db-scanonu', 'ScanONU_Claro', 'SmartScan_BrasilTecPar'];
   if (defaultDb && !list.includes(defaultDb)) {
     list.push(defaultDb);
   }
@@ -4267,7 +4267,7 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
 
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
-    const targetDatabases = ['db-scanonu', 'ScanONU_Claro'];
+    const targetDatabases = ['db-scanonu', 'ScanONU_Claro', 'SmartScan_BrasilTecPar'];
     let totalUpdated = 0;
     for (const dbName of targetDatabases) {
       try {
