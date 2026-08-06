@@ -1810,7 +1810,12 @@ app.post('/api/save-label', async (req: any, res: any) => {
       gpon_sn = 'N/A_' + suffix;
     }
 
-    const resolvedWebKey = senha !== undefined ? senha : web_key;
+    let resolvedWebKey = senha !== undefined ? senha : web_key;
+    if (web_key !== undefined && web_key !== 'N/A' && web_key !== 'NA' && web_key.trim() !== '') {
+      if (senha === undefined || senha === 'N/A' || senha === 'NA' || senha.trim() === '' || web_key !== senha) {
+        resolvedWebKey = web_key;
+      }
+    }
     let resolvedWifiSsid5g = wifi_ssid_5g || 'N/A';
     if (normalizedModelo.toUpperCase().includes('5676V2') || normalizedModelo.toUpperCase().includes('5676 V2')) {
       if (resolvedWifiSsid5g && resolvedWifiSsid5g !== 'N/A' && resolvedWifiSsid5g.trim() !== '') {
@@ -2010,6 +2015,14 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     if (exists || reconciledGpon) {
         const dbRow = exists ? checkRes.rows[0] : null;
+
+        if (dbRow) {
+          if (web_key !== undefined && web_key !== dbRow.web_key) {
+            resolvedWebKey = web_key;
+          } else if (senha !== undefined && senha !== dbRow.web_key) {
+            resolvedWebKey = senha;
+          }
+        }
 
         // Função auxiliar para fundir dados da nova captura com os dados existentes do banco
         // Evita que campos válidos já preenchidos no banco sejam apagados com "N/A" ou vazio

@@ -5334,8 +5334,8 @@ export default function App() {
                   <label className="text-[10px] text-blue-600 font-bold">WEB KEY / ADMIN</label>
                   <input
                     type="text"
-                    value={fast5670ConfirmData.web_key || ''}
-                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, web_key: e.target.value})}
+                    value={fast5670ConfirmData.senha || fast5670ConfirmData.web_key || ''}
+                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, senha: e.target.value, web_key: e.target.value})}
                     className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
                   />
                 </div>
