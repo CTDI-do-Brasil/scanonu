@@ -1664,25 +1664,29 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       try {
         let checkRes: any = { rowCount: 0, rows: [] as any[] };
         const normModelo = normalizeModel(scanResult.modelo || '', scanResult.fabricante || '');
-        const isReconcileModel = normModelo === 'NP5454T' || normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2';
-        if (isReconcileModel) {
+        if (normModelo === 'NP5454T') {
           checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'NP5454T' OR modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+            [scanResult.cpe_sn, scanResult.mac]
+          );
+        } else if (normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2') {
+          checkRes = await dbPool.query(
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $3 AND mac <> \'N/A\')',
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
             [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (cpe_sn = $1 AND cpe_sn <> \'N/A\' AND cpe_sn <> \'NA\') OR (mac = $2 AND mac <> \'N/A\')',
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
             [scanResult.cpe_sn, scanResult.mac]
           );
         } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
           checkRes = await dbPool.query(
-            'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE mac = $1',
+            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
             [scanResult.mac]
           );
         }
@@ -1925,9 +1929,16 @@ app.post('/api/save-label', async (req: any, res: any) => {
       checkParams.push(cpe_sn);
     }
 
+    let modelQueryPart = '';
+    if (normalizedModelo === 'NP5454T') {
+      modelQueryPart = "modelo = 'NP5454T' AND ";
+    } else {
+      modelQueryPart = "(modelo IS NULL OR modelo <> 'NP5454T') AND ";
+    }
+
     if (checkQueries.length > 0) {
       checkRes = await pool.query(
-        `SELECT * FROM etiquetas_scan_onu WHERE ${checkQueries.join(' OR ')} LIMIT 1`,
+        `SELECT * FROM etiquetas_scan_onu WHERE ${modelQueryPart}(${checkQueries.join(' OR ')}) LIMIT 1`,
         checkParams
       );
       duplicateType = 'GPON, MAC ou S/N';
