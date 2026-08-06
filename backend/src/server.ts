@@ -4228,39 +4228,46 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
       });
     }
 
-    // Se targetDb for fornecido, usa apenas ele. Senão tenta em ambos os bancos de dados padrões
+    // Se targetDb for fornecido, usa apenas ele. Senão tenta em todos os bancos de dados padrões
     const targetDbs = targetDb ? [String(targetDb)] : getActiveDatabases();
-    let totalUpdated = 0;
     const dbErrors: string[] = [];
 
-    for (const dbName of targetDbs) {
+    // Pre-limpa o MAC para coincidir com a comparação
+    const cleanMac = mac.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+    // Executa as atualizações em paralelo nos bancos de dados para otimizar tempo de resposta
+    const updatePromises = targetDbs.map(async (dbName) => {
       try {
         const pool = getPoolForDatabase(dbName);
         if (!pool) {
           dbErrors.push(`Banco ${dbName} não conectado.`);
-          continue;
+          return 0;
         }
 
         const setClauses = updates.map((u, i) => `${u.col} = $${i + 1}`);
         const queryParams = updates.map(u => u.val);
         
-        queryParams.push(mac);
+        queryParams.push(cleanMac);
         const macParamIdx = queryParams.length;
 
-        // Limpa pontuações do MAC e compara de forma case-insensitive, e filtra pelo modelo PG2447
+        // Limpa pontuações do MAC e compara utilizando a expressão exata do índice idx_etiquetas_scan_onu_clean_mac
         const queryStr = `
           UPDATE etiquetas_scan_onu 
           SET ${setClauses.join(', ')} 
-          WHERE UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = UPPER(REGEXP_REPLACE($${macParamIdx}, '[^A-Z0-9]', '', 'g')) 
+          WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $${macParamIdx} 
             AND modelo = 'PG2447'
         `;
 
         const result = await pool.query(queryStr, queryParams);
-        totalUpdated += result.rowCount || 0;
+        return result.rowCount || 0;
       } catch (err: any) {
         dbErrors.push(`Erro no banco ${dbName}: ${err.message || err}`);
+        return 0;
       }
-    }
+    });
+
+    const results = await Promise.all(updatePromises);
+    const totalUpdated = results.reduce((a, b) => a + b, 0);
 
     if (totalUpdated === 0) {
       const errorMsg = dbErrors.length > 0 
