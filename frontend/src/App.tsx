@@ -2646,7 +2646,7 @@ export default function App() {
               <div className="h-16 flex items-center justify-center w-full">
                 <svg viewBox="0 0 580 240" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
                   {/* Wordmark */}
-                  <text x="20" y="172" fontFamily="'Arial Rounded MT Bold', 'Helvetica Rounded', Arial, sans-serif" fontWeight="bold" fontSize="145" fill="#DA291C" letterSpacing="-8">Claro</text>
+                  <text x="20" y="172" fontFamily="'Montserrat', 'Inter', system-ui, sans-serif" fontWeight="900" fontSize="135" fill="#DA291C" letterSpacing="-6">Claro</text>
                   {/* Sunburst Symbol */}
                   <g fill="#DA291C">
                     <circle cx="475" cy="135" r="46" />
