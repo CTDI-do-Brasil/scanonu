@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import logoCtdi from './assets/logo-ctdi.png';
 // @ts-ignore
 import logoCtdiHq from './assets/logo-ctdi-hq.png';
+// @ts-ignore
+import logoClaro from './assets/logo-claro.png';
 import {  
   Camera, 
   Upload, 
@@ -2644,17 +2646,7 @@ export default function App() {
               className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
               <div className="h-16 flex items-center justify-center w-full">
-                <svg viewBox="0 0 580 240" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
-                  {/* Wordmark */}
-                  <text x="20" y="172" fontFamily="'Montserrat', 'Inter', system-ui, sans-serif" fontWeight="900" fontSize="135" fill="#DA291C" letterSpacing="-6">Claro</text>
-                  {/* Sunburst Symbol */}
-                  <g fill="#DA291C">
-                    <circle cx="475" cy="135" r="46" />
-                    <rect x="468" y="32" width="14" height="42" rx="7" />
-                    <rect x="532" y="128" width="42" height="14" rx="7" />
-                    <rect x="510" y="65" width="14" height="42" rx="7" transform="rotate(-45 517 86)" />
-                  </g>
-                </svg>
+                <img src={logoClaro} alt="Claro" className="h-12 w-auto object-contain" />
               </div>
               <div className="text-center">
                 <h2 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h2>
