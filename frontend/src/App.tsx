@@ -375,7 +375,7 @@ export default function App() {
   // Autenticação
   const [user, setUser] = useState<{ email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string } | null>(null);
   const [activeModule, setActiveModule] = useState<'selection' | 'gpon' | 'iptv'>('selection');
-  const [provider, setProvider] = useState<'tim' | 'brasil_tecpar'>('tim');
+  const [provider, setProvider] = useState<'tim' | 'brasil_tecpar' | 'claro'>('tim');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -2562,7 +2562,7 @@ export default function App() {
           <p className="text-blue-200/80 font-medium">Selecione o módulo de operação</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl justify-center">
+        <div className="flex flex-col md:flex-row flex-wrap gap-8 w-full max-w-6xl justify-center">
           {/* Módulo GPON - TIM */}
           {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
             <button
@@ -2629,6 +2629,35 @@ export default function App() {
               </div>
               <div className="text-center">
                 <h2 className="text-xl font-bold text-white leading-tight">Captura e Edição de ONUs</h2>
+              </div>
+            </button>
+          )}
+
+          {/* Módulo GPON - Claro */}
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
+            <button
+              onClick={() => {
+                setActiveModule('gpon');
+                setProvider('claro');
+                setTargetDatabase('ScanONU_Claro');
+              }}
+              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+            >
+              <div className="h-16 flex items-center justify-center w-full">
+                <svg viewBox="0 0 580 240" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
+                  {/* Wordmark */}
+                  <text x="20" y="172" fontFamily="'Arial Rounded MT Bold', 'Helvetica Rounded', Arial, sans-serif" fontWeight="bold" fontSize="145" fill="#DA291C" letterSpacing="-8">Claro</text>
+                  {/* Sunburst Symbol */}
+                  <g fill="#DA291C">
+                    <circle cx="475" cy="135" r="46" />
+                    <rect x="468" y="32" width="14" height="42" rx="7" />
+                    <rect x="532" y="128" width="42" height="14" rx="7" />
+                    <rect x="510" y="65" width="14" height="42" rx="7" transform="rotate(-45 517 86)" />
+                  </g>
+                </svg>
+              </div>
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h2>
               </div>
             </button>
           )}
@@ -3257,7 +3286,7 @@ export default function App() {
                 <Cpu className="w-5 h-5" />
               </div>
               <span className="font-extrabold text-lg tracking-tight text-slate-800">
-                {provider === 'brasil_tecpar' ? 'Brasil TecPar' : 'TIM'}
+                {provider === 'brasil_tecpar' ? 'Brasil TecPar' : provider === 'claro' ? 'Claro' : 'TIM'}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -3489,7 +3518,7 @@ export default function App() {
                 <Cpu className="w-5 h-5" />
               </div>
               <span className="font-extrabold text-lg text-slate-800 tracking-tight">
-                {provider === 'brasil_tecpar' ? 'Brasil TecPar' : 'TIM'}
+                {provider === 'brasil_tecpar' ? 'Brasil TecPar' : provider === 'claro' ? 'Claro' : 'TIM'}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
