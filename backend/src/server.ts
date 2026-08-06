@@ -1685,44 +1685,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE mac = $1',
             [scanResult.mac]
           );
-        } else if (scanResult.wifi_ssid && scanResult.wifi_ssid.toUpperCase() !== 'N/A' && scanResult.wifi_ssid.toUpperCase() !== 'NA') {
-            checkRes = await dbPool.query(
-              'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = $1',
-              [scanResult.wifi_ssid]
-            );
-            if (checkRes.rowCount === 0) {
-              const candidatesRes = await dbPool.query(
-                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(password_router, web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
-              );
-              const matchingRows = candidatesRes.rows.filter((row: any) => {
-                const normModel = row.modelo ? row.modelo.toUpperCase() : '';
-                if (normModelo && normModel && !normModel.includes(normModelo.toUpperCase()) && !normModelo.toUpperCase().includes(normModel)) {
-                  return false;
-                }
-                const isFast5670 = normModel.includes('5670');
-                if (isFast5670) {
-                  return matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid);
-                } else {
-                  const cleanMac = row.mac ? row.mac.replace(/[^0-9A-FA-F]/g, '').toUpperCase() : '';
-                  const cleanSsid = scanResult.wifi_ssid.replace(/_(2G|5G)$/i, '').trim().toUpperCase();
-                  if (cleanMac.length >= 4 && cleanSsid.length >= 4) {
-                    const suffix = cleanSsid.slice(-4);
-                    // Ignorar se o sufixo for o próprio número do modelo (ex: '2447', '5670', '6600', '5655') ou não for um hexadecimal de 4 dígitos válido
-                    if (suffix === '2447' || suffix === '5670' || suffix === '6600' || suffix === '5655' || suffix === '5657' || !/^[0-9A-F]{4}$/.test(suffix)) {
-                      return false;
-                    }
-                    return cleanMac.endsWith(suffix);
-                  }
-                  return false;
-                }
-              });
-
-              if (matchingRows.length === 1) {
-                checkRes.rows = [matchingRows[0]];
-                checkRes.rowCount = 1;
-              }
-            }
-          }
+        }
 
         if (checkRes.rowCount && checkRes.rowCount > 0) {
           existsInDb = true;
@@ -1963,9 +1926,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
         checkParams
       );
       duplicateType = 'GPON, MAC ou S/N';
-    } else if (wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-      checkRes = await pool.query('SELECT * FROM etiquetas_scan_onu WHERE wifi_ssid = $1 LIMIT 1', [wifi_ssid]);
-      duplicateType = 'SSID da Rede';
     }
 
     const exists = checkRes.rowCount && checkRes.rowCount > 0;
