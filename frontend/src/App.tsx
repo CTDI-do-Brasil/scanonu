@@ -2132,6 +2132,7 @@ export default function App() {
               setEquipmentExistsInDb(true);
               setExistingEquipmentData(safeExisting);
               setShowDuplicateModal(true);
+              setScreen('result');
             }, 100);
             return merged;
           });
