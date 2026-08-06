@@ -4217,10 +4217,23 @@ app.get('/api/admin/run-sync-debug', async (req: any, res: any) => {
 
 app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, res: any) => {
   try {
-    const { mac, wifi_key, targetDb } = req.body;
+    const { mac, wifi_key, wifi_ssid, wifi_ssid_5g, web_key, targetDb } = req.body;
     
-    if (!mac || !wifi_key) {
-      return res.status(400).json({ success: false, error: 'MAC e WIFI_KEY são obrigatórios.' });
+    if (!mac) {
+      return res.status(400).json({ success: false, error: 'O campo mac é obrigatório.' });
+    }
+
+    const updates: { col: string; val: any }[] = [];
+    if (wifi_key !== undefined) updates.push({ col: 'wifi_key', val: wifi_key });
+    if (wifi_ssid !== undefined) updates.push({ col: 'wifi_ssid', val: wifi_ssid });
+    if (wifi_ssid_5g !== undefined) updates.push({ col: 'wifi_ssid_5g', val: wifi_ssid_5g });
+    if (web_key !== undefined) updates.push({ col: 'web_key', val: web_key });
+
+    if (updates.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ao menos um campo para atualização (wifi_key, wifi_ssid, wifi_ssid_5g ou web_key) deve ser fornecido.' 
+      });
     }
 
     // Se targetDb for fornecido, usa apenas ele. Senão tenta em ambos os bancos de dados padrões
@@ -4236,11 +4249,21 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
           continue;
         }
 
+        const setClauses = updates.map((u, i) => `${u.col} = $${i + 1}`);
+        const queryParams = updates.map(u => u.val);
+        
+        queryParams.push(mac);
+        const macParamIdx = queryParams.length;
+
         // Limpa pontuações do MAC e compara de forma case-insensitive, e filtra pelo modelo PG2447
-        const result = await pool.query(
-          "UPDATE etiquetas_scan_onu SET wifi_key = $1 WHERE UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = UPPER(REGEXP_REPLACE($2, '[^A-Z0-9]', '', 'g')) AND modelo = 'PG2447'",
-          [wifi_key, mac]
-        );
+        const queryStr = `
+          UPDATE etiquetas_scan_onu 
+          SET ${setClauses.join(', ')} 
+          WHERE UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = UPPER(REGEXP_REPLACE($${macParamIdx}, '[^A-Z0-9]', '', 'g')) 
+            AND modelo = 'PG2447'
+        `;
+
+        const result = await pool.query(queryStr, queryParams);
         totalUpdated += result.rowCount || 0;
       } catch (err: any) {
         dbErrors.push(`Erro no banco ${dbName}: ${err.message || err}`);
@@ -4256,7 +4279,7 @@ app.post('/api/equipamentos/pg2447/wifi-key', express.json(), async (req: any, r
 
     return res.json({ 
       success: true, 
-      message: `WIFI_KEY atualizado com sucesso para o MAC ${mac}.`,
+      message: `Cadastro atualizado com sucesso para o MAC ${mac}.`,
       updatedCount: totalUpdated 
     });
   } catch (err: any) {
