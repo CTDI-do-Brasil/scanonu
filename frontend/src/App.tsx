@@ -4087,8 +4087,8 @@ export default function App() {
                         onChange={(e) => setNewOperacao(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all font-semibold"
                       >
-                        <option value="CTDI MATRIZ">CTDI MATRIZ (db-scanonu)</option>
-                        <option value="CTDI OPERAÇÃO GLP">CTDI OPERAÇÃO GLP (ScanONU_Claro)</option>
+                        <option value="CTDI MATRIZ">CTDI MATRIZ</option>
+                        <option value="CTDI OPERAÇÃO GLP">CTDI OPERAÇÃO GLP</option>
                       </select>
                     </div>
 
@@ -5159,8 +5159,8 @@ export default function App() {
                 onChange={(e) => setEditOperacao(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-all font-semibold"
               >
-                <option value="CTDI MATRIZ">CTDI MATRIZ (db-scanonu)</option>
-                <option value="CTDI OPERAÇÃO GLP">CTDI OPERAÇÃO GLP (ScanONU_Claro)</option>
+                <option value="CTDI MATRIZ">CTDI MATRIZ</option>
+                <option value="CTDI OPERAÇÃO GLP">CTDI OPERAÇÃO GLP</option>
               </select>
             </div>
 
