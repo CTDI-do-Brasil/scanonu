@@ -3351,21 +3351,6 @@ export default function App() {
               {user?.role !== 'consulta' && (
                 <>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mb-2">Geral</div>
-                  <button
-                    onClick={() => {
-                      setAdminTab('scan');
-                      setSidebarOpen(false);
-                    }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
-                  adminTab === 'scan'
-                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
-                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
-                }`}
-              >
-                  <Camera className="w-4 h-4" />
-                  Escaneador
-                </button>
-
                 <button
                   onClick={() => {
                     handleGoBackToModules();
@@ -3375,6 +3360,21 @@ export default function App() {
                 >
                   <LayoutGrid className="w-4 h-4" />
                   Início
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAdminTab('scan');
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
+                    adminTab === 'scan'
+                      ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                      : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
+                  }`}
+                >
+                  <Camera className="w-4 h-4" />
+                  Escaneador
                 </button>
               </>
               )}
