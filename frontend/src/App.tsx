@@ -3438,23 +3438,7 @@ export default function App() {
               </button>
             )}
 
-              {user?.role === 'master' && (
-              <button
-                onClick={() => {
-                  setAdminTab('admin');
-                  setAdminSubTab('iptv-models');
-                  setSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
-                  adminTab === 'admin' && adminSubTab === 'iptv-models'
-                    ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
-                    : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
-                }`}
-              >
-                <MonitorPlay className="w-4 h-4" />
-                Modelos IPTV
-              </button>
-              )}
+
 
             </nav>
 
