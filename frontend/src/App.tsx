@@ -3350,7 +3350,7 @@ export default function App() {
             <nav className="flex-1 px-4 pt-8 pb-6 space-y-1.5 overflow-y-auto">
               {user?.role !== 'consulta' && (
                 <>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mb-2">Geral</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mb-2">Menu</div>
                 <button
                   onClick={() => {
                     handleGoBackToModules();
