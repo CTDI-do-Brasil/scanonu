@@ -3936,18 +3936,20 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="space-y-1.5 w-full pt-2 border-t border-slate-100">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Banco de Dados de Destino</label>
-                  <select
-                    value={targetDatabase}
-                    onChange={(e) => setTargetDatabase(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none transition-all font-semibold"
-                  >
-                    <option value="db-scanonu">db-scanonu (Padrão)</option>
-                    <option value="ScanONU_Claro">ScanONU_Claro</option>
-                    <option value="SmartScan_BrasilTecPar">SmartScan_BrasilTecPar</option>
-                  </select>
-                </div>
+                {provider !== 'claro' && (
+                  <div className="space-y-1.5 w-full pt-2 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Banco de Dados de Destino</label>
+                    <select
+                      value={targetDatabase}
+                      onChange={(e) => setTargetDatabase(e.target.value as any)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none transition-all font-semibold"
+                    >
+                      <option value="db-scanonu">db-scanonu (Padrão)</option>
+                      <option value="ScanONU_Claro">ScanONU_Claro</option>
+                      <option value="SmartScan_BrasilTecPar">SmartScan_BrasilTecPar</option>
+                    </select>
+                  </div>
+                )}
 
                 <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center w-full space-y-3">
                   {importProgress && (
