@@ -4113,6 +4113,42 @@ export default function App() {
                           />
                           <span>Acesso ao Módulo Reimpressão</span>
                         </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                          <input 
+                            type="checkbox" 
+                            disabled
+                            checked={false}
+                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                          />
+                          <span>Acesso ao Módulo HFC (Em breve)</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                          <input 
+                            type="checkbox" 
+                            disabled
+                            checked={false}
+                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                          />
+                          <span>Acesso ao Módulo FWA / 5G (Em breve)</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                          <input 
+                            type="checkbox" 
+                            disabled
+                            checked={false}
+                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                          />
+                          <span>Acesso ao Módulo Logística (Em breve)</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                          <input 
+                            type="checkbox" 
+                            disabled
+                            checked={false}
+                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                          />
+                          <span>Acesso ao Módulo Dashboards & Relatórios (Em breve)</span>
+                        </label>
                       </div>
 
                       {newPermitirReimpressao && (
@@ -5184,6 +5220,42 @@ export default function App() {
                     className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
                   />
                   <span>Acesso ao Módulo Reimpressão</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                  <input 
+                    type="checkbox" 
+                    disabled
+                    checked={false}
+                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                  />
+                  <span>Acesso ao Módulo HFC (Em breve)</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                  <input 
+                    type="checkbox" 
+                    disabled
+                    checked={false}
+                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                  />
+                  <span>Acesso ao Módulo FWA / 5G (Em breve)</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                  <input 
+                    type="checkbox" 
+                    disabled
+                    checked={false}
+                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                  />
+                  <span>Acesso ao Módulo Logística (Em breve)</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
+                  <input 
+                    type="checkbox" 
+                    disabled
+                    checked={false}
+                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                  />
+                  <span>Acesso ao Módulo Dashboards & Relatórios (Em breve)</span>
                 </label>
               </div>
 
