@@ -1258,7 +1258,7 @@ function correctMacPrefix(mac: string): string {
   
   for (const oui of KNOWN_SAGEMCOM_OUIS) {
     let dist = 0;
-    for (const i = 0; i < 6; i++) {
+    for (let i = 0; i < 6; i++) {
       if (prefix[i] !== oui[i]) {
         dist++;
       }
