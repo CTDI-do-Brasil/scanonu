@@ -3379,7 +3379,7 @@ export default function App() {
               </>
               )}
 
-              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200/50 px-3 mt-6 mb-2">Painel Administrativo</div>
+
               {(user?.role === 'admin' || user?.role === 'master') && (
               <button
                 onClick={() => {
