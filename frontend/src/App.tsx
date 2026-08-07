@@ -2634,17 +2634,20 @@ export default function App() {
           )}
 
           {/* Módulo GPON - Claro */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
+          {user?.role === 'master' && (
             <button
-              disabled
-              className="w-full md:w-72 aspect-square bg-slate-50/80 opacity-60 cursor-not-allowed rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-sm border border-slate-200/60 filter grayscale"
+              onClick={() => {
+                setActiveModule('gpon');
+                setProvider('claro');
+                setTargetDatabase('ScanONU_Claro');
+              }}
+              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
               <div className="h-16 flex items-center justify-center w-full">
                 <img src={logoClaro} alt="Claro" className="h-12 w-auto object-contain" />
               </div>
               <div className="text-center">
-                <h2 className="text-xl font-bold text-slate-500 leading-tight">Captura e Edição de ONUs</h2>
-                <span className="text-xs font-bold text-red-500 mt-2 block uppercase tracking-wider">Indisponível</span>
+                <h2 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h2>
               </div>
             </button>
           )}
