@@ -2058,6 +2058,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
         let finalUsuario = getMergedValue(usuario, dbRow?.usuario);
         let finalWebKey = getMergedValue(resolvedWebKey, dbRow?.web_key);
         let finalGpon = exists ? dbRow.gpon_sn : (reconciledGpon || gpon_sn);
+        let finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
+        if (exists && dbRow && (finalPasswordRouter === 'N/A' || finalPasswordRouter === 'NA') && dbRow.password_router && dbRow.password_router !== 'N/A' && dbRow.password_router !== 'NA') {
+          finalPasswordRouter = dbRow.password_router;
+        }
 
         const isNP5454T = dbRow?.modelo === 'NP5454T';
         const is5670 = 
@@ -2135,6 +2139,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalWifiKey !== (dbRow.wifi_key || 'N/A') ||
             finalUsuario !== (dbRow.usuario || 'N/A') ||
             finalWebKey !== (dbRow.web_key || 'N/A') ||
+            finalPasswordRouter !== (dbRow.password_router || 'N/A') ||
             finalGpon !== (dbRow.gpon_sn || 'N/A');
 
           if (!fieldsChanged) {
@@ -2168,7 +2173,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
-      const finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
 
       const updateValues = [
         finalFabricante,
@@ -2203,7 +2207,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
           usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
           web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
-          password_router = COALESCE(NULLIF(EXCLUDED.password_router, 'N/A'), etiquetas_scan_onu.password_router),
+          password_router = COALESCE(NULLIF(NULLIF(EXCLUDED.password_router, 'N/A'), 'NA'), etiquetas_scan_onu.password_router),
           operador_email = EXCLUDED.operador_email,
           imagem_url = COALESCE(EXCLUDED.imagem_url, etiquetas_scan_onu.imagem_url),
           operacao = EXCLUDED.operacao,
