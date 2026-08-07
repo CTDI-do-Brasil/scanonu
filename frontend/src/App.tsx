@@ -375,7 +375,7 @@ function deriveBipadorData(gponInput: string, macInput: string): ScanData {
 
 export default function App() {
   // Autenticação
-  const [user, setUser] = useState<{ email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; permitir_tim?: boolean; permitir_brasil_tecpar?: boolean; permitir_claro?: boolean; tecnologias_permitidas?: string } | null>(null);
   const [activeModule, setActiveModule] = useState<'selection' | 'gpon' | 'iptv'>('selection');
   const [provider, setProvider] = useState<'tim' | 'brasil_tecpar' | 'claro'>('tim');
   const [emailInput, setEmailInput] = useState('');
@@ -395,13 +395,16 @@ export default function App() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
   const [changePasswordSuccess, setChangePasswordSuccess] = useState(false);
-  const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string }>>([]);
+  const [usersList, setUsersList] = useState<Array<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; permitir_tim?: boolean; permitir_brasil_tecpar?: boolean; permitir_claro?: boolean; tecnologias_permitidas?: string }>>([]);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('operador');
   const [newOperacao, setNewOperacao] = useState('CTDI MATRIZ');
   const [newPermitirGpon, setNewPermitirGpon] = useState(true);
   const [newPermitirReimpressao, setNewPermitirReimpressao] = useState(true);
+  const [newPermitirTim, setNewPermitirTim] = useState(true);
+  const [newPermitirBrasilTecpar, setNewPermitirBrasilTecpar] = useState(true);
+  const [newPermitirClaro, setNewPermitirClaro] = useState(true);
   const [newTecnologiasPermitidas, setNewTecnologiasPermitidas] = useState<string[]>(['IPTV', 'GPON', 'EMTA', 'STB']);
   const [adminMessage, setAdminMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -410,13 +413,16 @@ export default function App() {
   const currentVersionRef = useRef<string | null>(null);
 
   // Estados para edição/reset de senha de usuários
-  const [editingUser, setEditingUser] = useState<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; tecnologias_permitidas?: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<{ id?: number; email: string; role: string; operacao?: string; permitir_gpon?: boolean; permitir_reimpressao?: boolean; permitir_tim?: boolean; permitir_brasil_tecpar?: boolean; permitir_claro?: boolean; tecnologias_permitidas?: string } | null>(null);
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState('operador');
   const [editOperacao, setEditOperacao] = useState('CTDI MATRIZ');
   const [editPermitirGpon, setEditPermitirGpon] = useState(true);
   const [editPermitirReimpressao, setEditPermitirReimpressao] = useState(true);
+  const [editPermitirTim, setEditPermitirTim] = useState(true);
+  const [editPermitirBrasilTecpar, setEditPermitirBrasilTecpar] = useState(true);
+  const [editPermitirClaro, setEditPermitirClaro] = useState(true);
   const [editTecnologiasPermitidas, setEditTecnologiasPermitidas] = useState<string[]>(['IPTV', 'GPON', 'EMTA', 'STB']);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
   const [editUserError, setEditUserError] = useState<string | null>(null);
@@ -1032,6 +1038,9 @@ export default function App() {
           operacao: newOperacao,
           permitir_gpon: newPermitirGpon,
           permitir_reimpressao: newPermitirReimpressao,
+          permitir_tim: newPermitirTim,
+          permitir_brasil_tecpar: newPermitirBrasilTecpar,
+          permitir_claro: newPermitirClaro,
           tecnologias_permitidas: newTecnologiasPermitidas.join(',')
         })
       });
@@ -1044,6 +1053,9 @@ export default function App() {
         setNewOperacao('CTDI MATRIZ');
         setNewPermitirGpon(true);
         setNewPermitirReimpressao(true);
+        setNewPermitirTim(true);
+        setNewPermitirBrasilTecpar(true);
+        setNewPermitirClaro(true);
         setNewTecnologiasPermitidas(['IPTV', 'GPON', 'EMTA', 'STB']);
         fetchUsers();
       } else {
@@ -1077,6 +1089,9 @@ export default function App() {
           operacao: editOperacao,
           permitir_gpon: editPermitirGpon,
           permitir_reimpressao: editPermitirReimpressao,
+          permitir_tim: editPermitirTim,
+          permitir_brasil_tecpar: editPermitirBrasilTecpar,
+          permitir_claro: editPermitirClaro,
           tecnologias_permitidas: editTecnologiasPermitidas.join(',')
         })
       });
@@ -2567,7 +2582,7 @@ export default function App() {
 
         <div className="flex flex-col md:flex-row flex-wrap gap-8 w-full max-w-6xl justify-center">
           {/* Módulo GPON - TIM */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_tim !== false) && (
             <button
               onClick={() => {
                 setActiveModule('gpon');
@@ -2597,7 +2612,7 @@ export default function App() {
           )}
 
           {/* Módulo GPON - Brasil TecPar */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_gpon !== false) && (
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_brasil_tecpar !== false) && (
             <button
               disabled
               className="w-full md:w-72 aspect-square bg-slate-50/80 opacity-60 cursor-not-allowed rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-sm border border-slate-200/60 filter grayscale"
@@ -2634,7 +2649,7 @@ export default function App() {
           )}
 
           {/* Módulo GPON - Claro */}
-          {user?.role === 'master' && (
+          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_claro !== false) && (
             <button
               onClick={() => {
                 setActiveModule('gpon');
@@ -4098,11 +4113,29 @@ export default function App() {
                         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
                           <input 
                             type="checkbox" 
-                            checked={newPermitirGpon}
-                            onChange={(e) => setNewPermitirGpon(e.target.checked)}
+                            checked={newPermitirTim}
+                            onChange={(e) => setNewPermitirTim(e.target.checked)}
                             className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
                           />
-                          <span>Acesso ao Módulo GPON</span>
+                          <span>Acesso ao Módulo TIM</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={newPermitirBrasilTecpar}
+                            onChange={(e) => setNewPermitirBrasilTecpar(e.target.checked)}
+                            className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                          />
+                          <span>Acesso ao Módulo Brasil TecPar</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={newPermitirClaro}
+                            onChange={(e) => setNewPermitirClaro(e.target.checked)}
+                            className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                          />
+                          <span>Acesso ao Módulo Claro</span>
                         </label>
                         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
                           <input 
@@ -4112,42 +4145,6 @@ export default function App() {
                             className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
                           />
                           <span>Acesso ao Módulo Reimpressão</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                          <input 
-                            type="checkbox" 
-                            disabled
-                            checked={false}
-                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                          />
-                          <span>Acesso ao Módulo HFC (Em breve)</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                          <input 
-                            type="checkbox" 
-                            disabled
-                            checked={false}
-                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                          />
-                          <span>Acesso ao Módulo FWA / 5G (Em breve)</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                          <input 
-                            type="checkbox" 
-                            disabled
-                            checked={false}
-                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                          />
-                          <span>Acesso ao Módulo Logística (Em breve)</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                          <input 
-                            type="checkbox" 
-                            disabled
-                            checked={false}
-                            className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                          />
-                          <span>Acesso ao Módulo Dashboards & Relatórios (Em breve)</span>
                         </label>
                       </div>
 
@@ -4235,6 +4232,9 @@ export default function App() {
                                 setEditOperacao(usr.operacao || 'CTDI MATRIZ');
                                 setEditPermitirGpon(usr.permitir_gpon !== undefined ? usr.permitir_gpon : true);
                                 setEditPermitirReimpressao(usr.permitir_reimpressao !== undefined ? usr.permitir_reimpressao : true);
+                                setEditPermitirTim(usr.permitir_tim !== undefined ? usr.permitir_tim : true);
+                                setEditPermitirBrasilTecpar(usr.permitir_brasil_tecpar !== undefined ? usr.permitir_brasil_tecpar : true);
+                                setEditPermitirClaro(usr.permitir_claro !== undefined ? usr.permitir_claro : true);
                                 setEditTecnologiasPermitidas(usr.tecnologias_permitidas ? usr.tecnologias_permitidas.split(',') : ['IPTV', 'GPON', 'EMTA', 'STB']);
                                 setEditUserError(null);
                               }}
@@ -5206,11 +5206,29 @@ export default function App() {
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
                   <input 
                     type="checkbox" 
-                    checked={editPermitirGpon}
-                    onChange={(e) => setEditPermitirGpon(e.target.checked)}
+                    checked={editPermitirTim}
+                    onChange={(e) => setEditPermitirTim(e.target.checked)}
                     className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
                   />
-                  <span>Acesso ao Módulo GPON</span>
+                  <span>Acesso ao Módulo TIM</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={editPermitirBrasilTecpar}
+                    onChange={(e) => setEditPermitirBrasilTecpar(e.target.checked)}
+                    className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                  />
+                  <span>Acesso ao Módulo Brasil TecPar</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={editPermitirClaro}
+                    onChange={(e) => setEditPermitirClaro(e.target.checked)}
+                    className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
+                  />
+                  <span>Acesso ao Módulo Claro</span>
                 </label>
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
                   <input 
@@ -5220,42 +5238,6 @@ export default function App() {
                     className="rounded border-slate-300 text-[#003865] focus:ring-[#003865]"
                   />
                   <span>Acesso ao Módulo Reimpressão</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                  <input 
-                    type="checkbox" 
-                    disabled
-                    checked={false}
-                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                  />
-                  <span>Acesso ao Módulo HFC (Em breve)</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                  <input 
-                    type="checkbox" 
-                    disabled
-                    checked={false}
-                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                  />
-                  <span>Acesso ao Módulo FWA / 5G (Em breve)</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                  <input 
-                    type="checkbox" 
-                    disabled
-                    checked={false}
-                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                  />
-                  <span>Acesso ao Módulo Logística (Em breve)</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-60">
-                  <input 
-                    type="checkbox" 
-                    disabled
-                    checked={false}
-                    className="rounded border-slate-300 text-slate-400 focus:ring-slate-400"
-                  />
-                  <span>Acesso ao Módulo Dashboards & Relatórios (Em breve)</span>
                 </label>
               </div>
 

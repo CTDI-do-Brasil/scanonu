@@ -474,6 +474,9 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ',
       permitir_gpon BOOLEAN DEFAULT TRUE,
       permitir_reimpressao BOOLEAN DEFAULT TRUE,
+      permitir_tim BOOLEAN DEFAULT TRUE,
+      permitir_brasil_tecpar BOOLEAN DEFAULT TRUE,
+      permitir_claro BOOLEAN DEFAULT TRUE,
       tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'
     );
   `;
@@ -492,6 +495,9 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     if (!cols.includes('operacao')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
     if (!cols.includes('permitir_gpon')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_gpon BOOLEAN DEFAULT TRUE");
     if (!cols.includes('permitir_reimpressao')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_reimpressao BOOLEAN DEFAULT TRUE");
+    if (!cols.includes('permitir_tim')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_tim BOOLEAN DEFAULT TRUE");
+    if (!cols.includes('permitir_brasil_tecpar')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_brasil_tecpar BOOLEAN DEFAULT TRUE");
+    if (!cols.includes('permitir_claro')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_claro BOOLEAN DEFAULT TRUE");
     if (!cols.includes('tecnologias_permitidas')) await pool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'");
   } catch (e) {
     console.error('Erro ao adicionar colunas em usuarios_scan_onu:', e);
@@ -822,7 +828,13 @@ async function connectToDatabase() {
           email VARCHAR(150) UNIQUE NOT NULL,
           senha VARCHAR(100) NOT NULL,
           role VARCHAR(50) DEFAULT 'operador',
-          operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'
+          operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ',
+          permitir_gpon BOOLEAN DEFAULT TRUE,
+          permitir_reimpressao BOOLEAN DEFAULT TRUE,
+          permitir_tim BOOLEAN DEFAULT TRUE,
+          permitir_brasil_tecpar BOOLEAN DEFAULT TRUE,
+          permitir_claro BOOLEAN DEFAULT TRUE,
+          tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'
         );
       `;
       await dbPool.query(createUsersTableQuery);
@@ -840,6 +852,9 @@ async function connectToDatabase() {
         if (!cols.includes('operacao')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN operacao VARCHAR(100) DEFAULT 'CTDI MATRIZ'");
         if (!cols.includes('permitir_gpon')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_gpon BOOLEAN DEFAULT TRUE");
         if (!cols.includes('permitir_reimpressao')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_reimpressao BOOLEAN DEFAULT TRUE");
+        if (!cols.includes('permitir_tim')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_tim BOOLEAN DEFAULT TRUE");
+        if (!cols.includes('permitir_brasil_tecpar')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_brasil_tecpar BOOLEAN DEFAULT TRUE");
+        if (!cols.includes('permitir_claro')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN permitir_claro BOOLEAN DEFAULT TRUE");
         if (!cols.includes('tecnologias_permitidas')) await dbPool.query("ALTER TABLE usuarios_scan_onu ADD COLUMN tecnologias_permitidas VARCHAR(200) DEFAULT 'IPTV,GPON,EMTA,STB'");
       } catch (e) {
         console.error('Erro ao adicionar colunas em usuarios_scan_onu (initDb):', e);
@@ -1243,7 +1258,7 @@ function correctMacPrefix(mac: string): string {
   
   for (const oui of KNOWN_SAGEMCOM_OUIS) {
     let dist = 0;
-    for (let i = 0; i < 6; i++) {
+    for (const i = 0; i < 6; i++) {
       if (prefix[i] !== oui[i]) {
         dist++;
       }
@@ -1465,7 +1480,7 @@ Siga atentamente as instruções abaixo para cada campo:
 3. cpe_sn: Serial CPE/Equipamento. Se não houver explicitamente o serial do equipamento (não confunda com PN ou SAP), escreva 'N/A'. Não capture PN ou SAP.
 4. gpon_sn: Serial GPON (ex: SMBS12345678, ZTEG12345678, FHTT12345678, ALCL12345678, HWTC12345678). Se a etiqueta NÃO TIVER Gpon SN explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
 5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Se a etiqueta NÃO TIVER MAC explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
-6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única. CUIDADO EXTREMO com caracteres visualmente semelhantes: diferencie claramente 'B' e '8', 'O' (letra) e '0' (zero), 'I' e '1', 'Z' e '2', 'S' e '5', 'G' e '6', 'D' e '0'. Um erro nesses caracteres fará o sistema falhar. Se não achar, 'N/A'.
+6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única. CUIDADO EXTREMO com caracteres visualmente semelhantes: diferencie claramente 'B' e '8', 'O' (letra) and '0' (zero), 'I' e '1', 'Z' e '2', 'S' e '5', 'G' e '6', 'D' e '0'. Um erro nesses caracteres fará o sistema falhar. Se não achar, 'N/A'.
 7. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz. Aplique a mesma regra estrita do wifi_ssid para diferenciação de letras e números parecidos. Se não achar, 'N/A'.
 8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas. CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
 9. usuario: Usuário padrão de acesso web (ex: admin). Se não achar, 'N/A'.
@@ -2372,7 +2387,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     }
 
     const userRes = await dbPool.query(
-      'SELECT email, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
+      'SELECT email, role, operacao, permitir_gpon, permitir_reimpressao, permitir_tim, permitir_brasil_tecpar, permitir_claro, tecnologias_permitidas FROM usuarios_scan_onu WHERE email = $1 AND senha = $2',
       [email.trim().toLowerCase(), senha]
     );
 
@@ -2406,7 +2421,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 // Rota para cadastrar novos usuários (somente Admin)
 app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
-    const { email, senha, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas } = req.body;
+    const { email, senha, role, operacao, permitir_gpon, permitir_reimpressao, permitir_tim, permitir_brasil_tecpar, permitir_claro, tecnologias_permitidas } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -2418,7 +2433,7 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
     }
 
     await dbPool.query(
-      'INSERT INTO usuarios_scan_onu (email, senha, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      'INSERT INTO usuarios_scan_onu (email, senha, role, operacao, permitir_gpon, permitir_reimpressao, permitir_tim, permitir_brasil_tecpar, permitir_claro, tecnologias_permitidas) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
       [
         email.trim().toLowerCase(), 
         senha, 
@@ -2426,6 +2441,9 @@ app.post('/api/admin/users', authenticateSession, async (req: any, res: any) => 
         operacao || 'CTDI MATRIZ',
         permitir_gpon !== undefined ? permitir_gpon : true,
         permitir_reimpressao !== undefined ? permitir_reimpressao : true,
+        permitir_tim !== undefined ? permitir_tim : true,
+        permitir_brasil_tecpar !== undefined ? permitir_brasil_tecpar : true,
+        permitir_claro !== undefined ? permitir_claro : true,
         tecnologias_permitidas || 'IPTV,GPON,EMTA,STB'
       ]
     );
@@ -2472,7 +2490,7 @@ app.put('/api/user/password', authenticateSession, async (req: any, res: any) =>
 // Rota para editar e resetar senhas de usuários (somente Admin)
 app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
   try {
-    const { id, email, senha, role, operacao, permitir_gpon, permitir_reimpressao, tecnologias_permitidas } = req.body;
+    const { id, email, senha, role, operacao, permitir_gpon, permitir_reimpressao, permitir_tim, permitir_brasil_tecpar, permitir_claro, tecnologias_permitidas } = req.body;
 
     if (!dbConnected || !dbPool) {
       return res.status(500).json({ error: 'Banco de dados não está conectado.' });
@@ -2487,7 +2505,7 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
     let queryValues = [];
 
     if (senha && senha.trim() !== '') {
-      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3, operacao = $4, permitir_gpon = $5, permitir_reimpressao = $6, tecnologias_permitidas = $7 WHERE id = $8';
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, senha = $2, role = $3, operacao = $4, permitir_gpon = $5, permitir_reimpressao = $6, permitir_tim = $7, permitir_brasil_tecpar = $8, permitir_claro = $9, tecnologias_permitidas = $10 WHERE id = $11';
       queryValues = [
         email.trim().toLowerCase(),
         senha.trim(),
@@ -2495,17 +2513,23 @@ app.put('/api/admin/users', authenticateSession, async (req: any, res: any) => {
         operacao || 'CTDI MATRIZ',
         permitir_gpon !== undefined ? permitir_gpon : true,
         permitir_reimpressao !== undefined ? permitir_reimpressao : true,
+        permitir_tim !== undefined ? permitir_tim : true,
+        permitir_brasil_tecpar !== undefined ? permitir_brasil_tecpar : true,
+        permitir_claro !== undefined ? permitir_claro : true,
         tecnologias_permitidas || 'IPTV,GPON,EMTA,STB',
         id
       ];
     } else {
-      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2, operacao = $3, permitir_gpon = $4, permitir_reimpressao = $5, tecnologias_permitidas = $6 WHERE id = $7';
+      queryText = 'UPDATE usuarios_scan_onu SET email = $1, role = $2, operacao = $3, permitir_gpon = $4, permitir_reimpressao = $5, permitir_tim = $6, permitir_brasil_tecpar = $7, permitir_claro = $8, tecnologias_permitidas = $9 WHERE id = $10';
       queryValues = [
         email.trim().toLowerCase(),
         role,
         operacao || 'CTDI MATRIZ',
         permitir_gpon !== undefined ? permitir_gpon : true,
         permitir_reimpressao !== undefined ? permitir_reimpressao : true,
+        permitir_tim !== undefined ? permitir_tim : true,
+        permitir_brasil_tecpar !== undefined ? permitir_brasil_tecpar : true,
+        permitir_claro !== undefined ? permitir_claro : true,
         tecnologias_permitidas || 'IPTV,GPON,EMTA,STB',
         id
       ];
