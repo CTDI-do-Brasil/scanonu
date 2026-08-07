@@ -40,7 +40,8 @@ import {
   Lock,
   Sparkles,
   Key,
-  Barcode
+  Barcode,
+  LayoutGrid
 } from 'lucide-react';
 
 
@@ -3372,8 +3373,8 @@ export default function App() {
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  Voltar aos Módulos
+                  <LayoutGrid className="w-4 h-4" />
+                  Início
                 </button>
               </>
               )}
