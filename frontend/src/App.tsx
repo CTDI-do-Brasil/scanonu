@@ -2735,6 +2735,8 @@ export default function App() {
           alert(`O campo ${config.label} não pode ter mais de ${config.maxLength} caracteres. (Atual: ${val.length})`);
           return;
         }
+        // Trava de prefixo desativada temporariamente conforme solicitação
+        /*
         if (config.prefix) {
           const cleanVal = val.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
           const cleanPrefix = config.prefix.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -2743,6 +2745,7 @@ export default function App() {
             return;
           }
         }
+        */
       }
 
       setIsPrinting(true);
@@ -2993,7 +2996,7 @@ export default function App() {
                     })
                     .map(([key, config]: [string, any]) => {
                       const val = fieldsData[key] || '';
-                      const hasPrefixError = val && config.prefix && !val.replace(/[^A-Za-z0-9]/g, '').toUpperCase().startsWith(config.prefix.replace(/[^A-Za-z0-9]/g, '').toUpperCase());
+                      const hasPrefixError = false;
                       
                       return (
                         <div key={key}>
