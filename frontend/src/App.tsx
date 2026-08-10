@@ -4354,7 +4354,6 @@ export default function App() {
                         value={printerFormData.nome}
                         onChange={e => setPrinterFormData({ ...printerFormData, nome: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
-                        placeholder="Ex: Acessórios - LINHA C1 - 1"
                       />
                     </div>
                     <div>
@@ -4364,7 +4363,6 @@ export default function App() {
                         value={printerFormData.descricao}
                         onChange={e => setPrinterFormData({ ...printerFormData, descricao: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003865]/30 focus:bg-white"
-                        placeholder="Ex: Acessórios - LINHA C1 - 1"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
