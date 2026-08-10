@@ -2016,12 +2016,14 @@ app.post('/api/save-label', async (req: any, res: any) => {
         }
     }
 
-    // Se estamos salvando um registro completo com GPON real, limpamos registros temporários duplicados com o mesmo SSID
-    if (gpon_sn && !gpon_sn.toUpperCase().startsWith('N/A') && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A') {
+    const targetGpon = exists ? checkRes.rows[0].gpon_sn : (reconciledGpon || gpon_sn);
+
+    // Se estamos salvando um registro completo com GPON real, limpamos registros temporários duplicados com o mesmo SSID (exceto o próprio que estamos atualizando)
+    if (gpon_sn && !gpon_sn.toUpperCase().startsWith('N/A') && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
       try {
         await pool.query(
-          "DELETE FROM etiquetas_scan_onu WHERE wifi_ssid = $1 AND gpon_sn LIKE 'N/A%'",
-          [wifi_ssid]
+          "DELETE FROM etiquetas_scan_onu WHERE wifi_ssid = $1 AND gpon_sn LIKE 'N/A%' AND gpon_sn <> $2",
+          [wifi_ssid, targetGpon]
         );
       } catch (delErr) {
         console.error('Erro ao limpar registro temporario duplicado:', delErr);
@@ -2148,8 +2150,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
             });
           }
         }
-
-        const targetGpon = exists ? checkRes.rows[0].gpon_sn : (reconciledGpon || gpon_sn);
 
       // Se for para sobrescrever, usamos um UPDATE
       const updateQuery = `
