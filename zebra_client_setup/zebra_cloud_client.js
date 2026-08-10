@@ -134,12 +134,16 @@ function printZplLocally(zpl, jobId) {
               'Content-Length': Buffer.byteLength(payload) 
             }
           }, (printRes) => {
-            if (printRes.statusCode === 200) {
-              console.log(`✅ [IMPRESSÃO] Job #${jobId} impresso com sucesso na impressora local: ${name}`);
-              resolve();
-            } else {
-              reject(new Error(`Erro HTTP Zebra: ${printRes.statusCode}`));
-            }
+            let resBody = '';
+            printRes.on('data', chunk => resBody += chunk);
+            printRes.on('end', () => {
+              if (printRes.statusCode === 200) {
+                console.log(`✅ [IMPRESSÃO] Job #${jobId} impresso com sucesso na impressora local: ${name}`);
+                resolve();
+              } else {
+                reject(new Error(`Erro HTTP Zebra: ${printRes.statusCode}. Resposta: ${resBody}`));
+              }
+            });
           });
 
           printReq.on('error', reject);
