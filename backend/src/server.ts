@@ -4394,7 +4394,7 @@ app.post('/api/equipamentos/fast5670/web-key', express.json(), async (req: any, 
   }
 });
 
-app.post('/api/equipamentos/np5454t/editar', express.json(), async (req: any, res: any) => {
+const handleNp5454tEdit = async (req: any, res: any) => {
   try {
     const { mac, new_mac, cpe_sn, gpon_sn, wifi_key, wifi_ssid, wifi_ssid_5g, web_key, targetDb } = req.body;
     
@@ -4475,7 +4475,10 @@ app.post('/api/equipamentos/np5454t/editar', express.json(), async (req: any, re
     console.error('Erro na API de edição NP5454T:', err);
     return res.status(500).json({ success: false, error: err.message || err });
   }
-});
+};
+
+app.post('/api/equipamentos/np5454t/editar', express.json(), handleNp5454tEdit);
+app.post('/api/equipamentos/np5454t/web-key', express.json(), handleNp5454tEdit);
 
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
