@@ -2139,7 +2139,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalWifiKey !== (dbRow.wifi_key || 'N/A') ||
             finalUsuario !== (dbRow.usuario || 'N/A') ||
             finalWebKey !== (dbRow.web_key || 'N/A') ||
-            finalPasswordRouter !== (dbRow.password_router || 'N/A') ||
             finalGpon !== (dbRow.gpon_sn || 'N/A');
 
           if (!fieldsChanged) {

@@ -1,7 +1,6 @@
 @echo off
-chcp 65001 > nul
 echo ===================================================
-echo 🦓 INSTALADOR DE IMPRESSORA NUVEM - SMART SCAN 🦓
+echo * INSTALADOR DE IMPRESSORA NUVEM - SMART SCAN *
 echo ===================================================
 echo.
 echo Este script configurara a inicializacao automatica invisivel
@@ -42,7 +41,7 @@ wscript.exe "%STARTUP_FOLDER%\ZebraCloudClient.vbs"
 
 echo.
 echo ===================================================
-echo 🎉 INSTALACAO CONCLUIDA COM SUCESSO! 🎉
+echo * INSTALACAO CONCLUIDA COM SUCESSO! *
 echo ===================================================
 echo.
 echo O computador "%STATION_NAME%" ja esta online!
