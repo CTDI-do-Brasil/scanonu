@@ -4394,6 +4394,89 @@ app.post('/api/equipamentos/fast5670/web-key', express.json(), async (req: any, 
   }
 });
 
+app.post('/api/equipamentos/np5454t/editar', express.json(), async (req: any, res: any) => {
+  try {
+    const { mac, new_mac, cpe_sn, gpon_sn, wifi_key, wifi_ssid, wifi_ssid_5g, web_key, targetDb } = req.body;
+    
+    if (!mac) {
+      return res.status(400).json({ success: false, error: 'O campo mac (identificador de busca) é obrigatório.' });
+    }
+
+    const updates: { col: string; val: any }[] = [];
+    if (new_mac !== undefined) updates.push({ col: 'mac', val: new_mac });
+    if (cpe_sn !== undefined) updates.push({ col: 'cpe_sn', val: cpe_sn });
+    if (gpon_sn !== undefined) updates.push({ col: 'gpon_sn', val: gpon_sn });
+    if (wifi_key !== undefined) updates.push({ col: 'wifi_key', val: wifi_key });
+    if (wifi_ssid !== undefined) updates.push({ col: 'wifi_ssid', val: wifi_ssid });
+    if (wifi_ssid_5g !== undefined) updates.push({ col: 'wifi_ssid_5g', val: wifi_ssid_5g });
+    if (web_key !== undefined) updates.push({ col: 'web_key', val: web_key });
+
+    if (updates.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ao menos um campo para atualização deve ser fornecido.' 
+      });
+    }
+
+    // Se targetDb for fornecido, usa apenas ele. Senão tenta em todos os bancos de dados padrões
+    const targetDbs = targetDb ? [String(targetDb)] : getActiveDatabases();
+    const dbErrors: string[] = [];
+
+    // Pre-limpa o MAC de busca para coincidir com a comparação do índice
+    const cleanMac = mac.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+    // Executa as atualizações em paralelo nos bancos de dados para otimizar tempo de resposta
+    const updatePromises = targetDbs.map(async (dbName) => {
+      try {
+        const pool = getPoolForDatabase(dbName);
+        if (!pool) {
+          dbErrors.push(`Banco ${dbName} não conectado.`);
+          return 0;
+        }
+
+        const setClauses = updates.map((u, i) => `${u.col} = $${i + 1}`);
+        const queryParams = updates.map(u => u.val);
+        
+        queryParams.push(cleanMac);
+        const macParamIdx = queryParams.length;
+
+        // Limpa pontuações do MAC e compara utilizando a expressão exata do índice idx_etiquetas_scan_onu_clean_mac
+        const queryStr = `
+          UPDATE etiquetas_scan_onu 
+          SET ${setClauses.join(', ')} 
+          WHERE UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')) = $${macParamIdx} 
+            AND modelo = 'NP5454T'
+        `;
+
+        const result = await pool.query(queryStr, queryParams);
+        return result.rowCount || 0;
+      } catch (err: any) {
+        dbErrors.push(`Erro no banco ${dbName}: ${err.message || err}`);
+        return 0;
+      }
+    });
+
+    const results = await Promise.all(updatePromises);
+    const totalUpdated = results.reduce((a, b) => a + b, 0);
+
+    if (totalUpdated === 0) {
+      const errorMsg = dbErrors.length > 0 
+        ? `Nenhum equipamento modelo NP5454T encontrado com este MAC. Erros: ${dbErrors.join(', ')}`
+        : 'Nenhum equipamento modelo NP5454T encontrado com este MAC nas bases de dados.';
+      return res.status(404).json({ success: false, error: errorMsg });
+    }
+
+    return res.json({ 
+      success: true, 
+      message: `Cadastro atualizado com sucesso para o MAC ${mac}.`,
+      updatedCount: totalUpdated 
+    });
+  } catch (err: any) {
+    console.error('Erro na API de edição NP5454T:', err);
+    return res.status(500).json({ success: false, error: err.message || err });
+  }
+});
+
 app.post('/api/admin/fix-kaon-pg2447', authenticateSession, async (req: any, res: any) => {
   try {
     const targetDatabases = ['db-scanonu', 'ScanONU_Claro', 'SmartScan_BrasilTecPar'];
