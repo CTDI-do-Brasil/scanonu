@@ -112,8 +112,13 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'Kaon';
   }
 
+  // Normalizar modelo se for ZTE ZXHN F680
+  if (modelUpper.includes('F680') || modelUpper.includes('680')) {
+    dataCopy.modelo = 'ZXHN F680';
+    dataCopy.fabricante = 'ZTE';
+  }
   // Normalizar modelo se for ZTE ZXHN F6600P
-  if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
     dataCopy.modelo = 'ZXHN F6600P';
     dataCopy.fabricante = 'ZTE';
   }
@@ -199,8 +204,8 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
 
-  // Rule 1.7: ZTE ZXHN F6600P
-  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+  // Rule 1.7: ZTE ZXHN F6600P / F680
+  else if (modelUpper.includes('F680') || modelUpper.includes('680') || modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
     dataCopy.wifi_ssid = `TIM ULTRAFIBRA_${last4Hex}`;
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
