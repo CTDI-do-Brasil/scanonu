@@ -2142,6 +2142,17 @@ app.post('/api/save-label', async (req: any, res: any) => {
         }
 
         if (exists) {
+          console.log('DEBUG SAVE-LABEL - COMPARANDO DADOS:');
+          console.log(`- Fabricante: Final="${finalFabricante}", DB="${dbRow.fabricante || 'N/A'}"`);
+          console.log(`- Modelo: Final="${finalModelo}", DB="${dbRow.modelo || 'N/A'}"`);
+          console.log(`- CPE: Final="${finalCpe}", DB="${dbRow.cpe_sn || 'N/A'}"`);
+          console.log(`- MAC: Final="${finalMac}", DB="${dbRow.mac || 'N/A'}"`);
+          console.log(`- SSID: Final="${finalSsid}", DB="${dbRow.wifi_ssid || 'N/A'}"`);
+          console.log(`- SSID 5G: Final="${finalSsid5g}", DB="${dbRow.wifi_ssid_5g || 'N/A'}"`);
+          console.log(`- Wifi Key: Final="${finalWifiKey}", DB="${dbRow.wifi_key || 'N/A'}"`);
+          console.log(`- Web Key: Final="${finalWebKey}", DB="${dbRow.web_key || 'N/A'}"`);
+          console.log(`- GPON: Final="${finalGpon}", DB="${dbRow.gpon_sn || 'N/A'}"`);
+
           const fieldsChanged = 
             finalFabricante.toUpperCase() !== (dbRow.fabricante || 'N/A').toUpperCase() ||
             finalModelo.toUpperCase() !== (dbRow.modelo || 'N/A').toUpperCase() ||
@@ -2154,7 +2165,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
             finalWebKey !== (dbRow.web_key || 'N/A') ||
             finalGpon !== (dbRow.gpon_sn || 'N/A');
 
+          console.log(`- Algum campo mudou (fieldsChanged)? ${fieldsChanged}`);
+
           if (!fieldsChanged) {
+            console.log('DEBUG SAVE-LABEL - Dados identicos no banco. Ignorando update.');
             return res.json({
               success: true,
               message: 'Dados identicos, nada foi alterado.'
@@ -2201,8 +2215,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
         finalPasswordRouter,
         finalGpon
       ];
-      await pool.query(updateQuery, updateValues);
-      console.log(`Dados atualizados com sucesso no banco ${chosenDb}. Serial GPON alvo: ${targetGpon}`);
+      console.log(`DEBUG SAVE-LABEL - Executando UPDATE no banco ${chosenDb} com targetGpon="${targetGpon}"...`);
+      const updateResult = await pool.query(updateQuery, updateValues);
+      console.log(`Dados atualizados com sucesso no banco ${chosenDb}. RowCount: ${updateResult.rowCount || 0}. Serial GPON alvo: ${targetGpon}`);
     } else {
       const insertQuery = `
         INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
