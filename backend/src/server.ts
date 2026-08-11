@@ -1671,75 +1671,85 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     const isReimpressa = String(scanResult.reimpressa).toLowerCase().trim() === 'sim';
     scanResult.reimpressa = isReimpressa;
 
-    // VERIFICAÇÃO DE DUPLICIDADE: verifica se o GPON_SN já existe no banco de dados
+    // VERIFICAÇÃO DE DUPLICIDADE: verifica se o GPON_SN já existe em qualquer banco de dados
     let existsInDb = false;
     let existingData = null;
+    let foundDb = '';
 
-    if (dbConnected && dbPool) {
-      try {
-        let checkRes: any = { rowCount: 0, rows: [] as any[] };
-        const normModelo = normalizeModel(scanResult.modelo || '', scanResult.fabricante || '');
-        if (normModelo === 'NP5454T') {
-          checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
-            [scanResult.cpe_sn, scanResult.mac]
-          );
-        } else if (normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2') {
-          checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
-            [scanResult.cpe_sn, scanResult.mac]
-          );
-        } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA') {
-          checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
-            [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
-          );
-        } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
-          checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
-            [scanResult.cpe_sn, scanResult.mac]
-          );
-        } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
-          checkRes = await dbPool.query(
-            "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
-            [scanResult.mac]
-          );
-        }
+    if (dbConnected) {
+      const databases = getActiveDatabases();
+      const normModelo = normalizeModel(scanResult.modelo || '', scanResult.fabricante || '');
 
-        if (checkRes.rowCount && checkRes.rowCount > 0) {
-          existsInDb = true;
-          existingData = checkRes.rows[0];
-          
-          // Se o registro encontrado no banco é temporário (não tem GPON real)
-          const isTempGpon = existingData.gpon_sn && existingData.gpon_sn.toUpperCase().startsWith('N/A');
-          if (isTempGpon && scanResult.wifi_ssid) {
-            // Tenta achar um registro real pré-carregado no banco que tenha o MAC compatível
-            const candidatesRes = await dbPool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn NOT LIKE 'N/A%' AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)"
+      for (const dbName of databases) {
+        try {
+          const pool = getPoolForDatabase(dbName);
+          await ensureDatabaseSchema(pool, dbName);
+
+          let checkRes: any = { rowCount: 0, rows: [] as any[] };
+          if (normModelo === 'NP5454T') {
+            checkRes = await pool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              [scanResult.cpe_sn, scanResult.mac]
             );
-            const realMatchedRow = candidatesRes.rows.find((row: any) => {
-              const candidateModel = (row.modelo || '').toUpperCase();
-              const scanModel = (scanResult.modelo || '').toUpperCase();
-              if (candidateModel && scanModel && !candidateModel.includes(scanModel) && !scanModel.includes(candidateModel)) {
-                return false;
-              }
-              return matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid);
-            });
-            if (realMatchedRow) {
-              // Mescla os dados do registro real (S/N, GPON, MAC) com os dados de senhas do registro temporário
-              existingData = {
-                ...existingData,
-                gpon_sn: realMatchedRow.gpon_sn,
-                mac: realMatchedRow.mac,
-                cpe_sn: realMatchedRow.cpe_sn,
-                fabricante: realMatchedRow.fabricante || existingData.fabricante,
-                modelo: realMatchedRow.modelo || existingData.modelo
-              };
-            }
+          } else if (normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2') {
+            checkRes = await pool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              [scanResult.cpe_sn, scanResult.mac]
+            );
+          } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA' && !scanResult.gpon_sn.toUpperCase().startsWith('N/A_')) {
+            checkRes = await pool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
+              [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
+            );
+          } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
+            checkRes = await pool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              [scanResult.cpe_sn, scanResult.mac]
+            );
+          } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
+            checkRes = await pool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
+              [scanResult.mac]
+            );
           }
+
+          if (checkRes.rowCount && checkRes.rowCount > 0) {
+            existsInDb = true;
+            existingData = checkRes.rows[0];
+            foundDb = dbName;
+            
+            // Se o registro encontrado no banco é temporário (não tem GPON real)
+            const isTempGpon = existingData.gpon_sn && existingData.gpon_sn.toUpperCase().startsWith('N/A');
+            if (isTempGpon && scanResult.wifi_ssid) {
+              // Tenta achar um registro real pré-carregado no banco que tenha o MAC compatível
+              const candidatesRes = await pool.query(
+                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn NOT LIKE 'N/A%' AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)"
+              );
+              const realMatchedRow = candidatesRes.rows.find((row: any) => {
+                const candidateModel = (row.modelo || '').toUpperCase();
+                const scanModel = (scanResult.modelo || '').toUpperCase();
+                if (candidateModel && scanModel && !candidateModel.includes(scanModel) && !scanModel.includes(candidateModel)) {
+                  return false;
+                }
+                return matchMacAndSsidSuffix(row.mac, scanResult.wifi_ssid);
+              });
+              if (realMatchedRow) {
+                // Mescla os dados do registro real (S/N, GPON, MAC) com os dados de senhas do registro temporário
+                existingData = {
+                  ...existingData,
+                  gpon_sn: realMatchedRow.gpon_sn,
+                  mac: realMatchedRow.mac,
+                  cpe_sn: realMatchedRow.cpe_sn,
+                  fabricante: realMatchedRow.fabricante || existingData.fabricante,
+                  modelo: realMatchedRow.modelo || existingData.modelo
+                };
+              }
+            }
+            break; // Se já encontrou em algum banco, encerra a busca
+          }
+        } catch (dbErr) {
+          console.error(`Erro ao verificar duplicidade no banco ${dbName}:`, dbErr);
         }
-      } catch (dbErr) {
-        console.error('Erro ao verificar duplicidade no scan-label:', dbErr);
       }
     }
 
@@ -1759,6 +1769,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       data: scanResult,
       existsInDb,
       existingData,
+      database: foundDb,
       scanSource
     });
 

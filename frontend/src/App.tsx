@@ -644,6 +644,7 @@ export default function App() {
   // Estados de Duplicidade de Equipamento
   const [equipmentExistsInDb, setEquipmentExistsInDb] = useState(false);
   const [existingEquipmentData, setExistingEquipmentData] = useState<ScanData | null>(null);
+  const [targetDb, setTargetDb] = useState<string | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   // --- SANITIZAÇÃO GLOBAL DE INPUT DO SCANNER (! -> I) ---
@@ -2127,6 +2128,7 @@ export default function App() {
         setData(safeData);
         setEquipmentExistsInDb(true);
         setExistingEquipmentData(safeData);
+        setTargetDb(result.database || null);
         setCapturedImage(null); // Sem foto associada a esta consulta direta
         setScreen('result');
         setSearchGponInput('');
@@ -2187,6 +2189,7 @@ export default function App() {
                 });
                 setEquipmentExistsInDb(true);
                 setExistingEquipmentData(dbResult.data);
+                setTargetDb(dbResult.database || null);
                 setShowDuplicateModal(true);
                 setScreen('result');
                 return; // Sai do fluxo economizando o token!
@@ -2240,6 +2243,7 @@ export default function App() {
             setTimeout(() => {
               setEquipmentExistsInDb(true);
               setExistingEquipmentData(safeExisting);
+              setTargetDb(result.database || null);
               setShowDuplicateModal(true);
               setScreen('result');
             }, 100);
@@ -2368,6 +2372,7 @@ export default function App() {
     setError(null);
     setEquipmentExistsInDb(false);
     setExistingEquipmentData(null);
+    setTargetDb(null);
     setDbMessage(null);
     setShowDuplicateModal(false);
     setIsBatchMode(false);
@@ -3555,7 +3560,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.35</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.36</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5114,6 +5119,7 @@ export default function App() {
                               ...data,
                               operador: user?.email || 'admin@scanonu.com',
                               overwrite: equipmentExistsInDb, // Se já existe, envia para sobrescrever
+                              targetDb: targetDb, // Envia o banco onde o registro original reside
                               operacao: user?.operacao || 'CTDI MATRIZ'
                             })
                           });
