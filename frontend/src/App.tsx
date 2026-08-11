@@ -204,8 +204,21 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
 
-  // Rule 1.7: ZTE ZXHN F6600P / F680
-  else if (modelUpper.includes('F680') || modelUpper.includes('680') || modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+  // Rule 1.7: ZTE ZXHN F680
+  else if (modelUpper.includes('F680') || modelUpper.includes('680')) {
+    const cleanGpon = (dataCopy.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
+    if (cleanGpon.length >= 4 && !cleanGpon.startsWith('N/A_') && cleanGpon !== 'N/A') {
+      const last4Gpon = cleanGpon.slice(-4);
+      dataCopy.wifi_ssid = `LIVE TIM_${last4Gpon}_2G`;
+      dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Gpon}_5G`;
+    } else {
+      dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
+      dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
+    }
+  }
+
+  // Rule 1.7.2: ZTE ZXHN F6600P
+  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
     dataCopy.wifi_ssid = `TIM ULTRAFIBRA_${last4Hex}`;
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
@@ -3529,7 +3542,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.33</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.34</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
