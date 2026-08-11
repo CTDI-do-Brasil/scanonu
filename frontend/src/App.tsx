@@ -57,6 +57,7 @@ interface ScanData {
   wifi_key: string;
   usuario: string;
   senha: string;
+  web_key?: string;
   reimpressa?: boolean;
 }
 
@@ -2393,7 +2394,7 @@ export default function App() {
   };
 
   // Mapeamento amigável para rótulos de campos
-  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa'> = {
+  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key'> = {
     fabricante: 'Fabricante',
     modelo: 'Modelo',
     cpe_sn: 'CPE Serial (S/N)',
@@ -3560,7 +3561,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.36</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.37</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5052,7 +5053,10 @@ export default function App() {
                               value={value}
                               onChange={(e) => {
                                 const newValue = e.target.value;
-                                let updated = { ...data, [field]: newValue };
+                                let updated = { ...data, [field]: newValue } as any;
+                                if (field === 'senha') {
+                                  updated.web_key = newValue;
+                                }
                                 if (field === 'mac' || field === 'modelo' || field === 'fabricante') {
                                   updated = applyMacSsidRules(updated);
                                 }
