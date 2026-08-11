@@ -2072,7 +2072,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
         let finalWebKey = getMergedValue(resolvedWebKey, dbRow?.web_key);
         let finalGpon = exists ? dbRow.gpon_sn : (reconciledGpon || gpon_sn);
         let finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
-        if (exists && dbRow && (finalPasswordRouter === 'N/A' || finalPasswordRouter === 'NA') && dbRow.password_router && dbRow.password_router !== 'N/A' && dbRow.password_router !== 'NA') {
+        if (normalizedModelo === 'BC-UM221E') {
+          finalPasswordRouter = 'N/A';
+        } else if (exists && dbRow && (finalPasswordRouter === 'N/A' || finalPasswordRouter === 'NA') && dbRow.password_router && dbRow.password_router !== 'N/A' && dbRow.password_router !== 'NA') {
           finalPasswordRouter = dbRow.password_router;
         }
 
@@ -2242,7 +2244,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
-        const finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
+        let finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
+        if (normalizedModelo === 'BC-UM221E') {
+          finalPasswordRouter = 'N/A';
+        }
 
         const insertValues = [
           fabricante || 'N/A',

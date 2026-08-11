@@ -832,7 +832,7 @@ export default function App() {
 
   
   const fetchIptvModels = async () => {
-    if (!user || user.role !== 'master') return;
+    if (!user) return;
     setIsLoadingIptvModels(true);
     try {
       const response = await fetch('/api/iptv-models', {
@@ -943,7 +943,7 @@ export default function App() {
   };
 
   const fetchPrinters = async () => {
-    if (!user || user.role !== 'master') return;
+    if (!user) return;
     setIsLoadingPrinters(true);
     try {
       const response = await fetch('/api/admin/printers', {
@@ -3561,7 +3561,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.38</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.39</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
