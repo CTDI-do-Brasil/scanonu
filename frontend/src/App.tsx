@@ -206,11 +206,24 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
 
   // Rule 1.7: ZTE ZXHN F680
   else if (modelUpper.includes('F680') || modelUpper.includes('680')) {
+    const cleanCpe = (dataCopy.cpe_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
     const cleanGpon = (dataCopy.gpon_sn || '').replace(/[^A-Z0-9]/ig, '').toUpperCase();
-    if (cleanGpon.length >= 4 && !cleanGpon.startsWith('N/A_') && cleanGpon !== 'N/A') {
-      const last4Gpon = cleanGpon.slice(-4);
-      dataCopy.wifi_ssid = `LIVE TIM_${last4Gpon}_2G`;
-      dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Gpon}_5G`;
+    
+    let targetSerial = '';
+    if (cleanCpe.startsWith('ZTE') && cleanCpe.length >= 4 && cleanCpe !== 'N/A') {
+      targetSerial = cleanCpe;
+    } else if (cleanGpon.startsWith('ZTEEQ') && cleanGpon.length >= 4 && cleanGpon !== 'N/A') {
+      targetSerial = cleanGpon;
+    } else if (cleanCpe.length >= 4 && cleanCpe !== 'N/A' && !cleanCpe.startsWith('N/A_')) {
+      targetSerial = cleanCpe;
+    } else if (cleanGpon.length >= 4 && cleanGpon !== 'N/A' && !cleanGpon.startsWith('N/A_')) {
+      targetSerial = cleanGpon;
+    }
+
+    if (targetSerial) {
+      const last4Serial = targetSerial.slice(-4);
+      dataCopy.wifi_ssid = `LIVE TIM_${last4Serial}_2G`;
+      dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Serial}_5G`;
     } else {
       dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
       dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
@@ -3542,7 +3555,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.34</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.35</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
