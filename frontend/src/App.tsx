@@ -658,7 +658,7 @@ export default function App() {
       interval = setInterval(checkDetectedMac, 2000);
     }
     return () => clearInterval(interval);
-  }, [activeModule, selectedPrinter]);
+  }, [activeModule, selectedPrinter, selectedTecnologia, selectedModel]);
 
   interface StatsData {
     totalLabels: number;
