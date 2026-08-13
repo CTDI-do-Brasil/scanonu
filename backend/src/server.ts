@@ -412,7 +412,7 @@ app.get('/api/cpe/auto-fill', authenticateSession, async (req: any, res: any) =>
     const unit = (localRes.rowCount && localRes.rowCount > 0) ? localRes.rows[0] : null;
     
     // 2. Busca na API externa de Pre-Alerta (HTTP)
-    let sapCode = 'N/A';
+    let sapCode = '';
     try {
       const extRes = await fetch(
         `http://rec-pre-alerta.caprover.ctdibrasil.com.br/api/external/units?search=${cleanMac}`,
@@ -425,7 +425,7 @@ app.get('/api/cpe/auto-fill', authenticateSession, async (req: any, res: any) =>
       if (extRes.ok) {
         const extData = (await extRes.json()) as any;
         if (extData && extData.found && extData.results && extData.results.length > 0) {
-          sapCode = extData.results[0].codigo || 'N/A';
+          sapCode = extData.results[0].codigo || '';
         }
       }
     } catch (extErr: any) {
