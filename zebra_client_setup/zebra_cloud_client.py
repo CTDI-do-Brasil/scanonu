@@ -197,6 +197,12 @@ def poll_jobs():
 
 def detect_and_send_mac():
     try:
+        # Clear ARP cache for 192.168.1.1 to prevent cached MACs when hot-swapping ONUs
+        subprocess.run(["arp", "-d", "192.168.1.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
+
+    try:
         # Ping 192.168.1.1 once to populate ARP table (low timeout)
         subprocess.run(["ping", "-n", "1", "-w", "300", "192.168.1.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except:
