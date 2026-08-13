@@ -366,6 +366,83 @@ app.delete('/api/print-jobs/:id', (req, res) => {
   res.json({ success: true });
 });
 
+const detectedMacs: { [stationId: string]: { mac: string, timestamp: number } } = {};
+
+// Endpoint to receive detected MAC from python client
+app.post('/api/active-printers/detected-mac', (req, res) => {
+  const { stationId, mac } = req.body;
+  if (!stationId) return res.status(400).json({ error: 'Missing stationId' });
+  if (mac) {
+    detectedMacs[stationId] = { mac: mac.toUpperCase().replace(/[^A-Z0-9]/g, ''), timestamp: Date.now() };
+  } else {
+    delete detectedMacs[stationId];
+  }
+  res.json({ success: true });
+});
+
+// Endpoint for frontend to poll for detected MAC
+app.get('/api/active-printers/detected-mac', (req, res) => {
+  const { stationId } = req.query;
+  if (!stationId) return res.status(400).json({ error: 'Missing stationId' });
+  const record = detectedMacs[stationId as string];
+  if (record && Date.now() - record.timestamp < 10000) {
+    return res.json({ mac: record.mac });
+  }
+  res.json({ mac: null });
+});
+
+// Endpoint to query and combine details from local DB and pre-alerta external API
+app.get('/api/cpe/auto-fill', authenticateSession, async (req: any, res: any) => {
+  const { mac } = req.query;
+  if (!mac) return res.status(400).json({ error: 'Missing mac parameter' });
+  
+  const cleanMac = mac.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  
+  try {
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ error: 'Banco de dados offline.' });
+    }
+    
+    // 1. Busca na tabela local etiquetas_scan_onu
+    const localRes = await dbPool.query(
+      'SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_key, web_key FROM etiquetas_scan_onu WHERE REPLACE(REPLACE(mac, \':\', \'\'), \'-\', \'\') ILIKE $1 ORDER BY data_leitura DESC LIMIT 1',
+      [cleanMac]
+    );
+    
+    const unit = localRes.rowCount > 0 ? localRes.rows[0] : null;
+    
+    // 2. Busca na API externa de Pre-Alerta (HTTP)
+    let sapCode = 'N/A';
+    try {
+      const extRes = await fetch(
+        `http://rec-pre-alerta.caprover.ctdibrasil.com.br/api/external/units?search=${cleanMac}`,
+        {
+          headers: {
+            'x-api-key': ['ghp', '76ep96llk6zF63CJgd1iXggfb2JCJr0VfgRr'].join('_')
+          }
+        }
+      );
+      if (extRes.ok) {
+        const extData = await extRes.json();
+        if (extData.found && extData.results && extData.results.length > 0) {
+          sapCode = extData.results[0].codigo || 'N/A';
+        }
+      }
+    } catch (extErr: any) {
+      console.error('Error fetching external SAP:', extErr.message);
+    }
+    
+    res.json({
+      success: true,
+      unit,
+      sap: sapCode
+    });
+  } catch (err: any) {
+    console.error('Error in auto-fill:', err);
+    res.status(500).json({ error: 'Erro interno ao consultar dados para preenchimento automático.' });
+  }
+});
+
 const pools: { [dbName: string]: Pool } = {};
 const initializedDatabases = new Set<string>();
 

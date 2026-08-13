@@ -599,6 +599,55 @@ export default function App() {
     }
   }, [activeModule]);
 
+  // Poll for detected MAC on network gateway printers
+  useEffect(() => {
+    let interval: any;
+    if (activeModule === 'iptv' && selectedPrinter.startsWith('cloud_')) {
+      const stationId = selectedPrinter.replace('cloud_', '');
+      let lastMac = '';
+      
+      const checkDetectedMac = async () => {
+        try {
+          const res = await fetch(`/api/active-printers/detected-mac?stationId=${stationId}`);
+          const data = await res.json();
+          if (res.ok && data.mac && data.mac !== lastMac) {
+            lastMac = data.mac;
+            
+            // Auto-fill values from APIs using the detected MAC
+            const fillRes = await fetch(`/api/cpe/auto-fill?mac=${data.mac}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+              }
+            });
+            const fillData = await fillRes.json();
+            if (fillRes.ok && fillData.success && fillData.unit) {
+              const u = fillData.unit;
+              const cleanMac = u.mac.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+              const last4 = cleanMac.slice(-4);
+              
+              setFieldsData((prev: any) => ({
+                ...prev,
+                cpe_sn: u.cpe_sn || '',
+                pon_id: u.gpon_sn || '',
+                mac: u.mac || '',
+                ssid: `TIM_ULTRAFIBRA_${last4}`,
+                senha: u.wifi_key || '',
+                password: u.web_key || '',
+                sap: fillData.sap || ''
+              }));
+            }
+          }
+        } catch (e) {
+          console.error('Error polling detected MAC:', e);
+        }
+      };
+      
+      checkDetectedMac();
+      interval = setInterval(checkDetectedMac, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [activeModule, selectedPrinter]);
+
   interface StatsData {
     totalLabels: number;
     totalUsers: number;

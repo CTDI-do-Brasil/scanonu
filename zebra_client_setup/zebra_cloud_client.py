@@ -6,6 +6,8 @@ import socket
 import random
 import string
 import requests
+import subprocess
+import re
 
 # Tenta importar win32print. Se não estiver instalado, avisa o usuário.
 try:
@@ -193,6 +195,28 @@ def poll_jobs():
         # Silencia erros de timeout/conexao temporarios
         pass
 
+def detect_and_send_mac():
+    try:
+        # Ping 192.168.1.1 once to populate ARP table (low timeout)
+        subprocess.run(["ping", "-n", "1", "-w", "300", "192.168.1.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
+
+    try:
+        # Run arp -a for 192.168.1.1
+        out = subprocess.check_output(["arp", "-a", "192.168.1.1"], universal_newlines=True)
+        # Search for MAC address pattern
+        match = re.search(r"([0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2})", out)
+        if match:
+            mac = match.group(1).replace("-", "").replace(":", "").upper()
+            payload = {
+                "stationId": config["station_id"],
+                "mac": mac
+            }
+            requests.post(f"{CLOUD_URL}/active-printers/detected-mac", json=payload, timeout=3)
+    except:
+        pass
+
 def main():
     log_message("==================================================")
     log_message("🐍 SMART SCAN - CLIENTE DE IMPRESSÃO PYTHON v2.1 🐍")
@@ -247,12 +271,18 @@ def main():
     log_message("Serviço iniciado! Deixe esta janela aberta para imprimir...")
     
     last_heartbeat = 0
+    last_arp = 0
     while True:
         now = time.time()
         # Envia heartbeat a cada 10s
         if now - last_heartbeat >= 10:
             send_heartbeat()
             last_heartbeat = now
+            
+        # Faz a deteccao de MAC via ARP a cada 4s
+        if now - last_arp >= 4:
+            detect_and_send_mac()
+            last_arp = now
             
         # Faz o polling de novos trabalhos de impressão a cada 2s
         poll_jobs()
