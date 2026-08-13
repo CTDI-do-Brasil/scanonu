@@ -42,7 +42,8 @@ import {
   Sparkles,
   Key,
   Barcode,
-  LayoutGrid
+  LayoutGrid,
+  Settings
 } from 'lucide-react';
 
 
@@ -2386,6 +2387,7 @@ export default function App() {
 
   const handleGoBackToModules = () => {
     resetAll();
+    setAdminTab('scan');
     setActiveModule('selection');
   };
 
@@ -2781,6 +2783,28 @@ export default function App() {
               <div className="text-center space-y-1">
                 <h2 className="text-xl font-bold text-slate-800 leading-tight">Módulo Reimpressão</h2>
                 <p className="text-xs text-slate-400 font-medium">IPTV e Setup Box</p>
+              </div>
+            </button>
+          )}
+
+          {/* Módulo Gerenciamento */}
+          {['master', 'admin', 'consulta'].includes(user?.role || '') && (
+            <button
+              onClick={() => {
+                setActiveModule('gpon');
+                setAdminTab('admin');
+                setAdminSubTab('metrics');
+              }}
+              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+            >
+              <div className="h-16 flex items-center justify-center w-full">
+                <div className="bg-slate-100 p-3.5 rounded-2xl group-hover:bg-slate-200 transition-colors">
+                  <Settings className="w-9 h-9 text-slate-600 group-hover:rotate-45 transition-transform duration-500" />
+                </div>
+              </div>
+              <div className="text-center space-y-1">
+                <h2 className="text-xl font-bold text-slate-800 leading-tight">Gerenciamento</h2>
+                <p className="text-xs text-slate-400 font-medium">Relatórios, Usuários e Modelos</p>
               </div>
             </button>
           )}
