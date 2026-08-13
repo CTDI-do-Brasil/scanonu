@@ -409,7 +409,7 @@ app.get('/api/cpe/auto-fill', authenticateSession, async (req: any, res: any) =>
       [cleanMac]
     );
     
-    const unit = localRes.rowCount > 0 ? localRes.rows[0] : null;
+    const unit = (localRes.rowCount && localRes.rowCount > 0) ? localRes.rows[0] : null;
     
     // 2. Busca na API externa de Pre-Alerta (HTTP)
     let sapCode = 'N/A';
@@ -423,8 +423,8 @@ app.get('/api/cpe/auto-fill', authenticateSession, async (req: any, res: any) =>
         }
       );
       if (extRes.ok) {
-        const extData = await extRes.json();
-        if (extData.found && extData.results && extData.results.length > 0) {
+        const extData = (await extRes.json()) as any;
+        if (extData && extData.found && extData.results && extData.results.length > 0) {
           sapCode = extData.results[0].codigo || 'N/A';
         }
       }
