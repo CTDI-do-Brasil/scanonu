@@ -347,10 +347,13 @@ app.post('/api/print-jobs', (req, res) => {
 // Endpoint for the local proxy to poll its jobs
 app.get('/api/print-jobs', (req, res) => {
   const station = req.query.station as string;
+  const includeNetwork = req.query.include_network === 'true';
   if (!station) return res.status(400).json({ error: 'Missing station parameter' });
   
-  // Return only jobs targeted to this station
-  const stationJobs = printJobs.filter(j => j.targetStation === station);
+  // Return only jobs targeted to this station, and network gateway jobs if enabled
+  const stationJobs = printJobs.filter(j => 
+    j.targetStation === station || (includeNetwork && j.targetStation === 'network_gateway')
+  );
   res.json({ jobs: stationJobs });
 });
 
@@ -2711,28 +2714,21 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
       zpl = zpl.replace(regexClean, valClean);
     }
 
-    // 4. Enviar para a impressora via Socket TCP
-    const client = new net.Socket();
-    client.setTimeout(5000); // 5 segundos timeout
-
-    client.connect(printer.porta || 9100, printer.ip, () => {
-      console.log('Conectado à impressora ' + printer.ip + ':' + printer.porta);
-      client.write(zpl, 'utf8', () => {
-        client.destroy(); // Fecha a conexão após enviar
-        res.json({ success: true, message: 'Enviado para impressão!' });
-      });
+    // 4. Em vez de conectar diretamente da nuvem (que falha), colocamos na fila da rede local para o gateway Python imprimir
+    const id = Math.random().toString(36).substring(2, 15);
+    printJobs.push({
+      id,
+      zpl,
+      targetStation: 'network_gateway',
+      ip: printer.ip,
+      port: printer.porta || 9100,
+      timestamp: Date.now()
     });
-
-    client.on('timeout', () => {
-      client.destroy();
-      res.status(504).json({ error: 'Timeout de conexão com a impressora.' });
-    });
-
-    client.on('error', (err: any) => {
-      client.destroy();
-      console.error('Erro de socket:', err);
-      res.status(500).json({ error: 'Erro na impressora: ' + err.message });
-    });
+    
+    // Mantém no máximo 100 trabalhos na fila
+    if (printJobs.length > 100) printJobs.shift();
+    
+    res.json({ success: true, message: 'Enviado para a fila de impressão da rede local.' });
 
   } catch (err: any) {
     console.error(err);

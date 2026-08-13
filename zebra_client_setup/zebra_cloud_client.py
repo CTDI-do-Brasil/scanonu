@@ -22,7 +22,8 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.j
 config = {
     "station_id": "",
     "station_name": "",
-    "printer_name": ""
+    "printer_name": "",
+    "is_network_gateway": False
 }
 
 def load_config():
@@ -73,7 +74,7 @@ def select_printer():
     
     # Se já tem impressora salva, mostra a opção de manter
     current_printer = config.get("printer_name")
-    prompt_msg = "Selecione o numero da impressora Zebra: "
+    prompt_msg = "Selecione o numero da impressora Zebra local: "
     if current_printer in printers:
         print(f"Impressora atual configurada: {current_printer}")
         prompt_msg = f"Selecione o numero (ou aperte Enter para manter '{current_printer}'): "
@@ -117,6 +118,19 @@ def print_zpl_raw(zpl_code):
         print(f"❌ Erro ao enviar ZPL para a impressora '{printer_name}': {e}")
         return False
 
+def print_zpl_to_network(ip, port, zpl_code):
+    try:
+        # Abre uma conexao TCP socket direta com a impressora de rede local
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5.0)
+        s.connect((ip, int(port)))
+        s.sendall(zpl_code.encode('utf-8'))
+        s.close()
+        return True
+    except Exception as e:
+        print(f"❌ Erro de comunicacao com impressora de rede local {ip}:{port}: {e}")
+        return False
+
 def send_heartbeat():
     try:
         payload = {
@@ -131,30 +145,46 @@ def send_heartbeat():
 
 def poll_jobs():
     try:
-        res = requests.get(f"{CLOUD_URL}/print-jobs?station={config['station_id']}", timeout=5)
+        # Define url e inclui network se configurado como gateway
+        url = f"{CLOUD_URL}/print-jobs?station={config['station_id']}"
+        if config.get("is_network_gateway"):
+            url += "&include_network=true"
+            
+        res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
             jobs = data.get("jobs", [])
             for job in jobs:
                 job_id = job.get("id")
                 zpl = job.get("zpl")
-                print(f"📥 Recebido Job #{job_id} da nuvem!")
+                target_ip = job.get("ip")
+                target_port = job.get("port", 9100)
                 
-                # Imprime
-                if print_zpl_raw(zpl):
-                    print(f"✅ Impresso com sucesso na impressora: {config['printer_name']}")
-                    # Avisa a nuvem para apagar da fila
+                if target_ip:
+                    print(f"📥 Recebido Job de Rede #{job_id} para {target_ip}:{target_port}!")
+                    success = print_zpl_to_network(target_ip, target_port, zpl)
+                else:
+                    print(f"📥 Recebido Job Local #{job_id} da nuvem!")
+                    success = print_zpl_raw(zpl)
+                
+                # Se imprimiu, apaga da fila
+                if success:
+                    if target_ip:
+                        print(f"✅ Impresso com sucesso na impressora de rede: {target_ip}:{target_port}")
+                    else:
+                        print(f"✅ Impresso com sucesso na impressora local: {config['printer_name']}")
+                        
                     requests.delete(f"{CLOUD_URL}/print-jobs/{job_id}", timeout=5)
                     print(f"🗑️ Job #{job_id} removido da fila.")
         else:
             print(f"⚠️ Erro de polling: Status {res.status_code}")
     except Exception as e:
-        # Silencia erros de timeout
+        # Silencia erros de timeout/conexao temporarios
         pass
 
 def main():
     print("==================================================")
-    print("🐍 SMART SCAN - CLIENTE DE IMPRESSÃO PYTHON v1.0 🐍")
+    print("🐍 SMART SCAN - CLIENTE DE IMPRESSÃO PYTHON v2.0 🐍")
     print("==================================================")
     
     load_config()
@@ -166,13 +196,20 @@ def main():
             config["station_name"] = name_input
             save_config()
             
-    # Configura a impressora física
+    # Pergunta se quer ativar como Gateway de Rede se nao estiver configurado
+    if "is_network_gateway" not in config:
+        gateway_input = input("Deseja que este computador funcione como Gateway para impressoras de rede local (IP)? (s/n): ").strip().lower()
+        config["is_network_gateway"] = gateway_input in ['s', 'sim', 'y', 'yes']
+        save_config()
+    
+    # Configura a impressora física local
     select_printer()
     
     print("\n--------------------------------------------------")
     print(f"🆔 ID da Estação: {config['station_id']}")
     print(f"🖥️ Nome da Estação: {config['station_name']}")
-    print(f"🖨️ Impressora Windows: {config['printer_name']}")
+    print(f"🖨️ Impressora Windows Local: {config['printer_name']}")
+    print(f"🌐 Gateway de Rede: {'ATIVADO' if config.get('is_network_gateway') else 'DESATIVADO'}")
     print(f"📡 Conectado à nuvem: {CLOUD_URL}")
     print("--------------------------------------------------")
     print("Serviço iniciado! Deixe esta janela aberta para imprimir...")
