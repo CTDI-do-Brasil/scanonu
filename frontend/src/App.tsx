@@ -656,7 +656,7 @@ export default function App() {
     
     // Ignorar senha web na sanitização se necessário, mas o comum é sanitizar tudo
     // já que o scanner confunde ! com I
-    const skipFields = ['senha', 'wifi_key']; // Opcional: ignorar campos que podem ter ! de propósito
+    const skipFields = ['senha', 'wifi_key', 'web_key']; // Opcional: ignorar campos que podem ter ! de propósito
 
     for (const [key, value] of Object.entries(sanitizedData)) {
       if (typeof value === 'string' && value.includes('!') && !skipFields.includes(key)) {
@@ -3582,7 +3582,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.40</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.41</p>
                 </div>
                 <div className="flex gap-1">
                   <button 

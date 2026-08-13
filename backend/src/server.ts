@@ -153,7 +153,7 @@ const authenticateSession = async (req: any, res: any, next: any) => {
 app.use(express.static('public'));
 
 // Print Queue Memory Store
-const printJobs: { id: string; zpl: string; targetStation: string; timestamp: number }[] = [];
+const printJobs: { id: string; zpl: string; targetStation: string; timestamp: number; ip?: string; port?: number }[] = [];
 // Active Printers Registry
 const activePrinters: { [id: string]: { name: string; lastSeen: number } } = {};
 
