@@ -18,6 +18,7 @@ except ImportError:
 
 CLOUD_URL = 'https://scanonu.ctdibrasil.com.br/api'
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'zebra_print.log')
 
 config = {
     "station_id": "",
@@ -26,6 +27,16 @@ config = {
     "is_network_gateway": None
 }
 
+def log_message(msg):
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    log_line = f"[{timestamp}] {msg}"
+    print(log_line)
+    try:
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(log_line + "\n")
+    except Exception as e:
+        print(f"Erro ao gravar log: {e}")
+
 def load_config():
     global config
     if os.path.exists(CONFIG_FILE):
@@ -33,7 +44,7 @@ def load_config():
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
         except Exception as e:
-            print(f"⚠️ Erro ao ler config.json: {e}")
+            log_message(f"⚠️ Erro ao ler config.json: {e}")
     
     # Gera ID único se não existir
     if not config.get("station_id"):
@@ -51,32 +62,32 @@ def save_config():
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        print(f"⚠️ Erro ao salvar config.json: {e}")
+        log_message(f"⚠️ Erro ao salvar config.json: {e}")
 
 def select_printer():
     # Lista impressoras instaladas no Windows
-    print("\n--- Impressoras Instaladas no Windows ---")
+    log_message("\n--- Impressoras Instaladas no Windows ---")
     try:
         printers_info = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
         printers = [p[2] for p in printers_info]
     except Exception as e:
-        print(f"Erro ao listar impressoras: {e}")
+        log_message(f"Erro ao listar impressoras: {e}")
         return
         
     if not printers:
-        print("Nenhuma impressora encontrada no Windows!")
+        log_message("Nenhuma impressora encontrada no Windows!")
         return
 
     for idx, printer in enumerate(printers):
-        print(f"[{idx + 1}] {printer}")
+        log_message(f"[{idx + 1}] {printer}")
         
-    print("-----------------------------------------")
+    log_message("-----------------------------------------")
     
     # Se já tem impressora salva, mostra a opção de manter
     current_printer = config.get("printer_name")
     prompt_msg = "Selecione o numero da impressora Zebra local: "
     if current_printer in printers:
-        print(f"Impressora atual configurada: {current_printer}")
+        log_message(f"Impressora atual configurada: {current_printer}")
         prompt_msg = f"Selecione o numero (ou aperte Enter para manter '{current_printer}'): "
 
     while True:
@@ -97,7 +108,7 @@ def select_printer():
 def print_zpl_raw(zpl_code):
     printer_name = config.get("printer_name")
     if not printer_name:
-        print("❌ Nenhuma impressora selecionada na configuração.")
+        log_message("❌ Nenhuma impressora selecionada na configuração.")
         return False
         
     try:
@@ -115,7 +126,7 @@ def print_zpl_raw(zpl_code):
         finally:
             win32print.ClosePrinter(hPrinter)
     except Exception as e:
-        print(f"❌ Erro ao enviar ZPL para a impressora '{printer_name}': {e}")
+        log_message(f"❌ Erro ao enviar ZPL para a impressora '{printer_name}': {e}")
         return False
 
 def print_zpl_to_network(ip, port, zpl_code):
@@ -128,7 +139,7 @@ def print_zpl_to_network(ip, port, zpl_code):
         s.close()
         return True
     except Exception as e:
-        print(f"❌ Erro de comunicacao com impressora de rede local {ip}:{port}: {e}")
+        log_message(f"❌ Erro de comunicacao com impressora de rede local {ip}:{port}: {e}")
         return False
 
 def send_heartbeat():
@@ -139,9 +150,9 @@ def send_heartbeat():
         }
         res = requests.post(f"{CLOUD_URL}/active-printers", json=payload, timeout=5)
         if res.status_code != 200:
-            print(f"⚠️ Erro ao registrar na nuvem: Status {res.status_code}")
+            log_message(f"⚠️ Erro ao registrar na nuvem: Status {res.status_code}")
     except Exception as e:
-        print(f"⚠️ Falha de conexão com a nuvem (Heartbeat): {e}")
+        log_message(f"⚠️ Falha de conexão com a nuvem (Heartbeat): {e}")
 
 def poll_jobs():
     try:
@@ -161,31 +172,31 @@ def poll_jobs():
                 target_port = job.get("port", 9100)
                 
                 if target_ip:
-                    print(f"📥 Recebido Job de Rede #{job_id} para {target_ip}:{target_port}!")
+                    log_message(f"📥 Recebido Job de Rede #{job_id} para {target_ip}:{target_port}!")
                     success = print_zpl_to_network(target_ip, target_port, zpl)
                 else:
-                    print(f"📥 Recebido Job Local #{job_id} da nuvem!")
+                    log_message(f"📥 Recebido Job Local #{job_id} da nuvem!")
                     success = print_zpl_raw(zpl)
                 
                 # Se imprimiu, apaga da fila
                 if success:
                     if target_ip:
-                        print(f"✅ Impresso com sucesso na impressora de rede: {target_ip}:{target_port}")
+                        log_message(f"✅ Impresso com sucesso na impressora de rede: {target_ip}:{target_port}")
                     else:
-                        print(f"✅ Impresso com sucesso na impressora local: {config['printer_name']}")
+                        log_message(f"✅ Impresso com sucesso na impressora local: {config['printer_name']}")
                         
                     requests.delete(f"{CLOUD_URL}/print-jobs/{job_id}", timeout=5)
-                    print(f"🗑️ Job #{job_id} removido da fila.")
+                    log_message(f"🗑️ Job #{job_id} removido da fila.")
         else:
-            print(f"⚠️ Erro de polling: Status {res.status_code}")
+            log_message(f"⚠️ Erro de polling: Status {res.status_code}")
     except Exception as e:
         # Silencia erros de timeout/conexao temporarios
         pass
 
 def main():
-    print("==================================================")
-    print("🐍 SMART SCAN - CLIENTE DE IMPRESSÃO PYTHON v2.0 🐍")
-    print("==================================================")
+    log_message("==================================================")
+    log_message("🐍 SMART SCAN - CLIENTE DE IMPRESSÃO PYTHON v2.1 🐍")
+    log_message("==================================================")
     
     load_config()
     
@@ -205,14 +216,14 @@ def main():
     # Configura a impressora física local
     select_printer()
     
-    print("\n--------------------------------------------------")
-    print(f"🆔 ID da Estação: {config['station_id']}")
-    print(f"🖥️ Nome da Estação: {config['station_name']}")
-    print(f"🖨️ Impressora Windows Local: {config['printer_name']}")
-    print(f"🌐 Gateway de Rede: {'ATIVADO' if config.get('is_network_gateway') else 'DESATIVADO'}")
-    print(f"📡 Conectado à nuvem: {CLOUD_URL}")
-    print("--------------------------------------------------")
-    print("Serviço iniciado! Deixe esta janela aberta para imprimir...")
+    log_message("\n--------------------------------------------------")
+    log_message(f"🆔 ID da Estação: {config['station_id']}")
+    log_message(f"🖥️ Nome da Estação: {config['station_name']}")
+    log_message(f"🖨️ Impressora Windows Local: {config['printer_name']}")
+    log_message(f"🌐 Gateway de Rede: {'ATIVADO' if config.get('is_network_gateway') else 'DESATIVADO'}")
+    log_message(f"📡 Conectado à nuvem: {CLOUD_URL}")
+    log_message("--------------------------------------------------")
+    log_message("Serviço iniciado! Deixe esta janela aberta para imprimir...")
     
     last_heartbeat = 0
     while True:
