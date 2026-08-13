@@ -200,21 +200,42 @@ def main():
     
     load_config()
     
+    # Se nao estiver em um terminal interativo (roda em background)
+    is_interactive = sys.stdin and sys.stdin.isatty()
+    
     # Se não tiver nome definido no config.json, pede ao usuário
     if not config.get("station_name") or config["station_name"].startswith("Zebra_"):
-        name_input = input(f"Digite o nome deste computador no sistema (ou Enter para '{config['station_name']}'): ").strip()
-        if name_input:
-            config["station_name"] = name_input
-            save_config()
+        if is_interactive:
+            name_input = input(f"Digite o nome deste computador no sistema (ou Enter para '{config['station_name']}'): ").strip()
+            if name_input:
+                config["station_name"] = name_input
+                save_config()
             
     # Pergunta se quer ativar como Gateway de Rede se nao estiver configurado
     if config.get("is_network_gateway") is None:
-        gateway_input = input("Deseja que este computador funcione como Gateway para impressoras de rede local (IP)? (s/n): ").strip().lower()
-        config["is_network_gateway"] = gateway_input in ['s', 'sim', 'y', 'yes']
-        save_config()
+        if is_interactive:
+            gateway_input = input("Deseja que este computador funcione como Gateway para impressoras de rede local (IP)? (s/n): ").strip().lower()
+            config["is_network_gateway"] = gateway_input in ['s', 'sim', 'y', 'yes']
+            save_config()
+        else:
+            config["is_network_gateway"] = False
+            save_config()
     
-    # Configura a impressora física local
-    select_printer()
+    # Configura a impressora física local se não estiver configurada ou se não estiver no sistema
+    current_printer = config.get("printer_name")
+    try:
+        printers_info = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
+        printers = [p[2] for p in printers_info]
+    except:
+        printers = []
+        
+    if not current_printer or current_printer not in printers:
+        if is_interactive:
+            select_printer()
+        else:
+            if printers:
+                config["printer_name"] = printers[0]
+                save_config()
     
     log_message("\n--------------------------------------------------")
     log_message(f"🆔 ID da Estação: {config['station_id']}")
