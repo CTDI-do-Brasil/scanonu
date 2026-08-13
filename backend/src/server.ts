@@ -2723,7 +2723,7 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
       ip: printer.ip,
       port: printer.porta || 9100,
       timestamp: Date.now()
-    });
+    } as any);
     
     // Mantém no máximo 100 trabalhos na fila
     if (printJobs.length > 100) printJobs.shift();
