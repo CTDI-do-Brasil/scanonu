@@ -421,6 +421,7 @@ export default function App() {
 
   // Administração
   const [adminTab, setAdminTab] = useState<'scan' | 'admin'>('scan');
+  const [isManagementModule, setIsManagementModule] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Alteração de Senha do Próprio Usuário
@@ -1031,6 +1032,7 @@ export default function App() {
       if (activeModule !== 'selection') {
         resetAll();
         setAdminTab('scan');
+        setIsManagementModule(false);
         setActiveModule('selection');
       }
     };
@@ -2410,6 +2412,7 @@ export default function App() {
   const handleGoBackToModules = () => {
     resetAll();
     setAdminTab('scan');
+    setIsManagementModule(false);
     setActiveModule('selection');
   };
 
@@ -2712,6 +2715,7 @@ export default function App() {
                 setActiveModule('gpon');
                 setProvider('tim');
                 setTargetDatabase('db-scanonu');
+                setIsManagementModule(false);
               }}
               className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
@@ -2779,6 +2783,7 @@ export default function App() {
                 setActiveModule('gpon');
                 setProvider('claro');
                 setTargetDatabase('ScanONU_Claro');
+                setIsManagementModule(false);
               }}
               className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
@@ -2794,7 +2799,10 @@ export default function App() {
           {/* Módulo IPTV */}
           {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_reimpressao !== false) && (
             <button
-              onClick={() => setActiveModule('iptv')}
+              onClick={() => {
+                setActiveModule('iptv');
+                setIsManagementModule(false);
+              }}
               className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
               <div className="h-16 flex items-center justify-center w-full">
@@ -2815,7 +2823,8 @@ export default function App() {
               onClick={() => {
                 setActiveModule('gpon');
                 setAdminTab('admin');
-                setAdminSubTab('metrics');
+                setAdminSubTab('users');
+                setIsManagementModule(true);
               }}
               className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
             >
@@ -3509,57 +3518,9 @@ export default function App() {
                 Início
               </button>
 
-              {/* Se estiver no modo Operador (Scanner) */}
-              {adminTab === 'scan' && user?.role !== 'consulta' && (
-                <button
-                  onClick={() => {
-                    setAdminTab('scan');
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md`}
-                >
-                  <Camera className="w-4 h-4" />
-                  Escaneador
-                </button>
-              )}
-
-              {/* Se estiver no modo Gerenciamento (Admin) */}
-              {adminTab === 'admin' && (
+              {/* Modo de Gerenciamento Administrativo (Apenas Usuários e Impressoras) */}
+              {isManagementModule ? (
                 <>
-                  {(user?.role === 'admin' || user?.role === 'master' || user?.role === 'consulta') && (
-                    <button
-                      onClick={() => {
-                        setAdminTab('admin');
-                        setAdminSubTab('metrics');
-                        setSidebarOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
-                        adminSubTab === 'metrics'
-                          ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
-                          : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
-                      }`}
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                      Métricas & Dashboard
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      setAdminTab('admin');
-                      setAdminSubTab('export');
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
-                      adminSubTab === 'export'
-                        ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
-                        : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
-                    }`}
-                  >
-                    <Search className="w-4 h-4" />
-                    Consulta & Exportação
-                  </button>
-
                   {(user?.role === 'admin' || user?.role === 'master') && (
                     <button
                       onClick={() => {
@@ -3568,7 +3529,7 @@ export default function App() {
                         setSidebarOpen(false);
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
-                        adminSubTab === 'users'
+                        adminTab === 'admin' && adminSubTab === 'users'
                           ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
                           : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                       }`}
@@ -3586,7 +3547,7 @@ export default function App() {
                         setSidebarOpen(false);
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
-                        adminSubTab === 'printers'
+                        adminTab === 'admin' && adminSubTab === 'printers'
                           ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
                           : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
                       }`}
@@ -3596,6 +3557,60 @@ export default function App() {
                     </button>
                   )}
                 </>
+              ) : (
+                /* Modo de Operador de Leitura (Escaneador, Métricas de Operação e Exportação) */
+                <>
+                  {user?.role !== 'consulta' && (
+                    <button
+                      onClick={() => {
+                        setAdminTab('scan');
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
+                        adminTab === 'scan'
+                          ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                          : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
+                      }`}
+                    >
+                      <Camera className="w-4 h-4" />
+                      Escaneador
+                    </button>
+                  )}
+
+                  {(user?.role === 'admin' || user?.role === 'master' || user?.role === 'consulta') && (
+                    <button
+                      onClick={() => {
+                        setAdminTab('admin');
+                        setAdminSubTab('metrics');
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
+                        adminTab === 'admin' && adminSubTab === 'metrics'
+                          ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                          : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
+                      }`}
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      Métricas & Dashboard
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setAdminTab('admin');
+                      setAdminSubTab('export');
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
+                      adminTab === 'admin' && adminSubTab === 'export'
+                        ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                        : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
+                    }`}
+                  >
+                    <Search className="w-4 h-4" />
+                    Consulta & Exportação
+                  </button>
+                </>
               )}
             </nav>
 
@@ -3604,7 +3619,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.43</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.44</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
