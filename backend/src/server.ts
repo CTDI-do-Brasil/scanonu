@@ -262,7 +262,7 @@ ${rawZpl}`;
     for (const modelName of ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash']) {
       try {
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
+          setTimeout(() => reject(new Error(`Timeout de 10s no modelo ${modelName}`)), 10000)
         );
         response = await Promise.race([
           ai.models.generateContent({
@@ -1604,7 +1604,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
           
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
+            setTimeout(() => reject(new Error(`Timeout de 10s no modelo ${modelName}`)), 10000)
           );
 
           response = await Promise.race([
