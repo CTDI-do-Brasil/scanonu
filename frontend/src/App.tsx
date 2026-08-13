@@ -3009,31 +3009,7 @@ export default function App() {
 
         <main className="flex-1 p-6 flex flex-col items-center w-full">
           {/* Tab Selector for IPTV Module */}
-          {['master', 'admin'].includes(user?.role || '') && (
-            <div className="flex border-b border-slate-200 mb-6 w-full max-w-2xl bg-white rounded-t-2xl px-6 pt-2 shadow-sm border-x border-t border-slate-200/60">
-              <button
-                onClick={() => setIptvTab('print')}
-                className={`py-3 px-6 font-bold text-sm border-b-2 transition-all ${
-                  iptvTab === 'print' ? 'border-[#003865] text-[#003865]' : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Imprimir Etiqueta
-              </button>
-              {(user?.role === 'admin' || user?.role === 'master') && (
-              <button
-                onClick={() => {setIptvTab('models')}}
-                className={`py-3 px-6 font-bold text-sm border-b-2 transition-all ${
-                  iptvTab === 'models' ? 'border-[#003865] text-[#003865]' : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Modelos IPTV
-              </button>
-              )}
-            </div>
-          )}
-
-          {iptvTab === 'print' ? (
-            <div className={`w-full grid grid-cols-1 ${selectedModel ? 'max-w-5xl lg:grid-cols-12 gap-8' : 'max-w-2xl'}`}>
+          <div className={`w-full grid grid-cols-1 ${selectedModel ? 'max-w-5xl lg:grid-cols-12 gap-8' : 'max-w-2xl'}`}>
               <div className={`bg-white rounded-3xl shadow-sm border border-slate-200/60 p-8 ${selectedModel ? 'lg:col-span-7' : ''}`}>
                 <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4">Configuração da Etiqueta</h2>
                 
@@ -3225,97 +3201,6 @@ export default function App() {
                 </div>
               )}
             </div>
-          ) : (
-            <div className="w-full max-w-2xl bg-white rounded-3xl shadow-sm border border-slate-200/60 p-8 animate-fadeIn">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-[#003865] flex items-center gap-2">
-                    <Printer className="w-5 h-5" /> Modelos IPTV (ZPL)
-                  </h3>
-                  <p className="text-sm text-slate-500 font-medium">Gerencie os modelos e códigos de impressão</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setEditingIptvModel(null);
-                    setIptvModelForm({
-                      nome_modelo: '',
-                      codigo_zpl: '',
-                      campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}',
-                      tecnologia: 'IPTV'
-                    });
-                    setShowIptvModelModal(true);
-                  }}
-                  className="bg-[#003865] hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" /> Novo Modelo
-                </button>
-              </div>
-
-              {isLoadingIptvModels ? (
-                <div className="flex justify-center py-10"><RefreshCw className="w-8 h-8 text-[#003865] animate-spin" /></div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-500 uppercase bg-slate-50">
-                      <tr>
-                        <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
-                        <th className="px-4 py-3 font-bold">Modelo</th>
-                        <th className="px-4 py-3 font-bold">Tecnologia</th>
-                        <th className="px-4 py-3 font-bold text-center">Campos</th>
-                        <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {iptvModels.map((model: any) => (
-                        <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
-                          <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
-                          <td className="px-4 py-3">
-                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-bold uppercase">
-                              {model.tecnologia || 'IPTV'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                              {Object.keys(model.campos_config || {}).length} campos
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right flex items-center justify-end">
-                            <button
-                              onClick={() => {
-                                setEditingIptvModel(model);
-                                setIptvModelForm({
-                                  nome_modelo: model.nome_modelo,
-                                  codigo_zpl: model.codigo_zpl,
-                                  campos_config: JSON.stringify(model.campos_config, null, 2),
-                                  tecnologia: model.tecnologia || 'IPTV'
-                                });
-                                setShowIptvModelModal(true);
-                              }}
-                              className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors mr-2"
-                              title="Editar"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteIptvModel(model.id)}
-                              className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
-                              title="Deletar"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {iptvModels.length === 0 && (
-                        <tr><td colSpan={5} className="text-center py-6 text-slate-500 font-medium">Nenhum modelo cadastrado.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
           
           {/* MODAL MODELO IPTV (Duplicado aqui para funcionar dentro do retorno antecipado do módulo IPTV) */}
           {showIptvModelModal && (
@@ -3556,6 +3441,24 @@ export default function App() {
                       Gerenciar Impressoras
                     </button>
                   )}
+
+                  {user?.role === 'master' && (
+                    <button
+                      onClick={() => {
+                        setAdminTab('admin');
+                        setAdminSubTab('iptv-models');
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border-l-4 ${
+                        adminTab === 'admin' && adminSubTab === 'iptv-models'
+                          ? 'bg-gradient-to-r from-[#00b4d8]/20 to-transparent border-[#00b4d8] text-white shadow-md'
+                          : 'border-transparent text-blue-100/75 hover:bg-white/5 hover:text-white hover:border-white/20'
+                      }`}
+                    >
+                      <Barcode className="w-4 h-4" />
+                      Modelos IPTV
+                    </button>
+                  )}
                 </>
               ) : (
                 /* Modo de Operador de Leitura (Escaneador, Métricas de Operação e Exportação) */
@@ -3619,7 +3522,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.44</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.45</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
