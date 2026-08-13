@@ -620,20 +620,32 @@ export default function App() {
               }
             });
             const fillData = await fillRes.json();
+            const cleanMac = data.mac.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            const last4 = cleanMac.slice(-4);
+            
             if (fillRes.ok && fillData.success && fillData.unit) {
               const u = fillData.unit;
-              const cleanMac = u.mac.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-              const last4 = cleanMac.slice(-4);
-              
               setFieldsData((prev: any) => ({
                 ...prev,
                 cpe_sn: u.cpe_sn || '',
                 pon_id: u.gpon_sn || '',
-                mac: u.mac || '',
+                mac: u.mac || cleanMac,
                 ssid: `TIM_ULTRAFIBRA_${last4}`,
                 senha: u.wifi_key || '',
                 password: u.web_key || '',
                 sap: fillData.sap || ''
+              }));
+            } else {
+              // Preenche apenas o MAC e SSID caso não encontre no banco
+              setFieldsData((prev: any) => ({
+                ...prev,
+                mac: cleanMac,
+                ssid: `TIM_ULTRAFIBRA_${last4}`,
+                cpe_sn: '',
+                pon_id: '',
+                senha: '',
+                password: '',
+                sap: (fillData && fillData.sap) || ''
               }));
             }
           }
