@@ -1,5 +1,6 @@
 {
-  "station_id": "station_li19p5c4",
-  "station_name": "REIMPRESSAO TIM",
-  "printer_name": "IMP_ENG"
+  "station_id": "station_0ce6qfye",
+  "station_name": "Reimpressão ENG",
+  "printer_name": "IMP_ENG",
+  "is_network_gateway": false
 }

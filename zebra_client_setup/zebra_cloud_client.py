@@ -23,7 +23,7 @@ config = {
     "station_id": "",
     "station_name": "",
     "printer_name": "",
-    "is_network_gateway": False
+    "is_network_gateway": None
 }
 
 def load_config():
@@ -197,7 +197,7 @@ def main():
             save_config()
             
     # Pergunta se quer ativar como Gateway de Rede se nao estiver configurado
-    if "is_network_gateway" not in config:
+    if config.get("is_network_gateway") is None:
         gateway_input = input("Deseja que este computador funcione como Gateway para impressoras de rede local (IP)? (s/n): ").strip().lower()
         config["is_network_gateway"] = gateway_input in ['s', 'sim', 'y', 'yes']
         save_config()
