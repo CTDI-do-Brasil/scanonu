@@ -516,7 +516,7 @@ export default function App() {
   const [searchTriggered, setSearchTriggered] = useState(false);
   const [fieldsData, setFieldsData] = useState<any>({});
   const [isPrinting, setIsPrinting] = useState(false);
-  const [iptvTab, setIptvTab] = useState<'print' | 'models'>('print');
+
   const [previewZpl, setPreviewZpl] = useState('');
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -717,7 +717,7 @@ export default function App() {
   // Carrega estado de autenticação do localStorage ao iniciar
   useEffect(() => {
     let interval: any;
-    if (activeModule === 'iptv' && iptvTab === 'print') {
+    if (activeModule === 'iptv') {
       const fetchPrinters = async () => {
         try {
           const res = await fetch('/api/active-printers');
@@ -731,7 +731,7 @@ export default function App() {
       interval = setInterval(fetchPrinters, 5000);
     }
     return () => clearInterval(interval);
-  }, [activeModule, iptvTab]);
+  }, [activeModule]);
 
   useEffect(() => {
     if (user && activeModule === 'selection') {
