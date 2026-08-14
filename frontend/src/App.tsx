@@ -515,10 +515,12 @@ export default function App() {
 
   const [searchTriggered, setSearchTriggered] = useState(false);
   const [fieldsData, setFieldsData] = useState<any>({});
+  const [isCpeOnline, setIsCpeOnline] = useState(false);
   const lastMacRef = useRef('');
   const clearForm = () => {
     setFieldsData({});
     lastMacRef.current = '';
+    setIsCpeOnline(false);
   };
   const [isPrinting, setIsPrinting] = useState(false);
 
@@ -631,6 +633,7 @@ export default function App() {
             const data = await res.json();
             if (res.ok) {
               if (data.mac) {
+                setIsCpeOnline(true);
                 if (data.mac !== lastMacRef.current) {
                   lastMacRef.current = data.mac;
                   
@@ -682,6 +685,7 @@ export default function App() {
                   }
                 }
               } else {
+                setIsCpeOnline(false);
                 // Se o cabo foi retirado (não há MAC detectado), limpa a tela
                 if (lastMacRef.current !== '') {
                   clearForm();
@@ -694,7 +698,7 @@ export default function App() {
       };
       
       checkDetectedMac();
-      interval = setInterval(checkDetectedMac, 2000);
+      interval = setInterval(checkDetectedMac, 800);
       }
     }
     return () => clearInterval(interval);
@@ -3210,7 +3214,21 @@ export default function App() {
 
             {selectedModel ? (
               <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <h3 className="font-bold text-[#003865] mb-4">Dados da Etiqueta</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-[#003865]">Dados da Etiqueta</h3>
+                  {selectedPrinter && selectedPrinter !== 'usb_local' && (
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm ${
+                      isCpeOnline 
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
+                        : 'bg-rose-50 text-rose-700 border border-rose-200/60'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        isCpeOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'
+                      }`} />
+                      {isCpeOnline ? 'Aparelho Conectado (Online)' : 'Aparelho Desconectado (Offline)'}
+                    </span>
+                  )}
+                </div>
                 {(() => {
                   const FIELD_ORDER = ['sn', 'serial', 'cpe_sn', 'gpon_sn', 'ca_id', 'caid', 'sc_id', 'scid', 'mac'];
                   return Object.entries(selectedModel.campos_config || {})

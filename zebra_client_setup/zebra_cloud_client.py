@@ -220,8 +220,21 @@ def detect_and_send_mac():
                 "mac": mac
             }
             requests.post(f"{CLOUD_URL}/active-printers/detected-mac", json=payload, timeout=3)
+        else:
+            payload = {
+                "stationId": config["station_id"],
+                "mac": None
+            }
+            requests.post(f"{CLOUD_URL}/active-printers/detected-mac", json=payload, timeout=3)
     except:
-        pass
+        try:
+            payload = {
+                "stationId": config["station_id"],
+                "mac": None
+            }
+            requests.post(f"{CLOUD_URL}/active-printers/detected-mac", json=payload, timeout=3)
+        except:
+            pass
 
 def main():
     log_message("==================================================")
@@ -285,8 +298,8 @@ def main():
             send_heartbeat()
             last_heartbeat = now
             
-        # Faz a deteccao de MAC via ARP a cada 4s
-        if now - last_arp >= 4:
+        # Faz a deteccao de MAC via ARP a cada 1.5s
+        if now - last_arp >= 1.5:
             detect_and_send_mac()
             last_arp = now
             
