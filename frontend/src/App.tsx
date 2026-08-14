@@ -515,6 +515,11 @@ export default function App() {
 
   const [searchTriggered, setSearchTriggered] = useState(false);
   const [fieldsData, setFieldsData] = useState<any>({});
+  const lastMacRef = useRef('');
+  const clearForm = () => {
+    setFieldsData({});
+    lastMacRef.current = '';
+  };
   const [isPrinting, setIsPrinting] = useState(false);
 
   const [previewZpl, setPreviewZpl] = useState('');
@@ -620,14 +625,12 @@ export default function App() {
       }
 
       if (stationId) {
-        let lastMac = '';
-        
         const checkDetectedMac = async () => {
           try {
             const res = await fetch(`/api/active-printers/detected-mac?stationId=${stationId}`);
             const data = await res.json();
-          if (res.ok && data.mac && data.mac !== lastMac) {
-            lastMac = data.mac;
+          if (res.ok && data.mac && data.mac !== lastMacRef.current) {
+            lastMacRef.current = data.mac;
             
             // Auto-fill values from APIs using the detected MAC
             const fillRes = await fetch(`/api/cpe/auto-fill?mac=${data.mac}`, {
@@ -3021,7 +3024,7 @@ export default function App() {
             
             if (proxyRes.ok && proxyData.success) {
               alert('Etiqueta enviada para a fila de impressão! A Zebra vai puxar a etiqueta em até 3 segundos.');
-              setFieldsData({});
+              clearForm();
             } else {
               throw new Error(proxyData.error || 'Erro ao enviar etiqueta para a fila do CapRover.');
             }
@@ -3055,7 +3058,7 @@ export default function App() {
         const result = await response.json();
         if (response.ok && result.success) {
           alert('Etiqueta enviada para impressão com sucesso!');
-          setFieldsData({}); // Limpar os campos após imprimir
+          clearForm(); // Limpar os campos após imprimir
         }
       } catch (err: any) {
         console.error(err);
@@ -3106,7 +3109,7 @@ export default function App() {
                         onClick={() => {
                           setSelectedTecnologia(tech);
                           setSelectedModel(null);
-                          setFieldsData({});
+                          clearForm();
                         }}
                         className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all uppercase ${
                           selectedTecnologia === tech
@@ -3128,7 +3131,7 @@ export default function App() {
                   onChange={(e) => {
                     const model = iptvModels.find(m => m.id === parseInt(e.target.value));
                     setSelectedModel(model || null);
-                    setFieldsData({});
+                    clearForm();
                   }}
                 >
                   <option value="" disabled>Selecione um modelo...</option>
