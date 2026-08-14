@@ -629,56 +629,65 @@ export default function App() {
           try {
             const res = await fetch(`/api/active-printers/detected-mac?stationId=${stationId}`);
             const data = await res.json();
-          if (res.ok && data.mac && data.mac !== lastMacRef.current) {
-            lastMacRef.current = data.mac;
-            
-            // Auto-fill values from APIs using the detected MAC
-            const fillRes = await fetch(`/api/cpe/auto-fill?mac=${data.mac}`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+            if (res.ok) {
+              if (data.mac) {
+                if (data.mac !== lastMacRef.current) {
+                  lastMacRef.current = data.mac;
+                  
+                  // Auto-fill values from APIs using the detected MAC
+                  const fillRes = await fetch(`/api/cpe/auto-fill?mac=${data.mac}`, {
+                    headers: {
+                      'Authorization': `Bearer ${localStorage.getItem('scanonu_token')}`
+                    }
+                  });
+                  const fillData = await fillRes.json();
+                  const cleanMac = data.mac.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                  const last4 = cleanMac.slice(-4);
+                  let ssidSuffix = last4;
+                  try {
+                    const macVal = parseInt(last4, 16);
+                    if (!isNaN(macVal)) {
+                      // Subtrai 7 em hexadecimal
+                      const ssidVal = macVal - 7;
+                      ssidSuffix = ssidVal.toString(16).toUpperCase().padStart(4, '0');
+                    }
+                  } catch (err) {
+                    console.error('Error calculating SSID suffix:', err);
+                  }
+                  
+                  if (fillRes.ok && fillData.success && fillData.unit) {
+                    const u = fillData.unit;
+                    setFieldsData((prev: any) => ({
+                      ...prev,
+                      cpe_sn: u.cpe_sn || '',
+                      pon_id: u.gpon_sn || '',
+                      mac: u.mac || cleanMac,
+                      ssid: `TIM_ULTRAFIBRA_${ssidSuffix}`,
+                      senha: u.wifi_key || '',
+                      password: u.web_key || '',
+                      sap: fillData.sap || ''
+                    }));
+                  } else {
+                    // Preenche apenas o MAC e SSID caso não encontre no banco
+                    setFieldsData((prev: any) => ({
+                      ...prev,
+                      mac: cleanMac,
+                      ssid: `TIM_ULTRAFIBRA_${ssidSuffix}`,
+                      cpe_sn: '',
+                      pon_id: '',
+                      senha: '',
+                      password: '',
+                      sap: (fillData && fillData.sap) || ''
+                    }));
+                  }
+                }
+              } else {
+                // Se o cabo foi retirado (não há MAC detectado), limpa a tela
+                if (lastMacRef.current !== '') {
+                  clearForm();
+                }
               }
-            });
-            const fillData = await fillRes.json();
-            const cleanMac = data.mac.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-            const last4 = cleanMac.slice(-4);
-            let ssidSuffix = last4;
-            try {
-              const macVal = parseInt(last4, 16);
-              if (!isNaN(macVal)) {
-                // Subtrai 7 em hexadecimal
-                const ssidVal = macVal - 7;
-                ssidSuffix = ssidVal.toString(16).toUpperCase().padStart(4, '0');
-              }
-            } catch (err) {
-              console.error('Error calculating SSID suffix:', err);
             }
-            
-            if (fillRes.ok && fillData.success && fillData.unit) {
-              const u = fillData.unit;
-              setFieldsData((prev: any) => ({
-                ...prev,
-                cpe_sn: u.cpe_sn || '',
-                pon_id: u.gpon_sn || '',
-                mac: u.mac || cleanMac,
-                ssid: `TIM_ULTRAFIBRA_${ssidSuffix}`,
-                senha: u.wifi_key || '',
-                password: u.web_key || '',
-                sap: fillData.sap || ''
-              }));
-            } else {
-              // Preenche apenas o MAC e SSID caso não encontre no banco
-              setFieldsData((prev: any) => ({
-                ...prev,
-                mac: cleanMac,
-                ssid: `TIM_ULTRAFIBRA_${ssidSuffix}`,
-                cpe_sn: '',
-                pon_id: '',
-                senha: '',
-                password: '',
-                sap: (fillData && fillData.sap) || ''
-              }));
-            }
-          }
         } catch (e) {
           console.error('Error polling detected MAC:', e);
         }
