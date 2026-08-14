@@ -3024,7 +3024,6 @@ export default function App() {
             
             if (proxyRes.ok && proxyData.success) {
               alert('Etiqueta enviada para a fila de impressão! A Zebra vai puxar a etiqueta em até 3 segundos.');
-              clearForm();
             } else {
               throw new Error(proxyData.error || 'Erro ao enviar etiqueta para a fila do CapRover.');
             }
@@ -3058,7 +3057,6 @@ export default function App() {
         const result = await response.json();
         if (response.ok && result.success) {
           alert('Etiqueta enviada para impressão com sucesso!');
-          clearForm(); // Limpar os campos após imprimir
         }
       } catch (err: any) {
         console.error(err);
