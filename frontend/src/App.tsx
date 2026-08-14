@@ -3023,7 +3023,8 @@ export default function App() {
         
         // Verifica se o campo está vazio
         if (!val) {
-          alert(`O campo "${config.label}" é obrigatório e está faltando!`);
+          const fieldName = config.label.replace(':', '').trim();
+          alert(`Este campo ${fieldName} é obrigatório`);
           return;
         }
 
