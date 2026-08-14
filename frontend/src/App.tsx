@@ -3016,10 +3016,17 @@ export default function App() {
         return;
       }
 
-      // Validar travas de caracteres
+      // Validar travas de caracteres e obrigatoriedade
       for (const [key, config] of Object.entries(selectedModel.campos_config) as any) {
         if (key.endsWith('_clean')) continue; // Ignorar validação de campos automáticos de limpeza
-        const val = fieldsData[key] || '';
+        const val = (fieldsData[key] || '').trim();
+        
+        // Verifica se o campo está vazio
+        if (!val) {
+          alert(`O campo "${config.label}" é obrigatório e está faltando!`);
+          return;
+        }
+
         if (config.minLength && val.length < config.minLength) {
           alert(`O campo ${config.label} precisa ter no mínimo ${config.minLength} caracteres. (Atual: ${val.length})`);
           return;
