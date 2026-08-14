@@ -641,6 +641,17 @@ export default function App() {
             const fillData = await fillRes.json();
             const cleanMac = data.mac.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
             const last4 = cleanMac.slice(-4);
+            let ssidSuffix = last4;
+            try {
+              const macVal = parseInt(last4, 16);
+              if (!isNaN(macVal)) {
+                // Subtrai 7 em hexadecimal
+                const ssidVal = macVal - 7;
+                ssidSuffix = ssidVal.toString(16).toUpperCase().padStart(4, '0');
+              }
+            } catch (err) {
+              console.error('Error calculating SSID suffix:', err);
+            }
             
             if (fillRes.ok && fillData.success && fillData.unit) {
               const u = fillData.unit;
@@ -649,7 +660,7 @@ export default function App() {
                 cpe_sn: u.cpe_sn || '',
                 pon_id: u.gpon_sn || '',
                 mac: u.mac || cleanMac,
-                ssid: `TIM_ULTRAFIBRA_${last4}`,
+                ssid: `TIM_ULTRAFIBRA_${ssidSuffix}`,
                 senha: u.wifi_key || '',
                 password: u.web_key || '',
                 sap: fillData.sap || ''
@@ -659,7 +670,7 @@ export default function App() {
               setFieldsData((prev: any) => ({
                 ...prev,
                 mac: cleanMac,
-                ssid: `TIM_ULTRAFIBRA_${last4}`,
+                ssid: `TIM_ULTRAFIBRA_${ssidSuffix}`,
                 cpe_sn: '',
                 pon_id: '',
                 senha: '',
