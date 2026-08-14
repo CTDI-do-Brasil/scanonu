@@ -602,14 +602,30 @@ export default function App() {
   // Poll for detected MAC on network gateway printers
   useEffect(() => {
     let interval: any;
-    if (activeModule === 'iptv' && selectedPrinter.startsWith('cloud_')) {
-      const stationId = selectedPrinter.replace('cloud_', '');
-      let lastMac = '';
-      
-      const checkDetectedMac = async () => {
-        try {
-          const res = await fetch(`/api/active-printers/detected-mac?stationId=${stationId}`);
-          const data = await res.json();
+    if (activeModule === 'iptv' && selectedPrinter && selectedPrinter !== 'usb_local') {
+      let stationId = '';
+      if (selectedPrinter.startsWith('cloud_')) {
+        stationId = selectedPrinter.replace('cloud_', '');
+      } else {
+        // Mapeia a impressora física de rede para o computador correspondente do operador
+        const dbPrinter = printers.find(p => p.id.toString() === selectedPrinter);
+        if (dbPrinter) {
+          const nameLower = dbPrinter.nome.toLowerCase();
+          if (nameLower.includes('eng')) {
+            stationId = 'station_lr8hjbib'; // Reimpressão ENG
+          } else if (nameLower.includes('reimpressao_1') || nameLower.includes('glp')) {
+            stationId = 'station_fn86deuz'; // Reimpressão GLP 1
+          }
+        }
+      }
+
+      if (stationId) {
+        let lastMac = '';
+        
+        const checkDetectedMac = async () => {
+          try {
+            const res = await fetch(`/api/active-printers/detected-mac?stationId=${stationId}`);
+            const data = await res.json();
           if (res.ok && data.mac && data.mac !== lastMac) {
             lastMac = data.mac;
             
@@ -656,6 +672,7 @@ export default function App() {
       
       checkDetectedMac();
       interval = setInterval(checkDetectedMac, 2000);
+      }
     }
     return () => clearInterval(interval);
   }, [activeModule, selectedPrinter, selectedTecnologia, selectedModel]);
