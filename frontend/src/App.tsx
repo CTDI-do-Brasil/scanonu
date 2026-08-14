@@ -3216,11 +3216,12 @@ export default function App() {
                             value={val}
                             onChange={(e) => handleFieldChange(key, e.target.value)}
                             placeholder="Biper com o scanner ou digite..."
+                            disabled={['cpe_sn', 'mac', 'sap', 'ssid', 'pon_id', 'gpon_sn', 'serial', 'sn'].includes(key.toLowerCase()) && !!val}
                             className={`w-full bg-white border-2 rounded-xl px-4 py-3 text-slate-800 font-mono focus:ring-0 transition-colors ${
                               hasPrefixError 
                                 ? 'border-red-500 focus:border-red-500 text-red-700' 
                                 : 'border-slate-200 focus:border-[#003865]'
-                            }`}
+                            } disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed`}
                             maxLength={config.maxLength}
                           />
                           {hasPrefixError && (
