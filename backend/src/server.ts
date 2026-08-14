@@ -2829,6 +2829,10 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
       zpl = zpl.replace(/~SD\d+/g, `~SD${printDarkness}`);
     }
 
+    // Converter automaticamente qualquer padrão >:${campo_clean} ou >:${campo} para usar compactação Code 128
+    zpl = zpl.replace(/>:\s*\$\{\s*([a-zA-Z0-9_]+)_clean\s*\}/g, '${$1_code128}');
+    zpl = zpl.replace(/>:\s*\$\{\s*([a-zA-Z0-9_]+)\s*\}/g, '${$1_code128}');
+
     for (const key of Object.keys(model.campos_config)) {
       const val = fieldsData[key] || '';
       // Substituir a chave no formato ${chave} ou \${chave\}

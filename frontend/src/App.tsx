@@ -3050,6 +3050,10 @@ export default function App() {
         fullZpl = fullZpl.replace(/\^PR\d+,\d+/g, `^PR${printSpeed},${printSpeed}`);
         fullZpl = fullZpl.replace(/~SD\d+/g, `~SD${printDarkness}`);
 
+        // Converter automaticamente qualquer padrão >:${campo_clean} ou >:${campo} para usar compactação Code 128
+        fullZpl = fullZpl.replace(/>:\s*\$\{\s*([a-zA-Z0-9_]+)_clean\s*\}/g, '${$1_code128}');
+        fullZpl = fullZpl.replace(/>:\s*\$\{\s*([a-zA-Z0-9_]+)\s*\}/g, '${$1_code128}');
+
         // Substituir as variáveis normais, _clean e _code128
         Object.keys(selectedModel.campos_config || {}).forEach((key) => {
           const val = fieldsData[key] || '';
