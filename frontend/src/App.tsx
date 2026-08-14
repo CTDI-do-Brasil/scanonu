@@ -46,6 +46,40 @@ import {
   Settings
 } from 'lucide-react';
 
+function compressCode128(text: string): string {
+  let result = '>:'; // Start with Subset B
+  let inSubsetC = false;
+  let i = 0;
+  
+  while (i < text.length) {
+    // Count consecutive digits
+    let consecutiveDigits = 0;
+    while (i + consecutiveDigits < text.length && /^\d$/.test(text[i + consecutiveDigits])) {
+      consecutiveDigits++;
+    }
+    
+    if (consecutiveDigits >= 4 || (inSubsetC && consecutiveDigits >= 2)) {
+      if (!inSubsetC) {
+        result += '>5'; // Switch to Subset C
+        inSubsetC = true;
+      }
+      
+      const pairCount = Math.floor(consecutiveDigits / 2);
+      for (let p = 0; p < pairCount; p++) {
+        result += text[i] + text[i + 1];
+        i += 2;
+      }
+    } else {
+      if (inSubsetC) {
+        result += '>6'; // Switch back to Subset B
+        inSubsetC = false;
+      }
+      result += text[i];
+      i++;
+    }
+  }
+  return result;
+}
 
 interface ScanData {
   fabricante: string;
@@ -3016,7 +3050,7 @@ export default function App() {
         fullZpl = fullZpl.replace(/\^PR\d+,\d+/g, `^PR${printSpeed},${printSpeed}`);
         fullZpl = fullZpl.replace(/~SD\d+/g, `~SD${printDarkness}`);
 
-        // Substituir as variáveis normais e _clean
+        // Substituir as variáveis normais, _clean e _code128
         Object.keys(selectedModel.campos_config || {}).forEach((key) => {
           const val = fieldsData[key] || '';
           const regex = new RegExp('\\$\\{\\s*' + key + '\\s*\\}', 'g');
@@ -3025,6 +3059,10 @@ export default function App() {
           const valClean = val.replace(/[^A-Za-z0-9]/g, '');
           const regexClean = new RegExp('\\$\\{\\s*' + key + '_clean\\s*\\}', 'g');
           fullZpl = fullZpl.replace(regexClean, valClean);
+
+          const valCode128 = compressCode128(valClean);
+          const regexCode128 = new RegExp('\\$\\{\\s*' + key + '_code128\\s*\\}', 'g');
+          fullZpl = fullZpl.replace(regexCode128, valCode128);
         });
 
         if (selectedPrinter.startsWith('cloud_')) {

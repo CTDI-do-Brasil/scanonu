@@ -774,6 +774,21 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     console.error('Erro na migração de limpeza dos campos _clean:', e);
   }
 
+  // Migração para atualizar o ZPL do F@ST 5670 para usar o novo código comprimido code128
+  try {
+    const sagemcomModels = await pool.query("SELECT id, codigo_zpl FROM modelos_zpl_iptv WHERE nome_modelo ILIKE '%5670%'");
+    for (const row of sagemcomModels.rows) {
+      let zpl = row.codigo_zpl;
+      if (zpl.includes('cpe_sn_clean') && />:\s*\$\{\s*cpe_sn_clean\s*\}/.test(zpl)) {
+        zpl = zpl.replace(/>:\s*\$\{\s*cpe_sn_clean\s*\}/g, '${cpe_sn_code128}');
+        await pool.query('UPDATE modelos_zpl_iptv SET codigo_zpl = $1 WHERE id = $2', [zpl, row.id]);
+        console.log(`ZPL do modelo ID ${row.id} atualizado com sucesso para compactação Code 128!`);
+      }
+    }
+  } catch (err: any) {
+    console.error('Erro ao atualizar ZPL do F@ST 5670 para Code 128:', err.message);
+  }
+
   // Migração: Mover GP0/GPO de gpon_sn para cpe_sn e setar gpon_sn como N/A_MAC no modelo PG2447
   try {
     const migrateGpoRes = await pool.query(
@@ -2749,6 +2764,41 @@ app.delete('/api/admin/printers/:id', authenticateSession, async (req: any, res:
 
 
 // --- ROTA DE IMPRESSÃO ZPL IPTV ---
+function compressCode128(text: string): string {
+  let result = '>:'; // Start with Subset B
+  let inSubsetC = false;
+  let i = 0;
+  
+  while (i < text.length) {
+    // Count consecutive digits
+    let consecutiveDigits = 0;
+    while (i + consecutiveDigits < text.length && /^\d$/.test(text[i + consecutiveDigits])) {
+      consecutiveDigits++;
+    }
+    
+    if (consecutiveDigits >= 4 || (inSubsetC && consecutiveDigits >= 2)) {
+      if (!inSubsetC) {
+        result += '>5'; // Switch to Subset C
+        inSubsetC = true;
+      }
+      
+      const pairCount = Math.floor(consecutiveDigits / 2);
+      for (let p = 0; p < pairCount; p++) {
+        result += text[i] + text[i + 1];
+        i += 2;
+      }
+    } else {
+      if (inSubsetC) {
+        result += '>6'; // Switch back to Subset B
+        inSubsetC = false;
+      }
+      result += text[i];
+      i++;
+    }
+  }
+  return result;
+}
+
 app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
   try {
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco de dados offline.' });
@@ -2789,6 +2839,11 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
       const valClean = val.replace(/[^A-Za-z0-9]/g, '');
       const regexClean = new RegExp('\\$\\\{\\s*' + key + '_clean\\s*\\\}', 'g');
       zpl = zpl.replace(regexClean, valClean);
+
+      // Nova variável automatizada: ${campo_code128} para código de barras compactado Code 128
+      const valCode128 = compressCode128(valClean);
+      const regexCode128 = new RegExp('\\$\\\{\\s*' + key + '_code128\\s*\\\}', 'g');
+      zpl = zpl.replace(regexCode128, valCode128);
     }
 
     // 4. Em vez de conectar diretamente da nuvem (que falha), colocamos na fila da rede local para o gateway Python imprimir
