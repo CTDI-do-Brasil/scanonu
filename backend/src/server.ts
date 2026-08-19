@@ -1459,6 +1459,11 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'ZXHN F680';
   }
 
+  // ZTE ZXHN F6645P
+  if (modelClean.includes('F6645') || modelClean.includes('6645P') || modelClean.includes('6645')) {
+    return 'ZXHN F6645P';
+  }
+
   // ZTE ZXHN F6600P
   if (modelClean.includes('F6600') || modelClean.includes('6600P') || modelClean.includes('6600')) {
     return 'ZXHN F6600P';
@@ -1571,8 +1576,8 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
         const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM). Se não encontrar na etiqueta, escreva 'N/A'.
-2. modelo: Modelo exato da ONU (ex: F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Se não encontrar na etiqueta, escreva 'N/A'.
-3. cpe_sn: Serial CPE/Equipamento. Se não houver explicitamente o serial do equipamento (não confunda com PN ou SAP), escreva 'N/A'. Não capture PN ou SAP.
+2. modelo: Modelo exato da ONU (ex: ZXHN F6645P, F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Se não encontrar na etiqueta, escreva 'N/A'.
+3. cpe_sn: Serial CPE/Equipamento (ex: D-SN, S/N, Serial). Se não houver explicitamente o serial do equipamento (não confunda com PN ou SAP), escreva 'N/A'. Não capture PN ou SAP.
 4. gpon_sn: Serial GPON (ex: SMBS12345678, ZTEG12345678, FHTT12345678, ALCL12345678, HWTC12345678). Se a etiqueta NÃO TIVER Gpon SN explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
 5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Se a etiqueta NÃO TIVER MAC explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
 6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única. CUIDADO EXTREMO com caracteres visualmente semelhantes: diferencie claramente 'B' e '8', 'O' (letra) and '0' (zero), 'I' e '1', 'Z' e '2', 'S' e '5', 'G' e '6', 'D' e '0'. Um erro nesses caracteres fará o sistema falhar. Se não achar, 'N/A'.
