@@ -640,8 +640,8 @@ export default function App() {
 
   useEffect(() => {
     if (activeModule === 'iptv') {
-      if (iptvModels.length === 0) fetchIptvModels();
-      if (printers.length === 0) fetchPrinters();
+      fetchIptvModels();
+      fetchPrinters();
     }
   }, [activeModule]);
 
@@ -3187,6 +3187,7 @@ export default function App() {
                           setSelectedTecnologia(tech);
                           setSelectedModel(null);
                           clearForm();
+                          fetchIptvModels();
                         }}
                         className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all uppercase ${
                           selectedTecnologia === tech
@@ -3205,6 +3206,7 @@ export default function App() {
                 <select
                   className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
                   value={selectedModel ? selectedModel.id.toString() : ""}
+                  onFocus={() => fetchIptvModels()}
                   onChange={(e) => {
                     const model = iptvModels.find(m => m.id === parseInt(e.target.value));
                     setSelectedModel(model || null);
