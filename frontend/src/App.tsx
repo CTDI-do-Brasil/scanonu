@@ -648,7 +648,7 @@ export default function App() {
   // Poll for detected MAC on network gateway printers
   useEffect(() => {
     let interval: any;
-    if (activeModule === 'iptv' && selectedPrinter && selectedPrinter !== 'usb_local') {
+    if (activeModule === 'iptv' && selectedTecnologia === 'GPON' && selectedPrinter && selectedPrinter !== 'usb_local') {
       let stationId = '';
       if (selectedPrinter.startsWith('cloud_')) {
         stationId = selectedPrinter.replace('cloud_', '');
@@ -3103,6 +3103,9 @@ export default function App() {
             
             if (proxyRes.ok && proxyData.success) {
               alert('Etiqueta enviada para a fila de impressão! A Zebra vai puxar a etiqueta em até 3 segundos.');
+              if (selectedTecnologia !== 'GPON') {
+                setFieldsData({});
+              }
             } else {
               throw new Error(proxyData.error || 'Erro ao enviar etiqueta para a fila do CapRover.');
             }
@@ -3136,6 +3139,9 @@ export default function App() {
         const result = await response.json();
         if (response.ok && result.success) {
           alert('Etiqueta enviada para impressão com sucesso!');
+          if (selectedTecnologia !== 'GPON') {
+            setFieldsData({});
+          }
         }
       } catch (err: any) {
         console.error(err);
@@ -3273,7 +3279,7 @@ export default function App() {
               <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-[#003865]">Dados da Etiqueta</h3>
-                  {selectedPrinter && selectedPrinter !== 'usb_local' && (
+                  {selectedTecnologia === 'GPON' && selectedPrinter && selectedPrinter !== 'usb_local' && (
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm ${
                       isCpeOnline 
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
@@ -3312,7 +3318,7 @@ export default function App() {
                             value={val}
                             onChange={(e) => handleFieldChange(key, e.target.value)}
                             placeholder="Biper com o scanner ou digite..."
-                            disabled={['cpe_sn', 'mac', 'sap', 'ssid', 'pon_id', 'gpon_sn', 'serial', 'sn'].includes(key.toLowerCase()) && !!val}
+                            disabled={selectedTecnologia === 'GPON' && ['cpe_sn', 'mac', 'sap', 'ssid', 'pon_id', 'gpon_sn', 'serial', 'sn'].includes(key.toLowerCase()) && !!val}
                             className={`w-full bg-white border-2 rounded-xl px-4 py-3 text-slate-800 font-mono focus:ring-0 transition-colors ${
                               hasPrefixError 
                                 ? 'border-red-500 focus:border-red-500 text-red-700' 
