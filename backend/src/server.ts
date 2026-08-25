@@ -2797,12 +2797,96 @@ function compressCode128(text: string): string {
         result += '>6'; // Switch back to Subset B
         inSubsetC = false;
       }
-      result += text[i];
+       result += text[i];
       i++;
     }
   }
   return result;
 }
+
+// Helper para envio direto via Socket TCP (Porta 9100)
+function printViaDirectSocket(ip: string, port: number, zpl: string, timeoutMs: number = 1500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let handled = false;
+
+    const cleanup = (success: boolean) => {
+      if (!handled) {
+        handled = true;
+        socket.removeAllListeners();
+        socket.destroy();
+        resolve(success);
+      }
+    };
+
+    socket.setTimeout(timeoutMs);
+
+    socket.on('connect', () => {
+      socket.write(Buffer.from(zpl, 'utf-8'), () => {
+        cleanup(true);
+      });
+    });
+
+    socket.on('timeout', () => {
+      cleanup(false);
+    });
+
+    socket.on('error', () => {
+      cleanup(false);
+    });
+
+    try {
+      socket.connect(port, ip);
+    } catch {
+      cleanup(false);
+    }
+  });
+}
+
+// Endpoint genérico para impressão Zebra direta (com Fallback Híbrido)
+app.post('/api/print/zebra', authenticateSession, async (req: any, res: any) => {
+  try {
+    const { ip, port, zpl } = req.body;
+    if (!ip || !zpl) {
+      return res.status(400).json({ error: 'IP e ZPL são obrigatórios.' });
+    }
+
+    const targetPort = parseInt(port, 10) || 9100;
+    const directSuccess = await printViaDirectSocket(ip, targetPort, zpl, 1500);
+
+    if (directSuccess) {
+      console.log(`[TCP Direct] ZPL impresso com sucesso via socket direto para ${ip}:${targetPort}`);
+      return res.json({
+        success: true,
+        mode: 'direct_tcp',
+        message: `Etiqueta impressa diretamente via TCP Socket (${ip}:${targetPort}).`
+      });
+    }
+
+    // Fallback: Adiciona na fila de rede local
+    console.log(`[TCP Fallback] Inalcançável direto em ${ip}:${targetPort}. Encaminhando para fila local...`);
+    const id = Math.random().toString(36).substring(2, 15);
+    printJobs.push({
+      id,
+      zpl,
+      targetStation: 'network_gateway',
+      ip,
+      port: targetPort,
+      timestamp: Date.now()
+    } as any);
+
+    if (printJobs.length > 100) printJobs.shift();
+
+    return res.json({
+      success: true,
+      mode: 'gateway_queue',
+      message: 'Impressora não alcançada diretamente pela nuvem. Encaminhado para a fila local.'
+    });
+  } catch (err: any) {
+    console.error('Erro em /api/print/zebra:', err);
+    return res.status(500).json({ error: 'Erro ao processar impressão Zebra.' });
+  }
+});
 
 app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
   try {
@@ -2855,21 +2939,39 @@ app.post('/api/print-iptv', authenticateSession, async (req: any, res: any) => {
       zpl = zpl.replace(regexCode128, valCode128);
     }
 
-    // 4. Em vez de conectar diretamente da nuvem (que falha), colocamos na fila da rede local para o gateway Python imprimir
+    // 4. Estratégia Híbrida Inteligente:
+    const printerPort = printer.porta || 9100;
+    const directSuccess = await printViaDirectSocket(printer.ip, printerPort, zpl, 1500);
+
+    if (directSuccess) {
+      console.log(`[TCP Direct] Etiqueta impressa com sucesso via socket direto para ${printer.ip}:${printerPort}`);
+      return res.json({
+        success: true,
+        mode: 'direct_tcp',
+        message: 'Etiqueta impressa diretamente via Socket TCP!'
+      });
+    }
+
+    // Fallback: Caso inalcançável direto pela nuvem, envia para a fila do gateway local Python
+    console.log(`[TCP Fallback] Inalcançável direto em ${printer.ip}:${printerPort}. Enviando para fila do gateway local...`);
     const id = Math.random().toString(36).substring(2, 15);
     printJobs.push({
       id,
       zpl,
       targetStation: 'network_gateway',
       ip: printer.ip,
-      port: printer.porta || 9100,
+      port: printerPort,
       timestamp: Date.now()
     } as any);
     
     // Mantém no máximo 100 trabalhos na fila
     if (printJobs.length > 100) printJobs.shift();
     
-    res.json({ success: true, message: 'Enviado para a fila de impressão da rede local.' });
+    res.json({
+      success: true,
+      mode: 'gateway_queue',
+      message: 'Enviado para a fila de impressão da rede local.'
+    });
 
   } catch (err: any) {
     console.error(err);
