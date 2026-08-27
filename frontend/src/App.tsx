@@ -3557,9 +3557,6 @@ export default function App() {
                   <span className="font-black text-lg tracking-tight whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-blue-200">
                     SMART SCAN
                   </span>
-                  <span className="text-[9px] font-bold tracking-widest text-[#00b4d8] uppercase">
-                    Assistente de Campo
-                  </span>
                 </div>
               </div>
 
@@ -3703,7 +3700,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.45</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.46</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
