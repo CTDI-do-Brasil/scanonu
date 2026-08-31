@@ -646,7 +646,21 @@ export default function App() {
       fetchIptvModels();
       fetchPrinters();
     }
-  }, [activeModule]);
+  }, [activeModule, reimpressaoClient]);
+
+  // Auto-seleciona a aba que possui modelos cadastrados para o cliente ativo caso a aba atual esteja vazia
+  useEffect(() => {
+    if (activeModule === 'iptv' && iptvModels.length > 0) {
+      const clientModels = iptvModels.filter(m => (m.cliente || 'Claro').trim().toUpperCase() === reimpressaoClient.trim().toUpperCase());
+      const hasCurrentTech = clientModels.some(m => (m.tecnologia || 'IPTV').trim().toUpperCase() === selectedTecnologia.trim().toUpperCase());
+      if (!hasCurrentTech && clientModels.length > 0) {
+        const firstAvailableTech = clientModels[0].tecnologia as any;
+        if (firstAvailableTech) {
+          setSelectedTecnologia(firstAvailableTech);
+        }
+      }
+    }
+  }, [activeModule, iptvModels, reimpressaoClient]);
 
   // Poll for detected MAC on network gateway printers
   useEffect(() => {
@@ -3226,54 +3240,80 @@ export default function App() {
               <div className={`bg-white rounded-3xl shadow-sm border border-slate-200/60 p-8 ${selectedModel ? 'lg:col-span-7' : ''}`}>
                 <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4">Configuração da Etiqueta</h2>
                 
-                {/* Filtro de Tecnologia (Abas) */}
-                <div className="flex border-b border-slate-200 mb-6 bg-slate-50 rounded-xl p-1">
+                {/* Filtro de Tecnologia (Abas com Contador) */}
+                <div className="flex border-b border-slate-200 mb-6 bg-slate-50 rounded-xl p-1 gap-1">
                   {(['IPTV', 'GPON', 'EMTA', 'STB'] as const)
                     .filter((tech) => {
                       if (!user || user.role === 'master' || user.role === 'admin') return true;
                       const allowed = user.tecnologias_permitidas ? user.tecnologias_permitidas.split(',') : ['IPTV', 'GPON', 'EMTA', 'STB'];
                       return allowed.includes(tech);
                     })
-                    .map((tech) => (
-                      <button
-                        key={tech}
-                        type="button"
-                        onClick={() => {
-                          setSelectedTecnologia(tech);
-                          setSelectedModel(null);
-                          clearForm();
-                          fetchIptvModels();
-                        }}
-                        className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all uppercase ${
-                          selectedTecnologia === tech
-                            ? 'bg-[#003865] text-white shadow-sm'
-                            : 'text-slate-500 hover:text-[#003865]'
-                        }`}
-                      >
-                        {tech}
-                      </button>
-                    ))}
+                    .map((tech) => {
+                      const count = iptvModels.filter(m => 
+                        (m.cliente || 'Claro').trim().toUpperCase() === reimpressaoClient.trim().toUpperCase() &&
+                        (m.tecnologia || 'IPTV').trim().toUpperCase() === tech.trim().toUpperCase()
+                      ).length;
+
+                      return (
+                        <button
+                          key={tech}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTecnologia(tech);
+                            setSelectedModel(null);
+                            clearForm();
+                            fetchIptvModels();
+                          }}
+                          className={`flex-1 py-2 px-2.5 rounded-lg font-bold text-xs transition-all uppercase flex items-center justify-center gap-1.5 ${
+                            selectedTecnologia === tech
+                              ? 'bg-[#003865] text-white shadow-sm'
+                              : 'text-slate-500 hover:text-[#003865]'
+                          }`}
+                        >
+                          <span>{tech}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold leading-none ${
+                            selectedTecnologia === tech
+                              ? 'bg-white/20 text-white'
+                              : count > 0 ? 'bg-blue-100 text-blue-700' : 'bg-slate-200/70 text-slate-400'
+                          }`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
                 </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Modelo do Equipamento</label>
-                <select
-                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
-                  value={selectedModel ? selectedModel.id.toString() : ""}
-                  onFocus={() => fetchIptvModels()}
-                  onChange={(e) => {
-                    const model = iptvModels.find(m => m.id === parseInt(e.target.value));
-                    setSelectedModel(model || null);
-                    clearForm();
-                  }}
-                >
-                  <option value="" disabled>Selecione um modelo...</option>
-                  {iptvModels
-                    .filter(m => (m.cliente || 'Claro').toUpperCase() === reimpressaoClient.toUpperCase())
-                    .filter(m => (m.tecnologia || 'IPTV') === selectedTecnologia)
-                    .map(m => <option key={m.id} value={m.id.toString()}>{m.nome_modelo}</option>)}
-                </select>
+                {(() => {
+                  const clientModels = iptvModels.filter(m => (m.cliente || 'Claro').trim().toUpperCase() === reimpressaoClient.trim().toUpperCase());
+                  const matchingModels = clientModels.filter(m => (m.tecnologia || 'IPTV').trim().toUpperCase() === selectedTecnologia.trim().toUpperCase());
+
+                  return (
+                    <select
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                      value={selectedModel ? selectedModel.id.toString() : ""}
+                      onFocus={() => fetchIptvModels()}
+                      onChange={(e) => {
+                        const model = iptvModels.find(m => m.id === parseInt(e.target.value));
+                        setSelectedModel(model || null);
+                        clearForm();
+                      }}
+                    >
+                      <option value="" disabled>
+                        {isLoadingIptvModels 
+                          ? 'Carregando modelos...' 
+                          : matchingModels.length === 0 
+                          ? `Nenhum modelo em ${selectedTecnologia} (Veja abas com números)` 
+                          : 'Selecione um modelo...'}
+                      </option>
+                      {matchingModels.map(m => (
+                        <option key={m.id} value={m.id.toString()}>{m.nome_modelo}</option>
+                      ))}
+                    </select>
+                  );
+                })()}
               </div>
 
               <div>
