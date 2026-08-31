@@ -43,7 +43,8 @@ import {
   Key,
   Barcode,
   LayoutGrid,
-  Settings
+  Settings,
+  ScanLine
 } from 'lucide-react';
 
 function compressCode128(text: string): string {
@@ -516,7 +517,9 @@ export default function App() {
   const [isLoadingIptvModels, setIsLoadingIptvModels] = useState(false);
   const [editingIptvModel, setEditingIptvModel] = useState<any>(null);
   const [showIptvModelModal, setShowIptvModelModal] = useState(false);
-  const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '', tecnologia: 'IPTV' });
+  const [reimpressaoClient, setReimpressaoClient] = useState<'TIM' | 'Claro' | 'Brasil TecPar'>('Claro');
+  const [selectedClientMenu, setSelectedClientMenu] = useState<'tim' | 'claro' | 'brasil_tecpar' | null>(null);
+  const [iptvModelForm, setIptvModelForm] = useState({ nome_modelo: '', codigo_zpl: '', campos_config: '', tecnologia: 'IPTV', cliente: 'Claro' });
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<any>(null);
   const [printerFormData, setPrinterFormData] = useState({
@@ -1052,7 +1055,8 @@ export default function App() {
           nome_modelo: iptvModelForm.nome_modelo,
           codigo_zpl: iptvModelForm.codigo_zpl,
           campos_config: parsedCampos,
-          tecnologia: iptvModelForm.tecnologia
+          tecnologia: iptvModelForm.tecnologia,
+          cliente: iptvModelForm.cliente || 'Claro'
         })
       });
       const result = await response.json();
@@ -2557,6 +2561,7 @@ export default function App() {
     resetAll();
     setAdminTab('scan');
     setIsManagementModule(false);
+    setSelectedClientMenu(null);
     setActiveModule('selection');
   };
 
@@ -2851,139 +2856,183 @@ export default function App() {
           <p className="text-blue-200/80 font-medium">Selecione o módulo de operação</p>
         </div>
 
-        <div className="flex flex-col md:flex-row flex-wrap gap-8 w-full max-w-6xl justify-center">
-          {/* Módulo GPON - TIM */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_tim !== false) && (
-            <button
-              onClick={() => {
-                setActiveModule('gpon');
-                setProvider('tim');
-                setTargetDatabase('db-scanonu');
-                setIsManagementModule(false);
-              }}
-              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
-            >
-              <div className="h-16 flex items-center justify-center w-full">
-                <svg viewBox="0 0 340 120" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
-                  {/* TIM Red Trigram Symbol */}
-                  <g fill="#E4022D">
-                    <rect x="10" y="25" width="100" height="20" />
-                    <rect x="10" y="55" width="42" height="20" />
-                    <rect x="68" y="55" width="42" height="20" />
-                    <rect x="10" y="85" width="42" height="20" />
-                    <rect x="68" y="85" width="42" height="20" />
-                  </g>
-                  {/* TIM Blue Wordmark */}
-                  <text x="135" y="98" fontFamily="Arial, Helvetica, sans-serif" fontWeight="900" fontSize="94" fill="#004F9F" letterSpacing="-2">TIM</text>
-                </svg>
-              </div>
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h2>
-              </div>
-            </button>
-          )}
-
-          {/* Módulo GPON - Brasil TecPar */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_brasil_tecpar !== false) && (
-            <button
-              disabled
-              className="w-full md:w-72 aspect-square bg-slate-50/80 opacity-60 cursor-not-allowed rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-sm border border-slate-200/60 filter grayscale"
-            >
-              <div className="h-16 flex items-center justify-center w-full">
-                <svg viewBox="0 0 520 120" className="h-10 w-auto" xmlns="http://www.w3.org/2000/svg">
-                  {/* Symbol: White blocky shape */}
-                  <g fill="#ffffff">
-                    <path d="M 50 15 
-                             C 70 15, 80 20, 88 35 
-                             L 105 65 
-                             C 112 78, 108 92, 95 100 
-                             L 75 110 
-                             C 62 118, 48 114, 40 102 
-                             L 15 65 
-                             C 8 55, 12 40, 22 30 
-                             L 40 20 
-                             C 44 17, 47 15, 50 15 Z" />
-                  </g>
-                  {/* Symbol Inner Chevron: outline */}
-                  <g fill="none" stroke="#25b6e6" strokeWidth="8" strokeLinejoin="round" strokeLinecap="round">
-                    <path d="M 45 42 L 72 63 L 45 84 Z" />
-                  </g>
-                  {/* Text: Brasil TecPar in white */}
-                  <text x="135" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="800" fontSize="54" fill="#ffffff">Brasil</text>
-                  <text x="305" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="300" fontSize="54" fill="#ffffff">TecPar</text>
-                </svg>
-              </div>
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-slate-500 leading-tight">Captura e Edição de ONUs</h2>
-                <span className="text-xs font-bold text-red-500 mt-2 block uppercase tracking-wider">Indisponível</span>
-              </div>
-            </button>
-          )}
-
-          {/* Módulo GPON - Claro */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_claro !== false) && (
-            <button
-              onClick={() => {
-                setActiveModule('gpon');
-                setProvider('claro');
-                setTargetDatabase('ScanONU_Claro');
-                setIsManagementModule(false);
-              }}
-              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
-            >
-              <div className="h-16 flex items-center justify-center w-full">
-                <img src={logoClaro} alt="Claro" className="h-12 w-auto object-contain" />
-              </div>
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h2>
-              </div>
-            </button>
-          )}
-
-          {/* Módulo IPTV */}
-          {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_reimpressao !== false) && (
-            <button
-              onClick={() => {
-                setActiveModule('iptv');
-                setIsManagementModule(false);
-              }}
-              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
-            >
-              <div className="h-16 flex items-center justify-center w-full">
-                <div className="bg-blue-500/10 p-3 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
-                  <Printer className="w-9 h-9 text-blue-600" />
+        {selectedClientMenu ? (
+          <div className="flex flex-col items-center w-full max-w-4xl animate-fadeIn">
+            <div className="flex items-center gap-4 mb-8">
+              {selectedClientMenu === 'tim' ? (
+                <div className="bg-white px-4 py-2 rounded-2xl shadow-md">
+                  <svg viewBox="0 0 340 120" className="h-8 w-auto" xmlns="http://www.w3.org/2000/svg">
+                    <g fill="#E4022D">
+                      <rect x="10" y="25" width="100" height="20" />
+                      <rect x="10" y="55" width="42" height="20" />
+                      <rect x="68" y="55" width="42" height="20" />
+                      <rect x="10" y="85" width="42" height="20" />
+                      <rect x="68" y="85" width="42" height="20" />
+                    </g>
+                    <text x="135" y="98" fontFamily="Arial, Helvetica, sans-serif" fontWeight="900" fontSize="94" fill="#004F9F" letterSpacing="-2">TIM</text>
+                  </svg>
                 </div>
-              </div>
-              <div className="text-center space-y-1">
-                <h2 className="text-xl font-bold text-slate-800 leading-tight">Módulo Reimpressão</h2>
-                <p className="text-xs text-slate-400 font-medium">IPTV e Setup Box</p>
-              </div>
-            </button>
-          )}
-
-          {/* Módulo Gerenciamento */}
-          {['master', 'admin', 'consulta'].includes(user?.role || '') && (
-            <button
-              onClick={() => {
-                setActiveModule('gpon');
-                setAdminTab('admin');
-                setAdminSubTab('users');
-                setIsManagementModule(true);
-              }}
-              className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
-            >
-              <div className="h-16 flex items-center justify-center w-full">
-                <div className="bg-slate-100 p-3.5 rounded-2xl group-hover:bg-slate-200 transition-colors">
-                  <Settings className="w-9 h-9 text-slate-600 group-hover:rotate-45 transition-transform duration-500" />
+              ) : (
+                <div className="bg-white px-4 py-2 rounded-2xl shadow-md">
+                  <img src={logoClaro} alt="Claro" className="h-8 w-auto object-contain" />
                 </div>
+              )}
+              <div>
+                <h2 className="text-2xl font-bold text-white uppercase tracking-tight">
+                  Operação {selectedClientMenu === 'tim' ? 'TIM' : 'Claro'}
+                </h2>
+                <p className="text-blue-200/80 text-xs font-medium">Selecione a atividade desejada</p>
               </div>
-              <div className="text-center space-y-1">
-                <h2 className="text-xl font-bold text-slate-800 leading-tight">Gerenciamento</h2>
-                <p className="text-xs text-slate-400 font-medium">Relatórios, Usuários e Modelos</p>
-              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-6 w-full justify-center">
+              {/* Card 1: Captura e Edição de ONUs */}
+              <button
+                onClick={() => {
+                  setActiveModule('gpon');
+                  setProvider(selectedClientMenu);
+                  setTargetDatabase(selectedClientMenu === 'tim' ? 'db-scanonu' : 'ScanONU_Claro');
+                  setIsManagementModule(false);
+                }}
+                className="flex-1 max-w-sm aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+              >
+                <div className="h-16 flex items-center justify-center w-full">
+                  <div className="bg-emerald-500/10 p-4 rounded-2xl group-hover:bg-emerald-500/20 transition-colors">
+                    <ScanLine className="w-10 h-10 text-emerald-600" />
+                  </div>
+                </div>
+                <div className="text-center space-y-1">
+                  <h3 className="text-xl font-bold text-slate-800 leading-tight">Captura e Edição de ONUs</h3>
+                  <p className="text-xs text-slate-400 font-medium">Leitura inteligente via Câmera e OCR</p>
+                </div>
+              </button>
+
+              {/* Card 2: Módulo Reimpressão */}
+              {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_reimpressao !== false) && (
+                <button
+                  onClick={() => {
+                    setActiveModule('iptv');
+                    setProvider(selectedClientMenu);
+                    setReimpressaoClient(selectedClientMenu === 'tim' ? 'TIM' : 'Claro');
+                    setSelectedTecnologia(selectedClientMenu === 'tim' ? 'GPON' : 'IPTV');
+                    setIsManagementModule(false);
+                  }}
+                  className="flex-1 max-w-sm aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+                >
+                  <div className="h-16 flex items-center justify-center w-full">
+                    <div className="bg-blue-500/10 p-4 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
+                      <Printer className="w-10 h-10 text-blue-600" />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <h3 className="text-xl font-bold text-slate-800 leading-tight">Módulo Reimpressão</h3>
+                    <p className="text-xs text-slate-400 font-medium">
+                      {selectedClientMenu === 'tim' ? 'Etiquetas ZPL TIM (ex: F@ST 5670)' : 'Etiquetas ZPL Claro (IPTV e Setup Box)'}
+                    </p>
+                  </div>
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSelectedClientMenu(null)}
+              className="mt-8 text-blue-200 hover:text-white transition-colors text-sm font-semibold flex items-center gap-2 bg-white/10 hover:bg-white/20 px-5 py-2.5 rounded-xl backdrop-blur-sm"
+            >
+              <ArrowLeft className="w-4 h-4" /> Voltar aos Clientes
             </button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex flex-col md:flex-row flex-wrap gap-8 w-full max-w-6xl justify-center">
+            {/* Módulo TIM */}
+            {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_tim !== false) && (
+              <button
+                onClick={() => setSelectedClientMenu('tim')}
+                className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+              >
+                <div className="h-16 flex items-center justify-center w-full">
+                  <svg viewBox="0 0 340 120" className="h-12 w-auto" xmlns="http://www.w3.org/2000/svg">
+                    <g fill="#E4022D">
+                      <rect x="10" y="25" width="100" height="20" />
+                      <rect x="10" y="55" width="42" height="20" />
+                      <rect x="68" y="55" width="42" height="20" />
+                      <rect x="10" y="85" width="42" height="20" />
+                      <rect x="68" y="85" width="42" height="20" />
+                    </g>
+                    <text x="135" y="98" fontFamily="Arial, Helvetica, sans-serif" fontWeight="900" fontSize="94" fill="#004F9F" letterSpacing="-2">TIM</text>
+                  </svg>
+                </div>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-bold text-slate-800 leading-tight">Operação TIM</h2>
+                  <p className="text-xs text-slate-400 font-medium">Captura e Reimpressão</p>
+                </div>
+              </button>
+            )}
+
+            {/* Módulo Brasil TecPar */}
+            {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_brasil_tecpar !== false) && (
+              <button
+                disabled
+                className="w-full md:w-72 aspect-square bg-slate-50/80 opacity-60 cursor-not-allowed rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-sm border border-slate-200/60 filter grayscale"
+              >
+                <div className="h-16 flex items-center justify-center w-full">
+                  <svg viewBox="0 0 520 120" className="h-10 w-auto" xmlns="http://www.w3.org/2000/svg">
+                    <g fill="#ffffff">
+                      <path d="M 50 15 C 70 15, 80 20, 88 35 L 105 65 C 112 78, 108 92, 95 100 L 75 110 C 62 118, 48 114, 40 102 L 15 65 C 8 55, 12 40, 22 30 L 40 20 C 44 17, 47 15, 50 15 Z" />
+                    </g>
+                    <g fill="none" stroke="#25b6e6" strokeWidth="8" strokeLinejoin="round" strokeLinecap="round">
+                      <path d="M 45 42 L 72 63 L 45 84 Z" />
+                    </g>
+                    <text x="135" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="800" fontSize="54" fill="#ffffff">Brasil</text>
+                    <text x="305" y="85" fontFamily="Montserrat, Arial, sans-serif" fontWeight="300" fontSize="54" fill="#ffffff">TecPar</text>
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <h2 className="text-xl font-bold text-slate-500 leading-tight">Operação Brasil TecPar</h2>
+                  <span className="text-xs font-bold text-red-500 mt-2 block uppercase tracking-wider">Indisponível</span>
+                </div>
+              </button>
+            )}
+
+            {/* Módulo Claro */}
+            {(user?.role === 'master' || user?.role === 'admin' || user?.permitir_claro !== false) && (
+              <button
+                onClick={() => setSelectedClientMenu('claro')}
+                className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+              >
+                <div className="h-16 flex items-center justify-center w-full">
+                  <img src={logoClaro} alt="Claro" className="h-12 w-auto object-contain" />
+                </div>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-bold text-slate-800 leading-tight">Operação Claro</h2>
+                  <p className="text-xs text-slate-400 font-medium">Captura e Reimpressão</p>
+                </div>
+              </button>
+            )}
+
+            {/* Módulo Gerenciamento */}
+            {['master', 'admin', 'consulta'].includes(user?.role || '') && (
+              <button
+                onClick={() => {
+                  setActiveModule('gpon');
+                  setAdminTab('admin');
+                  setAdminSubTab('users');
+                  setIsManagementModule(true);
+                }}
+                className="w-full md:w-72 aspect-square bg-white hover:bg-slate-50 transition-all rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-6 shadow-xl hover:-translate-y-2 hover:shadow-2xl group border border-slate-100/50"
+              >
+                <div className="h-16 flex items-center justify-center w-full">
+                  <div className="bg-slate-100 p-3.5 rounded-2xl group-hover:bg-slate-200 transition-colors">
+                    <Settings className="w-9 h-9 text-slate-600 group-hover:rotate-45 transition-transform duration-500" />
+                  </div>
+                </div>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-bold text-slate-800 leading-tight">Gerenciamento</h2>
+                  <p className="text-xs text-slate-400 font-medium">Relatórios, Usuários e Modelos</p>
+                </div>
+              </button>
+            )}
+          </div>
+        )}
         
         <button 
           onClick={() => { setUser(null); localStorage.removeItem('scanonu_token'); }}
@@ -3159,7 +3208,7 @@ export default function App() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <Printer className="w-6 h-6 text-blue-300" />
-            <h1 className="text-xl font-bold tracking-tight">Módulo Reimpressão <span className="text-sm font-normal text-blue-200 ml-2">IPTV</span></h1>
+            <h1 className="text-xl font-bold tracking-tight">Módulo Reimpressão <span className="text-sm font-semibold bg-white/20 px-2.5 py-0.5 rounded-md ml-2 uppercase tracking-wide">{reimpressaoClient}</span></h1>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
@@ -3221,6 +3270,7 @@ export default function App() {
                 >
                   <option value="" disabled>Selecione um modelo...</option>
                   {iptvModels
+                    .filter(m => (m.cliente || 'Claro').toUpperCase() === reimpressaoClient.toUpperCase())
                     .filter(m => (m.tecnologia || 'IPTV') === selectedTecnologia)
                     .map(m => <option key={m.id} value={m.id.toString()}>{m.nome_modelo}</option>)}
                 </select>
@@ -3408,18 +3458,33 @@ export default function App() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Tecnologia</label>
-                    <select
-                      value={iptvModelForm.tecnologia}
-                      onChange={(e) => setIptvModelForm({...iptvModelForm, tecnologia: e.target.value})}
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
-                    >
-                      <option value="IPTV">IPTV</option>
-                      <option value="GPON">GPON</option>
-                      <option value="EMTA">EMTA</option>
-                      <option value="STB">STB</option>
-                    </select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Cliente / Operação</label>
+                      <select
+                        value={iptvModelForm.cliente}
+                        onChange={(e) => setIptvModelForm({...iptvModelForm, cliente: e.target.value as any})}
+                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                      >
+                        <option value="Claro">Claro</option>
+                        <option value="TIM">TIM</option>
+                        <option value="Brasil TecPar">Brasil TecPar</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Tecnologia</label>
+                      <select
+                        value={iptvModelForm.tecnologia}
+                        onChange={(e) => setIptvModelForm({...iptvModelForm, tecnologia: e.target.value})}
+                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                      >
+                        <option value="IPTV">IPTV</option>
+                        <option value="GPON">GPON</option>
+                        <option value="EMTA">EMTA</option>
+                        <option value="STB">STB</option>
+                      </select>
+                    </div>
                   </div>
                   
                   <div>
@@ -4660,7 +4725,8 @@ export default function App() {
                         nome_modelo: '',
                         codigo_zpl: '',
                         campos_config: '{\n  "sn": { "label": "S/N:", "minLength": 12, "maxLength": 20 },\n  "mac": { "label": "MAC ETHERNET:", "minLength": 12, "maxLength": 17 }\n}',
-                        tecnologia: 'IPTV'
+                        tecnologia: 'IPTV',
+                        cliente: 'Claro'
                       });
                       setShowIptvModelModal(true);
                     }}
@@ -4679,6 +4745,7 @@ export default function App() {
                         <tr>
                           <th className="px-4 py-3 rounded-tl-xl rounded-bl-xl font-bold">ID</th>
                           <th className="px-4 py-3 font-bold">Modelo</th>
+                          <th className="px-4 py-3 font-bold">Cliente</th>
                           <th className="px-4 py-3 font-bold">Tecnologia</th>
                           <th className="px-4 py-3 font-bold text-center">Campos</th>
                           <th className="px-4 py-3 rounded-tr-xl rounded-br-xl font-bold text-right">Ações</th>
@@ -4689,6 +4756,17 @@ export default function App() {
                           <tr key={model.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="px-4 py-3 font-medium text-slate-500">#{model.id}</td>
                             <td className="px-4 py-3 font-bold text-slate-800">{model.nome_modelo}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                (model.cliente || 'Claro').toUpperCase() === 'TIM' 
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                                  : (model.cliente || 'Claro').toUpperCase() === 'CLARO'
+                                  ? 'bg-red-50 text-red-700 border border-red-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                {model.cliente || 'Claro'}
+                              </span>
+                            </td>
                             <td className="px-4 py-3">
                               <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase">
                                 {model.tecnologia || 'IPTV'}
@@ -4707,7 +4785,8 @@ export default function App() {
                                     nome_modelo: model.nome_modelo,
                                     codigo_zpl: model.codigo_zpl,
                                     campos_config: JSON.stringify(model.campos_config, null, 2),
-                                    tecnologia: model.tecnologia || 'IPTV'
+                                    tecnologia: model.tecnologia || 'IPTV',
+                                    cliente: model.cliente || 'Claro'
                                   });
                                   setShowIptvModelModal(true);
                                 }}
@@ -5391,18 +5470,33 @@ export default function App() {
                 />
               </div>
               
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Tecnologia</label>
-                <select
-                  value={iptvModelForm.tecnologia}
-                  onChange={(e) => setIptvModelForm({...iptvModelForm, tecnologia: e.target.value})}
-                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
-                >
-                  <option value="IPTV">IPTV</option>
-                  <option value="GPON">GPON</option>
-                  <option value="EMTA">EMTA</option>
-                  <option value="STB">STB</option>
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Cliente / Operação</label>
+                  <select
+                    value={iptvModelForm.cliente}
+                    onChange={(e) => setIptvModelForm({...iptvModelForm, cliente: e.target.value as any})}
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  >
+                    <option value="Claro">Claro</option>
+                    <option value="TIM">TIM</option>
+                    <option value="Brasil TecPar">Brasil TecPar</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Tecnologia</label>
+                  <select
+                    value={iptvModelForm.tecnologia}
+                    onChange={(e) => setIptvModelForm({...iptvModelForm, tecnologia: e.target.value})}
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold focus:border-[#003865] focus:ring-0 transition-colors"
+                  >
+                    <option value="IPTV">IPTV</option>
+                    <option value="GPON">GPON</option>
+                    <option value="EMTA">EMTA</option>
+                    <option value="STB">STB</option>
+                  </select>
+                </div>
               </div>
               
               <div>

@@ -644,6 +644,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       codigo_zpl TEXT NOT NULL,
       campos_config JSONB NOT NULL,
       tecnologia VARCHAR(50) NOT NULL DEFAULT 'IPTV',
+      cliente VARCHAR(50) NOT NULL DEFAULT 'Claro',
       data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `;
@@ -660,6 +661,22 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
   } catch (err: any) {
     console.error("Erro ao rodar migração de tecnologia em modelos_zpl_iptv:", err.message);
+  }
+
+  // Migração para adicionar a coluna cliente na tabela modelos_zpl_iptv se não existir
+  try {
+    const checkCliente = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_name='modelos_zpl_iptv' AND column_name='cliente'"
+    );
+    if (checkCliente.rowCount === 0) {
+      await pool.query("ALTER TABLE modelos_zpl_iptv ADD COLUMN cliente VARCHAR(50) NOT NULL DEFAULT 'Claro'");
+      console.log("Coluna 'cliente' adicionada com sucesso à tabela modelos_zpl_iptv.");
+    }
+    // Set TIM for Sagemcom 5670 / TIM models, Claro for the rest
+    await pool.query("UPDATE modelos_zpl_iptv SET cliente = 'TIM' WHERE nome_modelo ILIKE '%5670%' OR nome_modelo ILIKE '%TIM%'");
+    await pool.query("UPDATE modelos_zpl_iptv SET cliente = 'Claro' WHERE cliente IS NULL OR cliente = ''");
+  } catch (err: any) {
+    console.error("Erro ao rodar migração de cliente em modelos_zpl_iptv:", err.message);
   }
 
 
@@ -1016,6 +1033,7 @@ async function connectToDatabase() {
           codigo_zpl TEXT NOT NULL,
           campos_config JSONB NOT NULL,
           tecnologia VARCHAR(50) NOT NULL DEFAULT 'IPTV',
+          cliente VARCHAR(50) NOT NULL DEFAULT 'Claro',
           data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `;
@@ -1032,6 +1050,21 @@ async function connectToDatabase() {
         }
       } catch (err: any) {
         console.error("Erro ao rodar migração de tecnologia em modelos_zpl_iptv (dbPool):", err.message);
+      }
+
+      // Migração para adicionar a coluna cliente na tabela modelos_zpl_iptv se não existir
+      try {
+        const checkCliente = await dbPool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name='modelos_zpl_iptv' AND column_name='cliente'"
+        );
+        if (checkCliente.rowCount === 0) {
+          await dbPool.query("ALTER TABLE modelos_zpl_iptv ADD COLUMN cliente VARCHAR(50) NOT NULL DEFAULT 'Claro'");
+          console.log("Coluna 'cliente' adicionada com sucesso à tabela modelos_zpl_iptv (dbPool).");
+        }
+        await dbPool.query("UPDATE modelos_zpl_iptv SET cliente = 'TIM' WHERE nome_modelo ILIKE '%5670%' OR nome_modelo ILIKE '%TIM%'");
+        await dbPool.query("UPDATE modelos_zpl_iptv SET cliente = 'Claro' WHERE cliente IS NULL OR cliente = ''");
+      } catch (err: any) {
+        console.error("Erro ao rodar migração de cliente em modelos_zpl_iptv (dbPool):", err.message);
       }
 
 
@@ -2998,14 +3031,14 @@ app.post('/api/admin/iptv-models', authenticateSession, async (req: any, res: an
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
     if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
-    const { nome_modelo, codigo_zpl, campos_config, tecnologia } = req.body;
+    const { nome_modelo, codigo_zpl, campos_config, tecnologia, cliente } = req.body;
     if (!nome_modelo || !codigo_zpl || !campos_config) return res.status(400).json({ error: 'Preencha todos os campos.' });
 
     const insertQuery = `
-      INSERT INTO modelos_zpl_iptv (nome_modelo, codigo_zpl, campos_config, tecnologia)
-      VALUES ($1, $2, $3, $4) RETURNING *
+      INSERT INTO modelos_zpl_iptv (nome_modelo, codigo_zpl, campos_config, tecnologia, cliente)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *
     `;
-    const result = await dbPool.query(insertQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), tecnologia || 'IPTV']);
+    const result = await dbPool.query(insertQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), tecnologia || 'IPTV', cliente || 'Claro']);
     return res.json({ success: true, model: result.rows[0] });
   } catch (err: any) {
     console.error(err);
@@ -3018,14 +3051,14 @@ app.put('/api/admin/iptv-models/:id', authenticateSession, async (req: any, res:
     if (!dbConnected || !dbPool) return res.status(500).json({ error: 'Banco off.' });
     if (req.user.role !== 'master') return res.status(403).json({ error: 'Acesso negado.' });
     
-    const { nome_modelo, codigo_zpl, campos_config, tecnologia } = req.body;
+    const { nome_modelo, codigo_zpl, campos_config, tecnologia, cliente } = req.body;
     
     const updateQuery = `
       UPDATE modelos_zpl_iptv 
-      SET nome_modelo = $1, codigo_zpl = $2, campos_config = $3, tecnologia = $4
-      WHERE id = $5 RETURNING *
+      SET nome_modelo = $1, codigo_zpl = $2, campos_config = $3, tecnologia = $4, cliente = $5
+      WHERE id = $6 RETURNING *
     `;
-    const result = await dbPool.query(updateQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), tecnologia || 'IPTV', req.params.id]);
+    const result = await dbPool.query(updateQuery, [nome_modelo, codigo_zpl, JSON.stringify(campos_config), tecnologia || 'IPTV', cliente || 'Claro', req.params.id]);
     return res.json({ success: true, model: result.rows[0] });
   } catch (err: any) {
     console.error(err);
