@@ -515,8 +515,8 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
 
   console.log(`Inicializando tabelas e migrações no banco: ${dbName}...`);
   
-  // Criar tabela de etiquetas
-  const createTableQuery = `
+  // Criar tabela de etiquetas (específica por cliente)
+  const createTableQuery = dbName === 'ScanONU_Claro' ? `
     CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
       gpon_sn VARCHAR(100) PRIMARY KEY,
       fabricante VARCHAR(100) NOT NULL,
@@ -525,6 +525,23 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       serial_number VARCHAR(100) DEFAULT 'N/A',
       pon_id VARCHAR(100) DEFAULT 'N/A',
       d_sn VARCHAR(100) DEFAULT 'N/A',
+      mac VARCHAR(100),
+      wifi_ssid VARCHAR(100),
+      wifi_ssid_5g VARCHAR(100),
+      wifi_key VARCHAR(100),
+      usuario VARCHAR(100),
+      web_key VARCHAR(100),
+      password_router VARCHAR(100),
+      imagem_url VARCHAR(500),
+      operador_email VARCHAR(150),
+      data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  ` : `
+    CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
+      gpon_sn VARCHAR(100) PRIMARY KEY,
+      fabricante VARCHAR(100) NOT NULL,
+      modelo VARCHAR(100) NOT NULL,
+      cpe_sn VARCHAR(100),
       mac VARCHAR(100),
       wifi_ssid VARCHAR(100),
       wifi_ssid_5g VARCHAR(100),
@@ -695,20 +712,32 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     }
   } catch (e) {}
 
-  // Garantir SSID, Imagem URL e SAP
+  // Garantir colunas base
   try {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
     await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS sap VARCHAR(100) DEFAULT 'N/A'");
-    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
-    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
-    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
     await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_sap ON etiquetas_scan_onu(sap)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_d_sn ON etiquetas_scan_onu(d_sn)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_serial_number ON etiquetas_scan_onu(serial_number)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_pon_id ON etiquetas_scan_onu(pon_id)');
     await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
+
+    if (dbName === 'ScanONU_Claro') {
+      // Colunas exclusivas do cliente Claro
+      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
+      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
+      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_d_sn ON etiquetas_scan_onu(d_sn)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_serial_number ON etiquetas_scan_onu(serial_number)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_pon_id ON etiquetas_scan_onu(pon_id)');
+    } else {
+      // Limpeza de testes da Claro e remoção de colunas exclusivas da Claro no banco TIM / padrão
+      try {
+        await pool.query("DELETE FROM etiquetas_scan_onu WHERE modelo = 'ZXHN F6600P' OR gpon_sn = 'ZTEGD970D7FE'");
+        await pool.query("ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS d_sn");
+        await pool.query("ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS serial_number");
+        await pool.query("ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS pon_id");
+      } catch (cleanErr) {}
+    }
   } catch (e) {
     console.error('Erro ao garantir colunas/indices adicionais:', e);
   }
