@@ -5598,8 +5598,8 @@ const handleClaroUnitsQuery = async (req: express.Request, res: express.Response
 app.get('/api/external/claro/units', handleClaroUnitsQuery);
 app.get('/api/claro/units', handleClaroUnitsQuery);
 
-// Rota da API externa para EDIÇÃO / ATUALIZAÇÃO de unidades (ex: modelo ZXHN F6600P no banco da Claro)
-const handleExternalUnitUpdate = async (req: express.Request, res: express.Response) => {
+// Rota da API externa para EDIÇÃO / ATUALIZAÇÃO de unidades - BANCO TIM (db-scanonu)
+const handleTimUnitUpdate = async (req: express.Request, res: express.Response) => {
   try {
     const apiKeyHeader = req.headers['x-api-key'] || req.query.api_key || req.query.apiKey;
     const expectedApiKey = process.env.EXTERNAL_API_KEY;
@@ -5618,59 +5618,30 @@ const handleExternalUnitUpdate = async (req: express.Request, res: express.Respo
       });
     }
 
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados TIM não está conectado.' });
+    }
+
     const {
-      // Identificadores para localizar o registro
       id,
       mac: lookupMac,
       gpon_sn: lookupGpon,
-      gpon_id: lookupGponId,
       cpe_sn: lookupCpe,
-      serial_number: lookupSn,
-
-      // Banco de dados (padrão: ScanONU_Claro)
-      database,
-      db,
-
-      // Campos a serem atualizados
       modelo,
       fabricante,
       mac,
       gpon_sn,
-      gpon_id,
       cpe_sn,
-      serial_number,
-      d_sn,
       wifi_ssid,
-      ssid,
       wifi_ssid_5g,
-      ssid_5ghz,
       wifi_key,
-      senha_wifi,
       usuario,
       web_key,
-      senha_web,
       password_router,
       senha,
-      operador,
       operador_email
     } = req.body || {};
 
-    const targetDbName = ((database || db || req.query.database || req.query.db || 'ScanONU_Claro') as string).trim();
-    let pool: Pool | null = null;
-
-    try {
-      pool = getPoolForDatabase(targetDbName);
-    } catch (e) {
-      pool = dbPool;
-    }
-
-    if (!pool) {
-      return res.status(503).json({ success: false, error: 'Banco de dados não está conectado.' });
-    }
-
-    const isClaro = targetDbName.toLowerCase().includes('claro');
-
-    // Montar cláusula WHERE para encontrar o registro
     const whereClauses: string[] = [];
     const queryParams: any[] = [];
     let pIdx = 1;
@@ -5678,36 +5649,28 @@ const handleExternalUnitUpdate = async (req: express.Request, res: express.Respo
     if (id) {
       whereClauses.push(`id = $${pIdx++}`);
       queryParams.push(Number(id));
-    } else if (lookupGpon || lookupGponId) {
-      const targetGponVal = (lookupGpon || lookupGponId).trim();
-      const col = isClaro ? 'gpon_id' : 'gpon_sn';
-      whereClauses.push(`(${col} = $${pIdx} OR ${col} ILIKE $${pIdx})`);
-      queryParams.push(targetGponVal);
+    } else if (lookupGpon) {
+      whereClauses.push(`(gpon_sn = $${pIdx} OR gpon_sn ILIKE $${pIdx})`);
+      queryParams.push(String(lookupGpon).trim());
       pIdx++;
     } else if (lookupMac) {
       const cleanMac = String(lookupMac).replace(/[^a-zA-Z0-9]/g, '');
       whereClauses.push(`(REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = UPPER($${pIdx}) OR mac ILIKE $${pIdx + 1})`);
       queryParams.push(cleanMac, `%${String(lookupMac).trim()}%`);
       pIdx += 2;
-    } else if (lookupCpe || lookupSn) {
-      const targetSnVal = (lookupCpe || lookupSn).trim();
-      if (isClaro) {
-        whereClauses.push(`(serial_number = $${pIdx} OR serial_number ILIKE $${pIdx} OR d_sn ILIKE $${pIdx})`);
-      } else {
-        whereClauses.push(`(cpe_sn = $${pIdx} OR cpe_sn ILIKE $${pIdx})`);
-      }
-      queryParams.push(targetSnVal);
+    } else if (lookupCpe) {
+      whereClauses.push(`(cpe_sn = $${pIdx} OR cpe_sn ILIKE $${pIdx})`);
+      queryParams.push(String(lookupCpe).trim());
       pIdx++;
     }
 
     if (whereClauses.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'É necessário informar ao menos um identificador no corpo da requisição para localizar o registro (id, mac, gpon_sn / gpon_id, ou cpe_sn / serial_number).'
+        error: 'É necessário informar ao menos um identificador no corpo da requisição (mac, gpon_sn, cpe_sn ou id).'
       });
     }
 
-    // Montar cláusula SET com os campos que foram enviados
     const setClauses: string[] = [];
 
     if (modelo !== undefined) {
@@ -5722,104 +5685,41 @@ const handleExternalUnitUpdate = async (req: express.Request, res: express.Respo
       setClauses.push(`mac = $${pIdx++}`);
       queryParams.push(String(mac).trim());
     }
-
-    // Campos com diferença de nome entre schemas
-    if (isClaro) {
-      const finalGpon = gpon_id !== undefined ? gpon_id : gpon_sn;
-      if (finalGpon !== undefined) {
-        setClauses.push(`gpon_id = $${pIdx++}`);
-        queryParams.push(String(finalGpon).trim());
-      }
-
-      const finalSn = serial_number !== undefined ? serial_number : cpe_sn;
-      if (finalSn !== undefined) {
-        setClauses.push(`serial_number = $${pIdx++}`);
-        queryParams.push(String(finalSn).trim());
-      }
-
-      if (d_sn !== undefined) {
-        setClauses.push(`d_sn = $${pIdx++}`);
-        queryParams.push(String(d_sn).trim());
-      }
-
-      const finalSsid = ssid !== undefined ? ssid : wifi_ssid;
-      if (finalSsid !== undefined) {
-        setClauses.push(`ssid = $${pIdx++}`);
-        queryParams.push(String(finalSsid).trim());
-      }
-
-      const finalSsid5g = ssid_5ghz !== undefined ? ssid_5ghz : wifi_ssid_5g;
-      if (finalSsid5g !== undefined) {
-        setClauses.push(`ssid_5ghz = $${pIdx++}`);
-        queryParams.push(String(finalSsid5g).trim());
-      }
-
-      const finalWifiKey = senha_wifi !== undefined ? senha_wifi : wifi_key;
-      if (finalWifiKey !== undefined) {
-        setClauses.push(`senha_wifi = $${pIdx++}`);
-        queryParams.push(String(finalWifiKey).trim());
-      }
-
-      const finalWebKey = senha_web !== undefined ? senha_web : (web_key !== undefined ? web_key : (password_router !== undefined ? password_router : senha));
-      if (finalWebKey !== undefined) {
-        setClauses.push(`senha_web = $${pIdx++}`);
-        queryParams.push(String(finalWebKey).trim());
-      }
-
-      const finalOp = operador !== undefined ? operador : operador_email;
-      if (finalOp !== undefined) {
-        setClauses.push(`operador = $${pIdx++}`);
-        queryParams.push(String(finalOp).trim());
-      }
-    } else {
-      const finalGpon = gpon_sn !== undefined ? gpon_sn : gpon_id;
-      if (finalGpon !== undefined) {
-        setClauses.push(`gpon_sn = $${pIdx++}`);
-        queryParams.push(String(finalGpon).trim());
-      }
-
-      const finalCpe = cpe_sn !== undefined ? cpe_sn : serial_number;
-      if (finalCpe !== undefined) {
-        setClauses.push(`cpe_sn = $${pIdx++}`);
-        queryParams.push(String(finalCpe).trim());
-      }
-
-      const finalSsid = wifi_ssid !== undefined ? wifi_ssid : ssid;
-      if (finalSsid !== undefined) {
-        setClauses.push(`wifi_ssid = $${pIdx++}`);
-        queryParams.push(String(finalSsid).trim());
-      }
-
-      const finalSsid5g = wifi_ssid_5g !== undefined ? wifi_ssid_5g : ssid_5ghz;
-      if (finalSsid5g !== undefined) {
-        setClauses.push(`wifi_ssid_5g = $${pIdx++}`);
-        queryParams.push(String(finalSsid5g).trim());
-      }
-
-      const finalWifiKey = wifi_key !== undefined ? wifi_key : senha_wifi;
-      if (finalWifiKey !== undefined) {
-        setClauses.push(`wifi_key = $${pIdx++}`);
-        queryParams.push(String(finalWifiKey).trim());
-      }
-
-      const finalWebKey = web_key !== undefined ? web_key : (senha_web !== undefined ? senha_web : (password_router !== undefined ? password_router : senha));
-      if (finalWebKey !== undefined) {
-        setClauses.push(`web_key = $${pIdx++}`);
-        queryParams.push(String(finalWebKey).trim());
-        setClauses.push(`password_router = $${pIdx++}`);
-        queryParams.push(String(finalWebKey).trim());
-      }
-
-      const finalOp = operador_email !== undefined ? operador_email : operador;
-      if (finalOp !== undefined) {
-        setClauses.push(`operador_email = $${pIdx++}`);
-        queryParams.push(String(finalOp).trim());
-      }
+    if (gpon_sn !== undefined) {
+      setClauses.push(`gpon_sn = $${pIdx++}`);
+      queryParams.push(String(gpon_sn).trim());
     }
-
+    if (cpe_sn !== undefined) {
+      setClauses.push(`cpe_sn = $${pIdx++}`);
+      queryParams.push(String(cpe_sn).trim());
+    }
+    if (wifi_ssid !== undefined) {
+      setClauses.push(`wifi_ssid = $${pIdx++}`);
+      queryParams.push(String(wifi_ssid).trim());
+    }
+    if (wifi_ssid_5g !== undefined) {
+      setClauses.push(`wifi_ssid_5g = $${pIdx++}`);
+      queryParams.push(String(wifi_ssid_5g).trim());
+    }
+    if (wifi_key !== undefined) {
+      setClauses.push(`wifi_key = $${pIdx++}`);
+      queryParams.push(String(wifi_key).trim());
+    }
     if (usuario !== undefined) {
       setClauses.push(`usuario = $${pIdx++}`);
       queryParams.push(String(usuario).trim());
+    }
+
+    const finalWebKey = web_key !== undefined ? web_key : (password_router !== undefined ? password_router : senha);
+    if (finalWebKey !== undefined) {
+      setClauses.push(`web_key = $${pIdx++}`);
+      queryParams.push(String(finalWebKey).trim());
+      setClauses.push(`password_router = $${pIdx++}`);
+      queryParams.push(String(finalWebKey).trim());
+    }
+    if (operador_email !== undefined) {
+      setClauses.push(`operador_email = $${pIdx++}`);
+      queryParams.push(String(operador_email).trim());
     }
 
     if (setClauses.length === 0) {
@@ -5836,32 +5736,229 @@ const handleExternalUnitUpdate = async (req: express.Request, res: express.Respo
       RETURNING *;
     `;
 
-    const updateResult = await pool.query(updateQuery, queryParams);
+    const updateResult = await dbPool.query(updateQuery, queryParams);
 
     if (updateResult.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        database: targetDbName,
-        error: 'Nenhum registro correspondente foi encontrado para atualização.'
+        database: 'db-scanonu',
+        error: 'Nenhum registro correspondente foi encontrado no banco TIM para atualização.'
       });
     }
 
     return res.json({
       success: true,
-      database: targetDbName,
-      message: 'Unidade atualizada com sucesso no banco de dados.',
+      database: 'db-scanonu',
+      message: 'Unidade atualizada com sucesso no banco TIM.',
       updatedCount: updateResult.rowCount,
       unit: updateResult.rows[0]
     });
 
   } catch (err: any) {
-    console.error('Erro na API externa de edição de unidades:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao atualizar unidade.' });
+    console.error('Erro na API de edição TIM:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao atualizar unidade no banco TIM.' });
   }
 };
 
-app.put('/api/external/units', handleExternalUnitUpdate);
-app.post('/api/external/units/edit', handleExternalUnitUpdate);
+app.put('/api/external/units', handleTimUnitUpdate);
+app.post('/api/external/units/edit', handleTimUnitUpdate);
+
+// Rota da API externa para EDIÇÃO / ATUALIZAÇÃO de unidades - BANCO CLARO (ScanONU_Claro)
+const handleClaroUnitUpdate = async (req: express.Request, res: express.Response) => {
+  try {
+    const apiKeyHeader = req.headers['x-api-key'] || req.query.api_key || req.query.apiKey;
+    const expectedApiKey = process.env.EXTERNAL_API_KEY;
+
+    if (!expectedApiKey || expectedApiKey.trim() === '') {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Serviço de edição externa desativado por motivos de segurança. Configure a variável EXTERNAL_API_KEY no servidor.' 
+      });
+    }
+
+    if (apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Acesso negado. Chave de API inválida ou ausente (informe no cabeçalho X-API-Key ou parâmetro ?api_key=).' 
+      });
+    }
+
+    const claroPool = getPoolForDatabase('ScanONU_Claro');
+    if (!claroPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados ScanONU_Claro não está conectado.' });
+    }
+
+    const {
+      id,
+      mac: lookupMac,
+      gpon_id: lookupGponId,
+      gpon_sn: lookupGponSn,
+      serial_number: lookupSn,
+      cpe_sn: lookupCpe,
+      modelo,
+      fabricante,
+      mac,
+      gpon_id,
+      gpon_sn,
+      serial_number,
+      cpe_sn,
+      d_sn,
+      ssid,
+      wifi_ssid,
+      ssid_5ghz,
+      wifi_ssid_5g,
+      senha_wifi,
+      wifi_key,
+      usuario,
+      senha_web,
+      web_key,
+      password_router,
+      senha,
+      operador,
+      operador_email
+    } = req.body || {};
+
+    const whereClauses: string[] = [];
+    const queryParams: any[] = [];
+    let pIdx = 1;
+
+    const targetLookupGpon = lookupGponId || lookupGponSn;
+    const targetLookupSn = lookupSn || lookupCpe;
+
+    if (id) {
+      whereClauses.push(`id = $${pIdx++}`);
+      queryParams.push(Number(id));
+    } else if (targetLookupGpon) {
+      whereClauses.push(`(gpon_id = $${pIdx} OR gpon_id ILIKE $${pIdx})`);
+      queryParams.push(String(targetLookupGpon).trim());
+      pIdx++;
+    } else if (lookupMac) {
+      const cleanMac = String(lookupMac).replace(/[^a-zA-Z0-9]/g, '');
+      whereClauses.push(`(REPLACE(REPLACE(UPPER(mac), ':', ''), '-', '') = UPPER($${pIdx}) OR mac ILIKE $${pIdx + 1})`);
+      queryParams.push(cleanMac, `%${String(lookupMac).trim()}%`);
+      pIdx += 2;
+    } else if (targetLookupSn) {
+      whereClauses.push(`(serial_number = $${pIdx} OR serial_number ILIKE $${pIdx} OR d_sn ILIKE $${pIdx})`);
+      queryParams.push(String(targetLookupSn).trim());
+      pIdx++;
+    }
+
+    if (whereClauses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'É necessário informar ao menos um identificador no corpo da requisição para o banco Claro (mac, gpon_id / gpon_sn, serial_number / cpe_sn, ou id).'
+      });
+    }
+
+    const setClauses: string[] = [];
+
+    if (modelo !== undefined) {
+      setClauses.push(`modelo = $${pIdx++}`);
+      queryParams.push(String(modelo).trim());
+    }
+    if (fabricante !== undefined) {
+      setClauses.push(`fabricante = $${pIdx++}`);
+      queryParams.push(String(fabricante).trim());
+    }
+    if (mac !== undefined) {
+      setClauses.push(`mac = $${pIdx++}`);
+      queryParams.push(String(mac).trim());
+    }
+
+    const finalGpon = gpon_id !== undefined ? gpon_id : gpon_sn;
+    if (finalGpon !== undefined) {
+      setClauses.push(`gpon_id = $${pIdx++}`);
+      queryParams.push(String(finalGpon).trim());
+    }
+
+    const finalSn = serial_number !== undefined ? serial_number : cpe_sn;
+    if (finalSn !== undefined) {
+      setClauses.push(`serial_number = $${pIdx++}`);
+      queryParams.push(String(finalSn).trim());
+    }
+
+    if (d_sn !== undefined) {
+      setClauses.push(`d_sn = $${pIdx++}`);
+      queryParams.push(String(d_sn).trim());
+    }
+
+    const finalSsid = ssid !== undefined ? ssid : wifi_ssid;
+    if (finalSsid !== undefined) {
+      setClauses.push(`ssid = $${pIdx++}`);
+      queryParams.push(String(finalSsid).trim());
+    }
+
+    const finalSsid5g = ssid_5ghz !== undefined ? ssid_5ghz : wifi_ssid_5g;
+    if (finalSsid5g !== undefined) {
+      setClauses.push(`ssid_5ghz = $${pIdx++}`);
+      queryParams.push(String(finalSsid5g).trim());
+    }
+
+    const finalWifiKey = senha_wifi !== undefined ? senha_wifi : wifi_key;
+    if (finalWifiKey !== undefined) {
+      setClauses.push(`senha_wifi = $${pIdx++}`);
+      queryParams.push(String(finalWifiKey).trim());
+    }
+
+    const finalWebKey = senha_web !== undefined ? senha_web : (web_key !== undefined ? web_key : (password_router !== undefined ? password_router : senha));
+    if (finalWebKey !== undefined) {
+      setClauses.push(`senha_web = $${pIdx++}`);
+      queryParams.push(String(finalWebKey).trim());
+    }
+
+    if (usuario !== undefined) {
+      setClauses.push(`usuario = $${pIdx++}`);
+      queryParams.push(String(usuario).trim());
+    }
+
+    const finalOp = operador !== undefined ? operador : operador_email;
+    if (finalOp !== undefined) {
+      setClauses.push(`operador = $${pIdx++}`);
+      queryParams.push(String(finalOp).trim());
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhum campo para atualização foi enviado no corpo da requisição.'
+      });
+    }
+
+    const updateQuery = `
+      UPDATE etiquetas_scan_onu
+      SET ${setClauses.join(', ')}
+      WHERE ${whereClauses.join(' AND ')}
+      RETURNING *;
+    `;
+
+    const updateResult = await claroPool.query(updateQuery, queryParams);
+
+    if (updateResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        database: 'ScanONU_Claro',
+        error: 'Nenhum registro correspondente foi encontrado no banco Claro para atualização.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      database: 'ScanONU_Claro',
+      message: 'Unidade atualizada com sucesso no banco Claro.',
+      updatedCount: updateResult.rowCount,
+      unit: updateResult.rows[0]
+    });
+
+  } catch (err: any) {
+    console.error('Erro na API externa de edição Claro:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao atualizar unidade no banco Claro.' });
+  }
+};
+
+app.put('/api/external/claro/units', handleClaroUnitUpdate);
+app.post('/api/external/claro/units/edit', handleClaroUnitUpdate);
+app.put('/api/claro/units', handleClaroUnitUpdate);
+app.post('/api/claro/units/edit', handleClaroUnitUpdate);
 
 // Todas as outras rotas GET servem o index.html do React em produção
 app.get('*', (req, res) => {
