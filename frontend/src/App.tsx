@@ -2002,7 +2002,8 @@ export default function App() {
                         ...mergedBatchData,
                         operador: user?.email || 'admin@scanonu.com',
                         overwrite: true,
-                        operacao: user?.operacao || 'CTDI MATRIZ'
+                        targetDb: targetDb || targetDatabase || (selectedClientMenu === 'claro' ? 'ScanONU_Claro' : 'db-scanonu'),
+                        operacao: (selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || mergedBatchData.modelo === 'ZXHN F6600P') ? 'CLARO' : (user?.operacao || 'CTDI MATRIZ')
                       })
                     });
                     const saveResult = await saveResponse.json();
@@ -2057,7 +2058,8 @@ export default function App() {
                       ...processedData,
                       operador: user?.email || 'admin@scanonu.com',
                       overwrite: false,
-                      operacao: user?.operacao || 'CTDI MATRIZ'
+                      targetDb: targetDb || targetDatabase || (selectedClientMenu === 'claro' ? 'ScanONU_Claro' : 'db-scanonu'),
+                      operacao: (selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || processedData.modelo === 'ZXHN F6600P') ? 'CLARO' : (user?.operacao || 'CTDI MATRIZ')
                     })
                   });
                   const saveResult = await saveResponse.json();
@@ -2199,7 +2201,8 @@ export default function App() {
                 ...processedData,
                 operador: user?.email || 'admin@scanonu.com',
                 overwrite: false,
-                operacao: user?.operacao || 'CTDI MATRIZ'
+                targetDb: targetDb || targetDatabase || (selectedClientMenu === 'claro' ? 'ScanONU_Claro' : 'db-scanonu'),
+                operacao: (selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || processedData.modelo === 'ZXHN F6600P') ? 'CLARO' : (user?.operacao || 'CTDI MATRIZ')
               })
             });
             const saveResult = await saveResponse.json();
@@ -5410,8 +5413,8 @@ export default function App() {
                               ...data,
                               operador: user?.email || 'admin@scanonu.com',
                               overwrite: equipmentExistsInDb, // Se já existe, envia para sobrescrever
-                              targetDb: targetDb, // Envia o banco onde o registro original reside
-                              operacao: user?.operacao || 'CTDI MATRIZ'
+                              targetDb: targetDb || targetDatabase || (selectedClientMenu === 'claro' ? 'ScanONU_Claro' : 'db-scanonu'),
+                              operacao: (selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || data.modelo === 'ZXHN F6600P') ? 'CLARO' : (user?.operacao || 'CTDI MATRIZ')
                             })
                           });
                           const result = await response.json();

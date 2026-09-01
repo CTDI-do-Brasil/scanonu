@@ -2055,6 +2055,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     let chosenDb = targetDb;
     const databases = getActiveDatabases();
+
+    // Regra explícita: ZTE ZXHN F6600P ou Operação Claro SEMPRE salva no banco ScanONU_Claro
+    if (normalizedModelo === 'ZXHN F6600P' || (modelo && modelo.toUpperCase().includes('6600')) || (operacao && operacao.toUpperCase().includes('CLARO'))) {
+      chosenDb = 'ScanONU_Claro';
+    }
     
     if (!chosenDb) {
       for (const dbName of databases) {
