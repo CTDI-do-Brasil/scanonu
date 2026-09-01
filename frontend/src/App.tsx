@@ -366,7 +366,39 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
   const is5670 = (String(safeExisting.modelo || '').toUpperCase().includes('5670')) ||
                  (String(safeScanned.modelo || '').toUpperCase().includes('5670'));
 
-  if (isNP5454T || is5670) {
+  const isClaro = (String(safeExisting.modelo || '').toUpperCase().includes('6600')) ||
+                  (String(safeScanned.modelo || '').toUpperCase().includes('6600')) ||
+                  (String(safeExisting.fabricante || '').toUpperCase().includes('ZTE') && String(safeScanned.modelo || '').toUpperCase().includes('6600'));
+
+  if (isClaro) {
+    merged.fabricante = 'ZTE';
+    merged.modelo = 'ZXHN F6600P';
+    merged.cpe_sn = (safeScanned.cpe_sn && safeScanned.cpe_sn !== 'N/A' && safeScanned.cpe_sn !== 'NA') 
+      ? safeScanned.cpe_sn 
+      : (safeExisting.serial_number || safeExisting.cpe_sn || 'N/A');
+    merged.serial_number = merged.cpe_sn;
+    merged.d_sn = (safeScanned.d_sn && safeScanned.d_sn !== 'N/A' && safeScanned.d_sn !== 'NA') 
+      ? safeScanned.d_sn 
+      : (safeExisting.d_sn || 'N/A');
+    merged.mac = (safeScanned.mac && safeScanned.mac !== 'N/A' && safeScanned.mac !== 'NA') 
+      ? safeScanned.mac 
+      : (safeExisting.mac || 'N/A');
+    merged.gpon_sn = (safeScanned.gpon_sn && safeScanned.gpon_sn !== 'N/A' && safeScanned.gpon_sn !== 'NA' && !safeScanned.gpon_sn.startsWith('N/A_')) 
+      ? safeScanned.gpon_sn 
+      : (safeExisting.gpon_sn || safeExisting.pon_id || 'N/A');
+    merged.pon_id = merged.gpon_sn;
+
+    const dbSenha = safeExisting.senha || (safeExisting as any).web_key;
+    const scanSenha = safeScanned.senha || (safeScanned as any).web_key;
+    merged.senha = (scanSenha && scanSenha !== 'N/A' && scanSenha !== 'NA') ? scanSenha : (dbSenha || 'N/A');
+    if ('web_key' in merged) {
+      merged.web_key = merged.senha;
+    }
+
+    const dbWifiKey = safeExisting.wifi_key;
+    const scanWifiKey = safeScanned.wifi_key;
+    merged.wifi_key = (scanWifiKey && scanWifiKey !== 'N/A' && scanWifiKey !== 'NA') ? scanWifiKey : (dbWifiKey || 'N/A');
+  } else if (isNP5454T || is5670) {
     merged.cpe_sn = safeExisting.cpe_sn || 'N/A';
     merged.mac = safeExisting.mac || 'N/A';
     merged.fabricante = safeExisting.fabricante || (isNP5454T ? 'Tellescom' : 'Sagemcom');
