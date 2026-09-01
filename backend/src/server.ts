@@ -522,6 +522,9 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       fabricante VARCHAR(100) NOT NULL,
       modelo VARCHAR(100) NOT NULL,
       cpe_sn VARCHAR(100),
+      serial_number VARCHAR(100) DEFAULT 'N/A',
+      pon_id VARCHAR(100) DEFAULT 'N/A',
+      d_sn VARCHAR(100) DEFAULT 'N/A',
       mac VARCHAR(100),
       wifi_ssid VARCHAR(100),
       wifi_ssid_5g VARCHAR(100),
@@ -2352,7 +2355,21 @@ app.post('/api/save-label', async (req: any, res: any) => {
         finalCpe,
         finalGpon
       ];
-      await pool.query(updateQuery, updateValues);
+      try {
+        await pool.query(updateQuery, updateValues);
+      } catch (updateErr: any) {
+        if (String(updateErr?.message).includes('column') || String(updateErr?.message).includes('d_sn') || String(updateErr?.message).includes('serial_number') || String(updateErr?.message).includes('pon_id')) {
+          console.warn(`[Auto-Migration] Detectada coluna faltante em ${chosenDb}. Aplicando ALTER TABLE agora...`);
+          try {
+            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
+            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
+            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
+          } catch (altErr) {}
+          await pool.query(updateQuery, updateValues);
+        } else {
+          throw updateErr;
+        }
+      }
     } else {
       const insertQuery = `
         INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
@@ -2404,7 +2421,21 @@ app.post('/api/save-label', async (req: any, res: any) => {
           zplUrl || imagem_url || null,
           operacao || 'CTDI MATRIZ'
         ];
-      await pool.query(insertQuery, insertValues);
+      try {
+        await pool.query(insertQuery, insertValues);
+      } catch (insertErr: any) {
+        if (String(insertErr?.message).includes('column') || String(insertErr?.message).includes('d_sn') || String(insertErr?.message).includes('serial_number') || String(insertErr?.message).includes('pon_id')) {
+          console.warn(`[Auto-Migration] Detectada coluna faltante em ${chosenDb}. Aplicando ALTER TABLE agora...`);
+          try {
+            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
+            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
+            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
+          } catch (altErr) {}
+          await pool.query(insertQuery, insertValues);
+        } else {
+          throw insertErr;
+        }
+      }
       console.log(`Dados salvos com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
     }
 
