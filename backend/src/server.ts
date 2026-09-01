@@ -518,23 +518,20 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   // Criar tabela de etiquetas (específica por cliente)
   const createTableQuery = dbName === 'ScanONU_Claro' ? `
     CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
-      gpon_sn VARCHAR(100) PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       fabricante VARCHAR(100) NOT NULL,
       modelo VARCHAR(100) NOT NULL,
-      cpe_sn VARCHAR(100),
       serial_number VARCHAR(100) DEFAULT 'N/A',
-      pon_id VARCHAR(100) DEFAULT 'N/A',
-      d_sn VARCHAR(100) DEFAULT 'N/A',
       mac VARCHAR(100),
-      wifi_ssid VARCHAR(100),
-      wifi_ssid_5g VARCHAR(100),
-      wifi_key VARCHAR(100),
+      gpon_id VARCHAR(100),
+      d_sn VARCHAR(100) DEFAULT 'N/A',
+      ssid VARCHAR(100),
+      ssid_5ghz VARCHAR(100),
       usuario VARCHAR(100),
-      web_key VARCHAR(100),
-      password_router VARCHAR(100),
-      imagem_url VARCHAR(500),
-      operador_email VARCHAR(150),
-      data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      senha_web VARCHAR(100),
+      senha_wifi VARCHAR(100),
+      operador VARCHAR(150),
+      data_da_captura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   ` : `
     CREATE TABLE IF NOT EXISTS etiquetas_scan_onu (
@@ -722,29 +719,80 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
 
     if (dbName === 'ScanONU_Claro') {
-      // Migração para renomear cpe_sn para serial_number na tabela do banco Claro
       try {
         const checkCols = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
         const cols = checkCols.rows.map((r: any) => r.column_name.toLowerCase());
         
-        if (cols.includes('cpe_sn') && !cols.includes('serial_number')) {
-          await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN cpe_sn TO serial_number');
-          console.log('[ScanONU_Claro] Coluna cpe_sn renomeada para serial_number.');
-        } else if (cols.includes('cpe_sn') && cols.includes('serial_number')) {
-          await pool.query("UPDATE etiquetas_scan_onu SET serial_number = cpe_sn WHERE (serial_number IS NULL OR serial_number = 'N/A' OR serial_number = 'NA') AND cpe_sn IS NOT NULL AND cpe_sn <> 'N/A'");
-          await pool.query("ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS cpe_sn");
-          console.log('[ScanONU_Claro] Coluna cpe_sn consolidada em serial_number e removida.');
-        }
-      } catch (renErr: any) {
-        console.error('[ScanONU_Claro] Erro ao migrar cpe_sn para serial_number:', renErr.message || renErr);
-      }
+        // Se a tabela possui qualquer coluna antiga, migra para a estrutura definitiva
+        if (cols.includes('cpe_sn') || cols.includes('wifi_ssid') || cols.includes('gpon_sn') || cols.includes('data_leitura') || cols.includes('web_key') || cols.includes('operador_email')) {
+          console.log('[ScanONU_Claro] Migrando tabela para estrutura definitiva de 14 colunas...');
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS etiquetas_scan_onu_new (
+              id SERIAL PRIMARY KEY,
+              fabricante VARCHAR(100) NOT NULL,
+              modelo VARCHAR(100) NOT NULL,
+              serial_number VARCHAR(100) DEFAULT 'N/A',
+              mac VARCHAR(100),
+              gpon_id VARCHAR(100),
+              d_sn VARCHAR(100) DEFAULT 'N/A',
+              ssid VARCHAR(100),
+              ssid_5ghz VARCHAR(100),
+              usuario VARCHAR(100),
+              senha_web VARCHAR(100),
+              senha_wifi VARCHAR(100),
+              operador VARCHAR(150),
+              data_da_captura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
 
-      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
-      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
-      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_d_sn ON etiquetas_scan_onu(d_sn)');
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_serial_number ON etiquetas_scan_onu(serial_number)');
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_pon_id ON etiquetas_scan_onu(pon_id)');
+          const colSelect = (colName: string, fallback: string = "'N/A'") => cols.includes(colName.toLowerCase()) ? colName : fallback;
+
+          const fabCol = colSelect('fabricante', "'ZTE'");
+          const modCol = colSelect('modelo', "'ZXHN F6600P'");
+          const snCol = cols.includes('serial_number') ? 'serial_number' : (cols.includes('cpe_sn') ? 'cpe_sn' : "'N/A'");
+          const macCol = colSelect('mac', "''");
+          const gponCol = cols.includes('gpon_id') ? 'gpon_id' : (cols.includes('pon_id') ? 'pon_id' : (cols.includes('gpon_sn') ? 'gpon_sn' : "'N/A'"));
+          const dsnCol = colSelect('d_sn', "'N/A'");
+          const ssidCol = cols.includes('ssid') ? 'ssid' : (cols.includes('wifi_ssid') ? 'wifi_ssid' : "'N/A'");
+          const ssid5gCol = cols.includes('ssid_5ghz') ? 'ssid_5ghz' : (cols.includes('wifi_ssid_5g') ? 'wifi_ssid_5g' : "'N/A'");
+          const userCol = colSelect('usuario', "''");
+          const webKeyCol = cols.includes('senha_web') ? 'senha_web' : (cols.includes('web_key') ? 'web_key' : "'N/A'");
+          const wifiKeyCol = cols.includes('senha_wifi') ? 'senha_wifi' : (cols.includes('wifi_key') ? 'wifi_key' : "'N/A'");
+          const opCol = cols.includes('operador') ? 'operador' : (cols.includes('operador_email') ? 'operador_email' : "'sistema'");
+          const dataCol = cols.includes('data_da_captura') ? 'data_da_captura' : (cols.includes('data_leitura') ? 'data_leitura' : 'CURRENT_TIMESTAMP');
+
+          await pool.query(`
+            INSERT INTO etiquetas_scan_onu_new (fabricante, modelo, serial_number, mac, gpon_id, d_sn, ssid, ssid_5ghz, usuario, senha_web, senha_wifi, operador, data_da_captura)
+            SELECT 
+              COALESCE(${fabCol}, 'ZTE'),
+              COALESCE(${modCol}, 'ZXHN F6600P'),
+              COALESCE(NULLIF(${snCol}, 'N/A'), 'N/A'),
+              COALESCE(${macCol}, ''),
+              COALESCE(NULLIF(${gponCol}, 'N/A'), 'N/A'),
+              COALESCE(${dsnCol}, 'N/A'),
+              COALESCE(${ssidCol}, 'N/A'),
+              COALESCE(${ssid5gCol}, 'N/A'),
+              COALESCE(${userCol}, ''),
+              COALESCE(${webKeyCol}, 'N/A'),
+              COALESCE(${wifiKeyCol}, 'N/A'),
+              COALESCE(${opCol}, 'sistema'),
+              COALESCE(${dataCol}, CURRENT_TIMESTAMP)
+            FROM etiquetas_scan_onu;
+          `);
+
+          await pool.query("DROP TABLE etiquetas_scan_onu CASCADE;");
+          await pool.query("ALTER TABLE etiquetas_scan_onu_new RENAME TO etiquetas_scan_onu;");
+          console.log('[ScanONU_Claro] Tabela etiquetas_scan_onu migrada com sucesso para a nova estrutura de 14 colunas.');
+        }
+
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_mac ON etiquetas_scan_onu(mac)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_gpon_id ON etiquetas_scan_onu(gpon_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_serial_number ON etiquetas_scan_onu(serial_number)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_d_sn ON etiquetas_scan_onu(d_sn)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_data_captura ON etiquetas_scan_onu(data_da_captura)');
+      } catch (renErr: any) {
+        console.error('[ScanONU_Claro] Erro ao migrar estrutura para 14 colunas:', renErr.message || renErr);
+      }
     } else {
       // Limpeza de testes da Claro e remoção de colunas exclusivas da Claro no banco TIM / padrão
       try {
@@ -2375,6 +2423,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
         }
 
       if (chosenDb === 'ScanONU_Claro') {
+        const targetId = exists ? checkRes.rows[0].id : null;
+        const targetGponId = exists ? (checkRes.rows[0].gpon_id || checkRes.rows[0].pon_id || checkRes.rows[0].gpon_sn) : finalGpon;
+        const targetMac = exists ? checkRes.rows[0].mac : finalMac;
+        const targetSerial = exists ? (checkRes.rows[0].serial_number || checkRes.rows[0].cpe_sn) : finalCpe;
+
         const updateQuery = `
           UPDATE etiquetas_scan_onu 
           SET 
@@ -2382,54 +2435,36 @@ app.post('/api/save-label', async (req: any, res: any) => {
             modelo = $2,
             serial_number = $3,
             mac = $4,
-            wifi_ssid = $5,
-            wifi_ssid_5g = $6,
-            wifi_key = $7,
-            usuario = $8,
-            web_key = $9,
-            operador_email = $10,
-            imagem_url = COALESCE($12, imagem_url),
-            operacao = $13,
-            password_router = $14,
-            gpon_sn = $15,
-            d_sn = $16,
-            pon_id = $17,
-            data_leitura = CURRENT_TIMESTAMP
-          WHERE gpon_sn = $11
+            gpon_id = $5,
+            d_sn = $6,
+            ssid = $7,
+            ssid_5ghz = $8,
+            usuario = $9,
+            senha_web = $10,
+            senha_wifi = $11,
+            operador = $12,
+            data_da_captura = CURRENT_TIMESTAMP
+          WHERE (id = $13 AND $13 IS NOT NULL) OR gpon_id = $14 OR mac = $15 OR (serial_number = $16 AND serial_number <> 'N/A')
         `;
         const updateValues = [
-          finalFabricante,
-          finalModelo,
-          finalCpe,
-          finalMac,
-          finalSsid,
-          finalSsid5g,
-          finalWifiKey,
-          finalUsuario,
-          finalWebKey,
-          operador || 'sistema',
-          targetGpon,
-          zplUrl || imagem_url || null,
-          operacao || 'CLARO',
-          finalPasswordRouter,
-          finalGpon,
+          finalFabricante || 'ZTE',
+          finalModelo || 'ZXHN F6600P',
+          finalCpe || 'N/A',
+          finalMac || 'N/A',
+          finalGpon || 'N/A',
           finalDsn || 'N/A',
-          finalGpon
+          finalSsid || 'N/A',
+          finalSsid5g || 'N/A',
+          finalUsuario || '',
+          finalWebKey || 'N/A',
+          finalWifiKey || 'N/A',
+          operador || 'sistema',
+          targetId,
+          targetGponId,
+          targetMac,
+          targetSerial
         ];
-        try {
-          await pool.query(updateQuery, updateValues);
-        } catch (updateErr: any) {
-          if (String(updateErr?.message).includes('column') || String(updateErr?.message).includes('d_sn') || String(updateErr?.message).includes('serial_number') || String(updateErr?.message).includes('pon_id')) {
-            try {
-              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
-              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
-              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
-            } catch (altErr) {}
-            await pool.query(updateQuery, updateValues);
-          } else {
-            throw updateErr;
-          }
-        }
+        await pool.query(updateQuery, updateValues);
       } else {
         const updateQuery = `
             UPDATE etiquetas_scan_onu 
@@ -2473,63 +2508,29 @@ app.post('/api/save-label', async (req: any, res: any) => {
     } else {
       if (chosenDb === 'ScanONU_Claro') {
         const insertQuery = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-          ON CONFLICT (gpon_sn) DO UPDATE SET
-            fabricante = EXCLUDED.fabricante,
-            modelo = EXCLUDED.modelo,
-            serial_number = COALESCE(NULLIF(EXCLUDED.serial_number, 'N/A'), etiquetas_scan_onu.serial_number),
-            pon_id = COALESCE(NULLIF(EXCLUDED.pon_id, 'N/A'), etiquetas_scan_onu.pon_id),
-            d_sn = COALESCE(NULLIF(EXCLUDED.d_sn, 'N/A'), etiquetas_scan_onu.d_sn),
-            mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
-            wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
-            wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
-            wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
-            usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
-            web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
-            password_router = COALESCE(NULLIF(NULLIF(EXCLUDED.password_router, 'N/A'), 'NA'), etiquetas_scan_onu.password_router),
-            operador_email = EXCLUDED.operador_email,
-            imagem_url = COALESCE(EXCLUDED.imagem_url, etiquetas_scan_onu.imagem_url),
-            operacao = EXCLUDED.operacao,
-            data_leitura = CURRENT_TIMESTAMP
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, serial_number, mac, gpon_id, d_sn, ssid, ssid_5ghz, usuario, senha_web, senha_wifi, operador, data_da_captura)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
         `;
-        if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
-          gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        let finalGponValue = gpon_sn;
+        if (!finalGponValue || finalGponValue.trim() === '' || finalGponValue.toUpperCase() === 'N/A' || finalGponValue.toUpperCase() === 'NA') {
+          finalGponValue = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
-        let finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
         const insertValues = [
           fabricante || 'ZTE',
           normalizedModelo || 'ZXHN F6600P',
           cpe_sn || 'N/A',
-          gpon_sn,
-          gpon_sn,
-          d_sn || 'N/A',
           mac || 'N/A',
+          finalGponValue,
+          d_sn || 'N/A',
           wifi_ssid || 'N/A',
-          resolvedWifiSsid5g,
-          wifi_key || 'N/A',
-          usuario || 'N/A',
+          resolvedWifiSsid5g || 'N/A',
+          usuario || '',
           resolvedWebKey || 'N/A',
-          finalPasswordRouter,
-          operador || 'sistema',
-          zplUrl || imagem_url || null,
-          operacao || 'CLARO'
+          wifi_key || 'N/A',
+          operador || 'sistema'
         ];
-        try {
-          await pool.query(insertQuery, insertValues);
-        } catch (insertErr: any) {
-          if (String(insertErr?.message).includes('column') || String(insertErr?.message).includes('d_sn') || String(insertErr?.message).includes('serial_number') || String(insertErr?.message).includes('pon_id')) {
-            try {
-              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
-              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
-              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
-            } catch (altErr) {}
-            await pool.query(insertQuery, insertValues);
-          } else {
-            throw insertErr;
-          }
-        }
-        console.log(`Dados salvos com sucesso no banco ScanONU_Claro. Serial Number: ${cpe_sn}, PON ID: ${gpon_sn}`);
+        await pool.query(insertQuery, insertValues);
+        console.log(`Dados salvos com sucesso no banco ScanONU_Claro. Serial Number: ${cpe_sn}, GPON ID: ${finalGponValue}`);
       } else {
         const insertQuery = `
           INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
@@ -3359,12 +3360,17 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
       return res.status(403).json({ error: 'Acesso negado. Perfil sem permissão para exportar o banco.' });
     }
 
+    const isClaroExport = targetDb === 'ScanONU_Claro';
     let queryText = 'SELECT * FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
     if (serialNumber) {
-      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount})`;
+      if (isClaroExport) {
+        queryText += ` AND (gpon_id ILIKE $${paramCount} OR serial_number ILIKE $${paramCount} OR d_sn ILIKE $${paramCount})`;
+      } else {
+        queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount})`;
+      }
       queryValues.push(`%${serialNumber}%`);
       paramCount++;
     }
@@ -3381,19 +3387,20 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
       paramCount++;
     }
 
+    const dateCol = isClaroExport ? 'data_da_captura' : 'data_leitura';
     if (startDate) {
-      queryText += ` AND data_leitura >= $${paramCount}`;
+      queryText += ` AND ${dateCol} >= $${paramCount}`;
       queryValues.push(startDate);
       paramCount++;
     }
 
     if (endDate) {
-      queryText += ` AND data_leitura <= $${paramCount}`;
+      queryText += ` AND ${dateCol} <= $${paramCount}`;
       queryValues.push(`${endDate} 23:59:59`);
       paramCount++;
     }
 
-    queryText += ' ORDER BY data_leitura ASC';
+    queryText += ` ORDER BY ${dateCol} ASC`;
     const etiquetasRes = await pool.query(queryText, queryValues);
     
     // Construção do XML usando xmlbuilder2
@@ -3402,22 +3409,41 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
         .ele('etiquetas');
 
     etiquetasRes.rows.forEach((row, index) => {
-      root.ele('onu')
-        .ele('id').txt(String(index + 1)).up()
-        .ele('fabricante').txt(row.fabricante || '').up()
-        .ele('modelo').txt(row.modelo || '').up()
-        .ele('cpe_sn').txt(row.cpe_sn || '').up()
-        .ele('gpon_sn').txt((row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || '')).up()
-        .ele('mac').txt(row.mac || '').up()
-        .ele('wifi_ssid').txt(row.wifi_ssid || '').up()
-        .ele('wifi_ssid_5g').txt(row.wifi_ssid_5g || '').up()
-        .ele('wifi_key').txt(row.wifi_key || '').up()
-        .ele('usuario').txt(row.usuario || '').up()
-        .ele('senha').txt(row.web_key || '').up()
-        .ele('web_key').txt(row.web_key || '').up()
-        .ele('operador_email').txt(row.operador_email || '').up()
-        .ele('data_leitura').txt(String(row.data_leitura)).up()
-      .up();
+      if (isClaroExport) {
+        root.ele('onu')
+          .ele('id').txt(String(row.id || (index + 1))).up()
+          .ele('fabricante').txt(row.fabricante || '').up()
+          .ele('modelo').txt(row.modelo || '').up()
+          .ele('serial_number').txt(row.serial_number || '').up()
+          .ele('mac').txt(row.mac || '').up()
+          .ele('gpon_id').txt(row.gpon_id || '').up()
+          .ele('d_sn').txt(row.d_sn || 'N/A').up()
+          .ele('ssid').txt(row.ssid || '').up()
+          .ele('ssid_5ghz').txt(row.ssid_5ghz || '').up()
+          .ele('usuario').txt(row.usuario || '').up()
+          .ele('senha_web').txt(row.senha_web || '').up()
+          .ele('senha_wifi').txt(row.senha_wifi || '').up()
+          .ele('operador').txt(row.operador || '').up()
+          .ele('data_da_captura').txt(String(row.data_da_captura || '')).up()
+        .up();
+      } else {
+        root.ele('onu')
+          .ele('id').txt(String(index + 1)).up()
+          .ele('fabricante').txt(row.fabricante || '').up()
+          .ele('modelo').txt(row.modelo || '').up()
+          .ele('cpe_sn').txt(row.cpe_sn || '').up()
+          .ele('gpon_sn').txt((row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || '')).up()
+          .ele('mac').txt(row.mac || '').up()
+          .ele('wifi_ssid').txt(row.wifi_ssid || '').up()
+          .ele('wifi_ssid_5g').txt(row.wifi_ssid_5g || '').up()
+          .ele('wifi_key').txt(row.wifi_key || '').up()
+          .ele('usuario').txt(row.usuario || '').up()
+          .ele('senha').txt(row.web_key || '').up()
+          .ele('web_key').txt(row.web_key || '').up()
+          .ele('operador_email').txt(row.operador_email || '').up()
+          .ele('data_leitura').txt(String(row.data_leitura)).up()
+        .up();
+      }
     });
 
     const xmlString = root.end({ prettyPrint: true });
@@ -3447,12 +3473,17 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
       return res.status(403).json({ error: 'Acesso negado. Perfil sem permissão para exportar a planilha.' });
     }
 
+    const isClaroExport = targetDb === 'ScanONU_Claro';
     let queryText = 'SELECT * FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
     if (search) {
-      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      if (isClaroExport) {
+        queryText += ` AND (gpon_id ILIKE $${paramCount} OR serial_number ILIKE $${paramCount} OR mac ILIKE $${paramCount} OR d_sn ILIKE $${paramCount})`;
+      } else {
+        queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      }
       queryValues.push(`%${search}%`);
       paramCount++;
     }
@@ -3463,44 +3494,44 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
       paramCount++;
     }
 
+    const dateCol = isClaroExport ? 'data_da_captura' : 'data_leitura';
     if (startDate) {
-      queryText += ` AND data_leitura >= $${paramCount}`;
+      queryText += ` AND ${dateCol} >= $${paramCount}`;
       queryValues.push(startDate);
       paramCount++;
     }
 
     if (endDate) {
-      queryText += ` AND data_leitura <= $${paramCount}`;
+      queryText += ` AND ${dateCol} <= $${paramCount}`;
       queryValues.push(`${endDate} 23:59:59`);
       paramCount++;
     }
 
-    queryText += ' ORDER BY data_leitura ASC';
+    queryText += ` ORDER BY ${dateCol} ASC`;
     const etiquetasRes = await pool.query(queryText, queryValues);
 
-    const isClaroExport = targetDb === 'ScanONU_Claro';
     const dataRows = etiquetasRes.rows.map((row, index) => {
-      const gponVal = (row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || '');
-      const ponVal = (row.pon_id && !row.pon_id.toUpperCase().startsWith('N/A_')) ? row.pon_id : gponVal;
-      const serialVal = row.serial_number && row.serial_number !== 'N/A' ? row.serial_number : (row.cpe_sn || '');
-
       if (isClaroExport) {
         return {
-          'ID': index + 1,
+          'ID': row.id || (index + 1),
           'Fabricante': row.fabricante || '',
           'Modelo': row.modelo || '',
-          'Serial Number': serialVal,
-          'PON ID': ponVal,
+          'Serial Number': row.serial_number || '',
+          'Mac': row.mac || '',
+          'GPON ID': row.gpon_id || '',
           'D-SN': row.d_sn || 'N/A',
-          'ONT MAC': row.mac || '',
-          'SSID Wi-Fi': row.wifi_ssid || '',
-          'Senha WIFI': row.wifi_key || '',
-          'Usuário': row.usuario || '',
-          'Senha WEB': row.web_key || '',
-          'Operador': row.operador_email || '',
-          'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
+          'SSID': row.ssid || '',
+          'SSID_5Ghz': row.ssid_5ghz || '',
+          'Usuario': row.usuario || '',
+          'Senha_WEB': row.senha_web || '',
+          'Senha_WIFI': row.senha_wifi || '',
+          'Operador': row.operador || '',
+          'Data_da_Captura': row.data_da_captura ? new Date(row.data_da_captura).toLocaleString('pt-BR') : ''
         };
       }
+
+      const gponVal = (row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || '');
+      const serialVal = row.serial_number && row.serial_number !== 'N/A' ? row.serial_number : (row.cpe_sn || '');
 
       return {
         'ID': index + 1,
@@ -3550,12 +3581,17 @@ app.get('/api/admin/query-labels', authenticateSession, async (req: any, res: an
       return res.status(403).json({ error: 'Acesso negado.' });
     }
 
+    const isClaro = targetDb === 'ScanONU_Claro';
     let queryText = 'SELECT * FROM etiquetas_scan_onu WHERE 1=1';
     const queryValues: any[] = [];
     let paramCount = 1;
 
     if (search) {
-      queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      if (isClaro) {
+        queryText += ` AND (gpon_id ILIKE $${paramCount} OR serial_number ILIKE $${paramCount} OR mac ILIKE $${paramCount} OR d_sn ILIKE $${paramCount})`;
+      } else {
+        queryText += ` AND (gpon_sn ILIKE $${paramCount} OR cpe_sn ILIKE $${paramCount} OR mac ILIKE $${paramCount})`;
+      }
       queryValues.push(`%${search}%`);
       paramCount++;
     }
@@ -3566,19 +3602,20 @@ app.get('/api/admin/query-labels', authenticateSession, async (req: any, res: an
       paramCount++;
     }
 
+    const dateCol = isClaro ? 'data_da_captura' : 'data_leitura';
     if (startDate) {
-      queryText += ` AND data_leitura >= $${paramCount}`;
+      queryText += ` AND ${dateCol} >= $${paramCount}`;
       queryValues.push(startDate);
       paramCount++;
     }
 
     if (endDate) {
-      queryText += ` AND data_leitura <= $${paramCount}`;
+      queryText += ` AND ${dateCol} <= $${paramCount}`;
       queryValues.push(`${endDate} 23:59:59`);
       paramCount++;
     }
 
-    queryText += ' ORDER BY data_leitura DESC LIMIT 200';
+    queryText += ` ORDER BY ${dateCol} DESC LIMIT 200`;
     const etiquetasRes = await pool.query(queryText, queryValues);
 
     return res.json({ success: true, labels: etiquetasRes.rows });
@@ -3603,7 +3640,11 @@ app.delete('/api/admin/scans/:gpon_sn', authenticateSession, async (req: any, re
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem excluir registros.' });
     }
 
-    await pool.query('DELETE FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    if (targetDb === 'ScanONU_Claro') {
+      await pool.query('DELETE FROM etiquetas_scan_onu WHERE gpon_id = $1 OR mac = $1 OR serial_number = $1 OR (id::text = $1)', [gpon_sn]);
+    } else {
+      await pool.query('DELETE FROM etiquetas_scan_onu WHERE gpon_sn = $1', [gpon_sn]);
+    }
     return res.json({ success: true, message: 'Leitura excluída com sucesso!' });
   } catch (err: any) {
     console.error('Erro ao excluir etiqueta:', err);
