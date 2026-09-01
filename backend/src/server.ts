@@ -698,7 +698,13 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
     await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
     await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS sap VARCHAR(100) DEFAULT 'N/A'");
+    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
+    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
+    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
     await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_sap ON etiquetas_scan_onu(sap)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_d_sn ON etiquetas_scan_onu(d_sn)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_serial_number ON etiquetas_scan_onu(serial_number)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_pon_id ON etiquetas_scan_onu(pon_id)');
     await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
   } catch (e) {
     console.error('Erro ao garantir colunas/indices adicionais:', e);
@@ -1608,17 +1614,18 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
   // Analise a imagem da etiqueta...
         const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
-1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM). Se não encontrar na etiqueta, escreva 'N/A'.
-2. modelo: Modelo exato da ONU (ex: ZXHN F6645P, F670L, HG8145V5, EG8145V5, F6600, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Se não encontrar na etiqueta, escreva 'N/A'.
-3. cpe_sn: Serial CPE/Equipamento (ex: D-SN, S/N, Serial). Se não houver explicitamente o serial do equipamento (não confunda com PN ou SAP), escreva 'N/A'. Não capture PN ou SAP.
-4. gpon_sn: Serial GPON (ex: SMBS12345678, ZTEG12345678, FHTT12345678, ALCL12345678, HWTC12345678). Se a etiqueta NÃO TIVER Gpon SN explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
-5. mac: Endereço MAC físico de 12 caracteres hexadecimais (ex: 8020DAD1D2D3). Se a etiqueta NÃO TIVER MAC explícito, NÃO INVENTE. Escreva exatamente 'N/A'.
-6. wifi_ssid: Nome da rede Wi-Fi de 2.4GHz ou rede única. CUIDADO EXTREMO com caracteres visualmente semelhantes: diferencie claramente 'B' e '8', 'O' (letra) and '0' (zero), 'I' e '1', 'Z' e '2', 'S' e '5', 'G' e '6', 'D' e '0'. Um erro nesses caracteres fará o sistema falhar. Se não achar, 'N/A'.
-7. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz. Aplique a mesma regra estrita do wifi_ssid para diferenciação de letras e números parecidos. Se não achar, 'N/A'.
-8. wifi_key: Senha padrão do Wi-Fi. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas. CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
-9. usuario: Usuário padrão de acesso web (ex: admin). Se não achar, 'N/A'.
-10. web_key: Senha de acesso web (Password/Senha). Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
-11. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.
+1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM). Para a etiqueta Claro da ZTE, retorne 'ZTE'.
+2. modelo: Modelo exato da ONU (ex: ZXHN F6600P, ZXHN F6645P, F670L, HG8145V5, EG8145V5, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Para ZTE F6600P da Claro, retorne exatamente 'ZXHN F6600P'.
+3. cpe_sn: Serial CPE/Equipamento (ex: S/N: 219579970175). Na etiqueta ZTE Claro capture exatamente o valor do campo 'S/N:'. Se não houver, escreva 'N/A'.
+4. gpon_sn: Serial GPON / PON ID (ex: PON ID: ZTEGD970D7FE, SMBS12345678, ZTEG12345678, FHTT12345678). Na etiqueta ZTE Claro capture exatamente o valor do campo 'PON ID:'. Se a etiqueta NÃO TIVER, escreva 'N/A'.
+5. d_sn: Device Serial Number / D-SN (ex: D-SN: ZTE3ANNR1Y24995). Capture do campo 'D-SN:' se presente na etiqueta. Se não encontrar, escreva 'N/A'.
+6. mac: Endereço MAC físico ONT MAC de 12 caracteres hexadecimais (ex: ONT MAC: 14CA56CEF44D). ATENÇÃO CRÍTICA: Se a etiqueta tiver 'ONT MAC' e 'MTA MAC', capture EXCLUSIVAMENTE o ONT MAC. Ignore completamente o MTA MAC. Se a etiqueta NÃO TIVER MAC explícito, escreva 'N/A'.
+7. wifi_ssid: Nome da rede Wi-Fi principal. Para etiquetas Claro ZTE (ex: CLARO_CEF44D), capture o SSID ou 'CLARO_' + últimos 6 dígitos do ONT MAC.
+8. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz (se houver, senão 'N/A').
+9. wifi_key: Senha padrão do Wi-Fi (ex: U9HxCHt$K9). ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas. CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
+10. usuario: Usuário padrão de acesso web (ex: CLARO_CEF44D ou admin). Na Claro ZTE, capture do campo Usuário ou gere 'CLARO_' + 6 últimos dígitos do MAC.
+11. web_key: Senha de acesso web / Interface Web (Senha: 492AuzG#CTN#GHu). Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
+12. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.
 
 DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
 * TABELA DE MAIÚSCULAS VS MINÚSCULAS DE GRAFIA HOMÓLOGA (Ex: X/x, Z/z, C/c, O/o, S/s, V/v, W/w, P/p, K/k, U/u):
@@ -1644,7 +1651,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
   - '9' (Nove) vs 'g' / 'q': O número '9' assenta na linha de base com laço no topo. As letras 'g' e 'q' possuem hastes verticais que descem abaixo da linha de base.
 
 * Validação por Contexto Cruzado:
-  - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 dígitos hexadecimais (ex: '95C8'), compare com os últimos 4 dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
+  - Antes de finalizar a resposta, cruze as informações de forma lógica: se o SSID do Wi-Fi termina com um código de 4 ou 6 dígitos hexadecimais (ex: 'CEF44D' ou '95C8'), compare com os últimos dígitos do MAC Address lido. Use essa correspondência e similaridade visual para garantir que o MAC Address e os SSIDs estejam perfeitamente alinhados e corretos.`;
 
     let response: any;
     const maxAttempts = 1; // 1 attempt per model to prevent API billing spikes
@@ -1681,6 +1688,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
                     modelo: { type: Type.STRING },
                     cpe_sn: { type: Type.STRING },
                     gpon_sn: { type: Type.STRING },
+                    d_sn: { type: Type.STRING },
                     mac: { type: Type.STRING },
                     wifi_ssid: { type: Type.STRING },
                     wifi_ssid_5g: { type: Type.STRING },
@@ -1764,8 +1772,16 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       cpeNorm = 'N7' + cpeNorm.substring(2);
     }
 
-    const modelNormTemp = normalizeModel(geminiData.modelo || '', fabricanteNorm);
+    let dsnNorm = (geminiData.d_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
+    if (!dsnNorm || dsnNorm === 'NA') dsnNorm = 'N/A';
+
+    let modelNormTemp = normalizeModel(geminiData.modelo || '', fabricanteNorm);
     const modelUpper = modelNormTemp.toUpperCase();
+
+    if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('ZXHN F6600P')) {
+      fabricanteNorm = 'ZTE';
+      modelNormTemp = 'ZXHN F6600P';
+    }
 
     if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || fabricanteNorm.toUpperCase().includes('KAON')) {
       let actualGpon = cleanAndNormalizePG2447Serial(gponNorm) || 
@@ -1781,16 +1797,33 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       cpeNorm = 'N/A';
     }
 
+    let resolvedUsuario = geminiData.usuario || '';
+    let resolvedWifiSsid = geminiData.wifi_ssid || '';
+
+    // Regra Claro ZTE ZXHN F6600P: usuario e wifi_ssid = CLARO_ + últimos 6 dígitos do MAC
+    if (modelNormTemp === 'ZXHN F6600P' && macNorm && macNorm !== 'N/A' && macNorm.length >= 6) {
+      const last6Mac = macNorm.slice(-6);
+      if (!resolvedUsuario || resolvedUsuario.toUpperCase() === 'N/A' || resolvedUsuario.toUpperCase().startsWith('CLARO')) {
+        resolvedUsuario = `CLARO_${last6Mac}`;
+      }
+      if (!resolvedWifiSsid || resolvedWifiSsid.toUpperCase() === 'N/A' || resolvedWifiSsid.toUpperCase().startsWith('CLARO')) {
+        resolvedWifiSsid = `CLARO_${last6Mac}`;
+      }
+    }
+
     scanResult = {
       fabricante: fabricanteNorm,
-      modelo: normalizeModel(geminiData.modelo || '', fabricanteNorm),
-      cpe_sn: cpeNorm,
+      modelo: modelNormTemp,
+      cpe_sn: cpeNorm || 'N/A',
+      serial_number: cpeNorm || 'N/A',
       gpon_sn: gponNorm,
+      pon_id: gponNorm,
+      d_sn: dsnNorm,
       mac: macNorm,
-      wifi_ssid: geminiData.wifi_ssid || '',
+      wifi_ssid: resolvedWifiSsid,
       wifi_ssid_5g: geminiData.wifi_ssid_5g || '',
       wifi_key: geminiData.wifi_key || '',
-      usuario: geminiData.usuario || '',
+      usuario: resolvedUsuario,
       senha: geminiData.web_key || geminiData.senha || '',
       web_key: geminiData.web_key || geminiData.senha || '',
       reimpressa: geminiData.reimpressa || 'nao'
@@ -1933,22 +1966,39 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
   }
 });
 
-// Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
-// Nova rota para salvar ou atualizar (sobrescrever) os dados no banco PostgreSQL
 app.post('/api/save-label', async (req: any, res: any) => {
   try {
-    let { fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao } = req.body;
+    let { fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao } = req.body;
+
+    if (serial_number && (!cpe_sn || cpe_sn === 'N/A')) {
+      cpe_sn = serial_number;
+    }
+    if (pon_id && (!gpon_sn || gpon_sn === 'N/A')) {
+      gpon_sn = pon_id;
+    }
 
     fabricante = normalizeFabricante(fabricante || 'N/A', modelo || '');
-    // Gerar um GPON SN único se vier como N/A para não violar a UNIQUE constraint no PostgreSQL
     let normalizedModelo = normalizeModel(modelo, fabricante);
     const isFast5670 = normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
 
-    // Ajuste/Validação Restritiva do Modelo PG2447 (GPO obrigatório)
+    if (normalizedModelo === 'ZXHN F6600P' || (modelo && modelo.toUpperCase().includes('6600'))) {
+      fabricante = 'ZTE';
+      normalizedModelo = 'ZXHN F6600P';
+      const cleanMac = mac ? mac.replace(/[^0-9A-F]/ig, '').toUpperCase() : '';
+      if (cleanMac.length >= 6) {
+        const last6 = cleanMac.slice(-6);
+        if (!usuario || usuario.toUpperCase() === 'N/A' || usuario.toUpperCase() === 'NA' || usuario.toUpperCase().startsWith('CLARO')) {
+          usuario = `CLARO_${last6}`;
+        }
+        if (!wifi_ssid || wifi_ssid.toUpperCase() === 'N/A' || wifi_ssid.toUpperCase() === 'NA' || wifi_ssid.toUpperCase().startsWith('CLARO')) {
+          wifi_ssid = `CLARO_${last6}`;
+        }
+      }
+    }
+
     if (normalizedModelo === 'PG2447') {
       let realSerial = cleanAndNormalizePG2447Serial(cpe_sn) || cleanAndNormalizePG2447Serial(gpon_sn);
 
-      // Validação estrita: Aceitar somente quando for GPO...
       if (!realSerial) {
         return res.status(400).json({ 
           success: false, 
@@ -1958,12 +2008,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
       cpe_sn = realSerial;
 
-      // Para o PG2447, o cpe_sn é o serial real. O gpon_sn deve ser o N/A_MAC dummy
       const cleanMac = mac ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : '';
       gpon_sn = 'N/A_' + (cleanMac || Math.random().toString(36).substring(2, 10).toUpperCase());
     }
 
-    // Gerar um GPON SN unico se vier como N/A SEMPRE para não violar UNIQUE constraint
     if (!gpon_sn || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
       const suffix = (mac && mac.toUpperCase() !== 'N/A') ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : Math.random().toString(36).substring(2, 10).toUpperCase();
       gpon_sn = 'N/A_' + suffix;
@@ -2002,12 +2050,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
       });
     }
 
-    // Determinar em qual banco de dados salvar
     let chosenDb = targetDb;
     const databases = getActiveDatabases();
     
     if (!chosenDb) {
-      // Procurar em qual banco o registro já existe
       for (const dbName of databases) {
         try {
           const tempPool = getPoolForDatabase(dbName);
@@ -2023,7 +2069,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
       }
     }
 
-    // Se ainda não tiver escolhido, tentar buscar pela operação do usuário logado
     if (!chosenDb && req.user && req.user.email) {
       try {
         const defaultPool = getPoolForDatabase('db-scanonu');
@@ -2042,7 +2087,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
       }
     }
 
-    // Se ainda não tiver escolhido, usar o padrão
     if (!chosenDb) {
       chosenDb = getDefaultDatabaseName();
     }
@@ -2050,7 +2094,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
     const pool = getPoolForDatabase(chosenDb);
     await ensureDatabaseSchema(pool, chosenDb);
 
-    // Gerar arquivo ZPL e enviar para o MinIO
     let zplUrl: string | null = null;
     try {
       zplUrl = await uploadZplToMinio({
@@ -2117,11 +2160,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
       });
     }
     
-    // NOVO: Lógica de reconciliação (IA -> Planilha)
     let reconciledGpon = null;
     let reconciledMac = null;
     let reconciledCpe = null;
-      let reconciledModelo = null;
+    let reconciledModelo = null;
     if (!exists && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
       const candidatesRes = await pool.query(
         "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
@@ -2140,7 +2182,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
             const cleanSsid = wifi_ssid.replace(/_(2G|5G)$/i, '').trim().toUpperCase();
             if (cleanMac.length >= 4 && cleanSsid.length >= 4) {
               const suffix = cleanSsid.slice(-4);
-              // Ignorar se o sufixo for o próprio número do modelo (ex: '2447', '5670', '6600', '5655') ou não for um hexadecimal de 4 dígitos válido
               if (suffix === '2447' || suffix === '5670' || suffix === '6600' || suffix === '5655' || suffix === '5657' || !/^[0-9A-F]{4}$/.test(suffix)) {
                 return false;
               }
@@ -2150,31 +2191,29 @@ app.post('/api/save-label', async (req: any, res: any) => {
           }
         });
 
-        if (matchingRows.length === 1) {
-          const matchedRow = matchingRows[0];
-          reconciledGpon = matchedRow.gpon_sn;
-          reconciledMac = matchedRow.mac;
-          reconciledCpe = matchedRow.cpe_sn;
-          if (matchedRow.fabricante) fabricante = matchedRow.fabricante;
-          reconciledModelo = matchedRow.modelo;
+        if (matchingRows.length > 0) {
+          const bestMatch = matchingRows[0];
+          reconciledGpon = bestMatch.gpon_sn;
+          reconciledMac = bestMatch.mac;
+          reconciledCpe = bestMatch.cpe_sn;
+          reconciledModelo = bestMatch.modelo;
         }
     }
 
-    const targetGpon = exists ? checkRes.rows[0].gpon_sn : (reconciledGpon || gpon_sn);
-
-    // Se estamos salvando um registro completo com GPON real, limpamos registros temporários duplicados com o mesmo SSID (exceto o próprio que estamos atualizando)
-    if (gpon_sn && !gpon_sn.toUpperCase().startsWith('N/A') && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA') {
-      try {
-        await pool.query(
-          "DELETE FROM etiquetas_scan_onu WHERE wifi_ssid = $1 AND gpon_sn LIKE 'N/A%' AND gpon_sn <> $2",
-          [wifi_ssid, targetGpon]
-        );
-      } catch (delErr) {
-        console.error('Erro ao limpar registro temporario duplicado:', delErr);
-      }
-    }
-
     if (exists || reconciledGpon) {
+        const targetGpon = exists ? checkRes.rows[0].gpon_sn : reconciledGpon;
+
+        if (!exists && reconciledGpon) {
+          try {
+            await pool.query(
+              "DELETE FROM etiquetas_scan_onu WHERE wifi_ssid = $1 AND gpon_sn LIKE 'N/A%' AND gpon_sn <> $2",
+              [wifi_ssid, targetGpon]
+            );
+          } catch (delErr) {
+            console.error('Erro ao limpar registro temporario duplicado:', delErr);
+          }
+        }
+
         const dbRow = exists ? checkRes.rows[0] : null;
 
         if (dbRow) {
@@ -2185,8 +2224,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
           }
         }
 
-        // Função auxiliar para fundir dados da nova captura com os dados existentes do banco
-        // Evita que campos válidos já preenchidos no banco sejam apagados com "N/A" ou vazio
         const getMergedValue = (newVal: any, dbVal: any) => {
           if (!newVal || newVal.toUpperCase() === 'N/A' || newVal.toUpperCase() === 'NA' || newVal.trim() === '') {
             return dbVal || 'N/A';
@@ -2197,6 +2234,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
         let finalFabricante = getMergedValue(fabricante, dbRow?.fabricante);
         let finalModelo = getMergedValue(reconciledModelo || normalizedModelo, dbRow?.modelo);
         let finalCpe = getMergedValue(reconciledCpe || cpe_sn, dbRow?.cpe_sn);
+        let finalDsn = getMergedValue(d_sn, dbRow?.d_sn);
         let finalMac = getMergedValue(reconciledMac || mac, dbRow?.mac);
         let finalSsid = getMergedValue(wifi_ssid, dbRow?.wifi_ssid);
         let finalSsid5g = getMergedValue(resolvedWifiSsid5g, dbRow?.wifi_ssid_5g);
@@ -2218,9 +2256,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
           normalizedModelo === 'F@ST 5670V2';
 
         if (exists && dbRow && (isNP5454T || is5670)) {
-          // Regras específicas do NP5454T e F@ST 5670:
-          // Se for F@ST 5670, permitimos que o operador edite qualquer caractere se houver mudança.
-          // Caso contrário, mantemos os dados originais do banco (regra padrão de reconciliação).
           if (is5670) {
             finalCpe = (cpe_sn && cpe_sn !== dbRow.cpe_sn) ? cpe_sn : (dbRow.cpe_sn || 'N/A');
             finalMac = (mac && mac !== dbRow.mac) ? mac : (dbRow.mac || 'N/A');
@@ -2244,13 +2279,11 @@ app.post('/api/save-label', async (req: any, res: any) => {
               finalGpon = dbRow.gpon_sn || ('N/A_' + (mac && mac !== 'N/A' ? mac : Math.random().toString(36).substring(2, 10).toUpperCase()));
             }
           } else {
-            // NP5454T (Mantém 100% estrito do banco)
             finalCpe = dbRow.cpe_sn || 'N/A';
             finalMac = dbRow.mac || 'N/A';
             finalFabricante = dbRow.fabricante || 'Tellescom';
             finalModelo = dbRow.modelo || 'NP5454T';
 
-            // Permitir editar e salvar no banco as informações de SENHA WEB e SENHA WIFI
             finalWifiKey = (wifi_key && wifi_key.trim() !== '' && wifi_key.toUpperCase() !== 'N/A' && wifi_key.toUpperCase() !== 'NA') ? wifi_key : (dbRow.wifi_key || 'N/A');
             finalWebKey = (resolvedWebKey && resolvedWebKey.trim() !== '' && resolvedWebKey.toUpperCase() !== 'N/A' && resolvedWebKey.toUpperCase() !== 'NA') ? resolvedWebKey : (dbRow.web_key || 'N/A');
 
@@ -2266,7 +2299,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
               finalGpon = dbRow.gpon_sn || ('N/A_' + (mac && mac !== 'N/A' ? mac : Math.random().toString(36).substring(2, 10).toUpperCase()));
             }
 
-            // SSIDs baseados nos 4 últimos dígitos do S/N final (apenas para o NP5454T)
             const cleanSn = finalCpe.replace(/[^A-Z0-9]/ig, '').toUpperCase();
             if (cleanSn.length >= 4 && cleanSn !== 'N/A') {
               const last4 = cleanSn.slice(-4);
@@ -2276,42 +2308,6 @@ app.post('/api/save-label', async (req: any, res: any) => {
           }
         }
 
-        if (exists) {
-          console.log('DEBUG SAVE-LABEL - COMPARANDO DADOS:');
-          console.log(`- Fabricante: Final="${finalFabricante}", DB="${dbRow.fabricante || 'N/A'}"`);
-          console.log(`- Modelo: Final="${finalModelo}", DB="${dbRow.modelo || 'N/A'}"`);
-          console.log(`- CPE: Final="${finalCpe}", DB="${dbRow.cpe_sn || 'N/A'}"`);
-          console.log(`- MAC: Final="${finalMac}", DB="${dbRow.mac || 'N/A'}"`);
-          console.log(`- SSID: Final="${finalSsid}", DB="${dbRow.wifi_ssid || 'N/A'}"`);
-          console.log(`- SSID 5G: Final="${finalSsid5g}", DB="${dbRow.wifi_ssid_5g || 'N/A'}"`);
-          console.log(`- Wifi Key: Final="${finalWifiKey}", DB="${dbRow.wifi_key || 'N/A'}"`);
-          console.log(`- Web Key: Final="${finalWebKey}", DB="${dbRow.web_key || 'N/A'}"`);
-          console.log(`- GPON: Final="${finalGpon}", DB="${dbRow.gpon_sn || 'N/A'}"`);
-
-          const fieldsChanged = 
-            finalFabricante.toUpperCase() !== (dbRow.fabricante || 'N/A').toUpperCase() ||
-            finalModelo.toUpperCase() !== (dbRow.modelo || 'N/A').toUpperCase() ||
-            finalCpe.toUpperCase() !== (dbRow.cpe_sn || 'N/A').toUpperCase() ||
-            finalMac.toUpperCase() !== (dbRow.mac || 'N/A').toUpperCase() ||
-            finalSsid.toUpperCase() !== (dbRow.wifi_ssid || 'N/A').toUpperCase() ||
-            (finalSsid5g || 'N/A').toUpperCase() !== (dbRow.wifi_ssid_5g || 'N/A').toUpperCase() ||
-            finalWifiKey !== (dbRow.wifi_key || 'N/A') ||
-            finalUsuario !== (dbRow.usuario || 'N/A') ||
-            finalWebKey !== (dbRow.web_key || 'N/A') ||
-            finalGpon !== (dbRow.gpon_sn || 'N/A');
-
-          console.log(`- Algum campo mudou (fieldsChanged)? ${fieldsChanged}`);
-
-          if (!fieldsChanged) {
-            console.log('DEBUG SAVE-LABEL - Dados identicos no banco. Ignorando update.');
-            return res.json({
-              success: true,
-              message: 'Dados identicos, nada foi alterado.'
-            });
-          }
-        }
-
-      // Se for para sobrescrever, usamos um UPDATE
       const updateQuery = `
           UPDATE etiquetas_scan_onu 
           SET 
@@ -2329,6 +2325,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
             operacao = $13,
             password_router = $14,
             gpon_sn = $15,
+            d_sn = $16,
+            serial_number = $17,
+            pon_id = $18,
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
       `;
@@ -2348,19 +2347,23 @@ app.post('/api/save-label', async (req: any, res: any) => {
         zplUrl || imagem_url || null,
         operacao || 'CTDI MATRIZ',
         finalPasswordRouter,
+        finalGpon,
+        finalDsn || 'N/A',
+        finalCpe,
         finalGpon
       ];
-      console.log(`DEBUG SAVE-LABEL - Executando UPDATE no banco ${chosenDb} com targetGpon="${targetGpon}"...`);
-      const updateResult = await pool.query(updateQuery, updateValues);
-      console.log(`Dados atualizados com sucesso no banco ${chosenDb}. RowCount: ${updateResult.rowCount || 0}. Serial GPON alvo: ${targetGpon}`);
+      await pool.query(updateQuery, updateValues);
     } else {
       const insertQuery = `
-        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (gpon_sn) DO UPDATE SET
           fabricante = EXCLUDED.fabricante,
           modelo = EXCLUDED.modelo,
           cpe_sn = COALESCE(NULLIF(EXCLUDED.cpe_sn, 'N/A'), etiquetas_scan_onu.cpe_sn),
+          serial_number = COALESCE(NULLIF(EXCLUDED.serial_number, 'N/A'), etiquetas_scan_onu.serial_number),
+          pon_id = COALESCE(NULLIF(EXCLUDED.pon_id, 'N/A'), etiquetas_scan_onu.pon_id),
+          d_sn = COALESCE(NULLIF(EXCLUDED.d_sn, 'N/A'), etiquetas_scan_onu.d_sn),
           mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
           wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
           wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
@@ -2373,7 +2376,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           operacao = EXCLUDED.operacao,
           data_leitura = CURRENT_TIMESTAMP
       `;
-      if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
+        if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
@@ -2386,7 +2389,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
           fabricante || 'N/A',
           normalizedModelo || 'N/A',
           cpe_sn || 'N/A',
+          cpe_sn || 'N/A',
           gpon_sn,
+          gpon_sn,
+          d_sn || 'N/A',
           mac || 'N/A',
           wifi_ssid || 'N/A',
           resolvedWifiSsid5g,
@@ -3293,21 +3299,47 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
     queryText += ' ORDER BY data_leitura ASC';
     const etiquetasRes = await pool.query(queryText, queryValues);
 
-    const dataRows = etiquetasRes.rows.map((row, index) => ({
-      'ID': index + 1,
-      'Fabricante': row.fabricante || '',
-      'Modelo': row.modelo || '',
-      'CPE Serial Number': row.cpe_sn || '',
-      'GPON Serial Number': (row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || ''),
-      'Endereço MAC': row.mac || '',
-      'SSID Wi-Fi 2.4G / Único': row.wifi_ssid || '',
-      'SSID Wi-Fi 5G': row.wifi_ssid_5g || '',
-      'Senha WIFI': row.wifi_key || '',
-      'Usuário': row.usuario || '',
-      'Senha WEB': row.web_key || '',
-      'Operador': row.operador_email || '',
-      'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
-    }));
+    const isClaroExport = targetDb === 'ScanONU_Claro';
+    const dataRows = etiquetasRes.rows.map((row, index) => {
+      const gponVal = (row.gpon_sn && row.gpon_sn.toUpperCase().startsWith('N/A_')) ? 'N/A' : (row.gpon_sn || '');
+      const ponVal = (row.pon_id && !row.pon_id.toUpperCase().startsWith('N/A_')) ? row.pon_id : gponVal;
+      const serialVal = row.serial_number && row.serial_number !== 'N/A' ? row.serial_number : (row.cpe_sn || '');
+
+      if (isClaroExport) {
+        return {
+          'ID': index + 1,
+          'Fabricante': row.fabricante || '',
+          'Modelo': row.modelo || '',
+          'Serial Number': serialVal,
+          'PON ID': ponVal,
+          'D-SN': row.d_sn || 'N/A',
+          'ONT MAC': row.mac || '',
+          'SSID Wi-Fi': row.wifi_ssid || '',
+          'Senha WIFI': row.wifi_key || '',
+          'Usuário': row.usuario || '',
+          'Senha WEB': row.web_key || '',
+          'Operador': row.operador_email || '',
+          'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
+        };
+      }
+
+      return {
+        'ID': index + 1,
+        'Fabricante': row.fabricante || '',
+        'Modelo': row.modelo || '',
+        'CPE Serial Number': serialVal,
+        'GPON Serial Number': gponVal,
+        'D-SN': row.d_sn || 'N/A',
+        'Endereço MAC': row.mac || '',
+        'SSID Wi-Fi 2.4G / Único': row.wifi_ssid || '',
+        'SSID Wi-Fi 5G': row.wifi_ssid_5g || '',
+        'Senha WIFI': row.wifi_key || '',
+        'Usuário': row.usuario || '',
+        'Senha WEB': row.web_key || '',
+        'Operador': row.operador_email || '',
+        'Data de Leitura': row.data_leitura ? new Date(row.data_leitura).toLocaleString('pt-BR') : ''
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataRows);
     const workbook = XLSX.utils.book_new();

@@ -86,7 +86,10 @@ interface ScanData {
   fabricante: string;
   modelo: string;
   cpe_sn: string;
+  serial_number?: string;
   gpon_sn: string;
+  pon_id?: string;
+  d_sn?: string;
   mac: string;
   wifi_ssid: string;
   wifi_ssid_5g: string;
@@ -114,7 +117,10 @@ const DEFAULT_SCAN_DATA: ScanData = {
   fabricante: '',
   modelo: '',
   cpe_sn: '',
+  serial_number: '',
   gpon_sn: '',
+  pon_id: '',
+  d_sn: 'N/A',
   mac: '',
   wifi_ssid: '',
   wifi_ssid_5g: '',
@@ -272,8 +278,20 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     }
   }
 
-  // Rule 1.7.2: ZTE ZXHN F6645P / ZXHN F6600P
-  else if (modelUpper.includes('F6645') || modelUpper.includes('6645P') || modelUpper.includes('6645') || modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+  // Rule 1.7.3: ZTE ZXHN F6600P (Claro)
+  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600')) {
+    dataCopy.modelo = 'ZXHN F6600P';
+    dataCopy.fabricante = 'ZTE';
+    const cleanFullMac = dataCopy.mac.replace(/[:\s-]/g, '').toUpperCase();
+    if (cleanFullMac.length >= 6) {
+      const last6 = cleanFullMac.slice(-6);
+      dataCopy.usuario = `CLARO_${last6}`;
+      dataCopy.wifi_ssid = `CLARO_${last6}`;
+    }
+  }
+  
+  // Rule 1.7.2: ZTE ZXHN F6645P
+  else if (modelUpper.includes('F6645') || modelUpper.includes('6645P') || modelUpper.includes('6645') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
     dataCopy.wifi_ssid = `TIM ULTRAFIBRA_${last4Hex}`;
     dataCopy.wifi_ssid_5g = `TIM ULTRAFIBRA_${last4Hex}`;
   }
@@ -2584,17 +2602,19 @@ export default function App() {
   };
 
   // Mapeamento amigável para rótulos de campos
-  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key'> = {
+  const isClaroContext = selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || provider === 'claro';
+  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key' | 'serial_number' | 'pon_id'> = {
     fabricante: 'Fabricante',
     modelo: 'Modelo',
-    cpe_sn: 'CPE Serial (S/N)',
-    gpon_sn: 'GPON Serial (S/N)',
-    mac: 'Endereço MAC',
-    wifi_ssid: 'SSID Wi-Fi 2.4GHz / Único',
+    cpe_sn: isClaroContext ? 'Serial Number (S/N)' : 'Serial Number (S/N)',
+    gpon_sn: isClaroContext ? 'PON ID' : 'GPON Serial (S/N)',
+    d_sn: 'D-SN',
+    mac: isClaroContext ? 'ONT MAC' : 'Endereço MAC',
+    wifi_ssid: isClaroContext ? 'SSID Wi-Fi' : 'SSID Wi-Fi 2.4GHz / Único',
     wifi_ssid_5g: 'SSID Wi-Fi 5GHz',
     wifi_key: 'Senha WIFI',
-    usuario: 'Usuário Padrão',
-    senha: 'Senha WEB'
+    usuario: isClaroContext ? 'Usuário (Interface Web)' : 'Usuário Padrão',
+    senha: isClaroContext ? 'Senha (Interface Web)' : 'Senha WEB'
   };
 
   // RENDERIZAÇÃO DA ÁREA DE LOGIN OU CONSULTA PÚBLICA
@@ -5289,9 +5309,18 @@ export default function App() {
                       const label = fieldLabels[field];
                       const value = data[field] || '';
 
-                      // Ocultar CPE Serial (S/N) se for N/A ou vazio
+                      // Ocultar Serial Number se for N/A ou vazio (exceto para ZXHN F6600P / Claro)
                       if (field === 'cpe_sn' && (!value || value.toUpperCase() === 'N/A' || value.toUpperCase() === 'NA')) {
-                        return null;
+                        if (data.modelo !== 'ZXHN F6600P' && targetDatabase !== 'ScanONU_Claro') {
+                          return null;
+                        }
+                      }
+
+                      // Ocultar D-SN se for N/A ou vazio (exceto para ZXHN F6600P / Claro)
+                      if (field === 'd_sn' && (!value || value.toUpperCase() === 'N/A' || value.toUpperCase() === 'NA')) {
+                        if (data.modelo !== 'ZXHN F6600P' && targetDatabase !== 'ScanONU_Claro') {
+                          return null;
+                        }
                       }
 
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
