@@ -722,7 +722,23 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
 
     if (dbName === 'ScanONU_Claro') {
-      // Colunas exclusivas do cliente Claro
+      // Migração para renomear cpe_sn para serial_number na tabela do banco Claro
+      try {
+        const checkCols = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
+        const cols = checkCols.rows.map((r: any) => r.column_name.toLowerCase());
+        
+        if (cols.includes('cpe_sn') && !cols.includes('serial_number')) {
+          await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN cpe_sn TO serial_number');
+          console.log('[ScanONU_Claro] Coluna cpe_sn renomeada para serial_number.');
+        } else if (cols.includes('cpe_sn') && cols.includes('serial_number')) {
+          await pool.query("UPDATE etiquetas_scan_onu SET serial_number = cpe_sn WHERE (serial_number IS NULL OR serial_number = 'N/A' OR serial_number = 'NA') AND cpe_sn IS NOT NULL AND cpe_sn <> 'N/A'");
+          await pool.query("ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS cpe_sn");
+          console.log('[ScanONU_Claro] Coluna cpe_sn consolidada em serial_number e removida.');
+        }
+      } catch (renErr: any) {
+        console.error('[ScanONU_Claro] Erro ao migrar cpe_sn para serial_number:', renErr.message || renErr);
+      }
+
       await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
       await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
       await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
@@ -2345,12 +2361,13 @@ app.post('/api/save-label', async (req: any, res: any) => {
           }
         }
 
-      const updateQuery = `
+      if (chosenDb === 'ScanONU_Claro') {
+        const updateQuery = `
           UPDATE etiquetas_scan_onu 
           SET 
             fabricante = $1,
             modelo = $2,
-            cpe_sn = $3,
+            serial_number = $3,
             mac = $4,
             wifi_ssid = $5,
             wifi_ssid_5g = $6,
@@ -2363,83 +2380,113 @@ app.post('/api/save-label', async (req: any, res: any) => {
             password_router = $14,
             gpon_sn = $15,
             d_sn = $16,
-            serial_number = $17,
-            pon_id = $18,
+            pon_id = $17,
             data_leitura = CURRENT_TIMESTAMP
           WHERE gpon_sn = $11
-      `;
-
-      const updateValues = [
-        finalFabricante,
-        finalModelo,
-        finalCpe,
-        finalMac,
-        finalSsid,
-        finalSsid5g,
-        finalWifiKey,
-        finalUsuario,
-        finalWebKey,
-        operador || 'sistema',
-        targetGpon,
-        zplUrl || imagem_url || null,
-        operacao || 'CTDI MATRIZ',
-        finalPasswordRouter,
-        finalGpon,
-        finalDsn || 'N/A',
-        finalCpe,
-        finalGpon
-      ];
-      try {
-        await pool.query(updateQuery, updateValues);
-      } catch (updateErr: any) {
-        if (String(updateErr?.message).includes('column') || String(updateErr?.message).includes('d_sn') || String(updateErr?.message).includes('serial_number') || String(updateErr?.message).includes('pon_id')) {
-          console.warn(`[Auto-Migration] Detectada coluna faltante em ${chosenDb}. Aplicando ALTER TABLE agora...`);
-          try {
-            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
-            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
-            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
-          } catch (altErr) {}
+        `;
+        const updateValues = [
+          finalFabricante,
+          finalModelo,
+          finalCpe,
+          finalMac,
+          finalSsid,
+          finalSsid5g,
+          finalWifiKey,
+          finalUsuario,
+          finalWebKey,
+          operador || 'sistema',
+          targetGpon,
+          zplUrl || imagem_url || null,
+          operacao || 'CLARO',
+          finalPasswordRouter,
+          finalGpon,
+          finalDsn || 'N/A',
+          finalGpon
+        ];
+        try {
           await pool.query(updateQuery, updateValues);
-        } else {
-          throw updateErr;
+        } catch (updateErr: any) {
+          if (String(updateErr?.message).includes('column') || String(updateErr?.message).includes('d_sn') || String(updateErr?.message).includes('serial_number') || String(updateErr?.message).includes('pon_id')) {
+            try {
+              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
+              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
+              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
+            } catch (altErr) {}
+            await pool.query(updateQuery, updateValues);
+          } else {
+            throw updateErr;
+          }
         }
+      } else {
+        const updateQuery = `
+            UPDATE etiquetas_scan_onu 
+            SET 
+              fabricante = $1,
+              modelo = $2,
+              cpe_sn = $3,
+              mac = $4,
+              wifi_ssid = $5,
+              wifi_ssid_5g = $6,
+              wifi_key = $7,
+              usuario = $8,
+              web_key = $9,
+              operador_email = $10,
+              imagem_url = COALESCE($12, imagem_url),
+              operacao = $13,
+              password_router = $14,
+              gpon_sn = $15,
+              data_leitura = CURRENT_TIMESTAMP
+            WHERE gpon_sn = $11
+        `;
+        const updateValues = [
+          finalFabricante,
+          finalModelo,
+          finalCpe,
+          finalMac,
+          finalSsid,
+          finalSsid5g,
+          finalWifiKey,
+          finalUsuario,
+          finalWebKey,
+          operador || 'sistema',
+          targetGpon,
+          zplUrl || imagem_url || null,
+          operacao || 'CTDI MATRIZ',
+          finalPasswordRouter,
+          finalGpon
+        ];
+        await pool.query(updateQuery, updateValues);
       }
     } else {
-      const insertQuery = `
-        INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-        ON CONFLICT (gpon_sn) DO UPDATE SET
-          fabricante = EXCLUDED.fabricante,
-          modelo = EXCLUDED.modelo,
-          cpe_sn = COALESCE(NULLIF(EXCLUDED.cpe_sn, 'N/A'), etiquetas_scan_onu.cpe_sn),
-          serial_number = COALESCE(NULLIF(EXCLUDED.serial_number, 'N/A'), etiquetas_scan_onu.serial_number),
-          pon_id = COALESCE(NULLIF(EXCLUDED.pon_id, 'N/A'), etiquetas_scan_onu.pon_id),
-          d_sn = COALESCE(NULLIF(EXCLUDED.d_sn, 'N/A'), etiquetas_scan_onu.d_sn),
-          mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
-          wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
-          wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
-          wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
-          usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
-          web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
-          password_router = COALESCE(NULLIF(NULLIF(EXCLUDED.password_router, 'N/A'), 'NA'), etiquetas_scan_onu.password_router),
-          operador_email = EXCLUDED.operador_email,
-          imagem_url = COALESCE(EXCLUDED.imagem_url, etiquetas_scan_onu.imagem_url),
-          operacao = EXCLUDED.operacao,
-          data_leitura = CURRENT_TIMESTAMP
-      `;
+      if (chosenDb === 'ScanONU_Claro') {
+        const insertQuery = `
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          ON CONFLICT (gpon_sn) DO UPDATE SET
+            fabricante = EXCLUDED.fabricante,
+            modelo = EXCLUDED.modelo,
+            serial_number = COALESCE(NULLIF(EXCLUDED.serial_number, 'N/A'), etiquetas_scan_onu.serial_number),
+            pon_id = COALESCE(NULLIF(EXCLUDED.pon_id, 'N/A'), etiquetas_scan_onu.pon_id),
+            d_sn = COALESCE(NULLIF(EXCLUDED.d_sn, 'N/A'), etiquetas_scan_onu.d_sn),
+            mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
+            wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
+            wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
+            wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
+            usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
+            web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
+            password_router = COALESCE(NULLIF(NULLIF(EXCLUDED.password_router, 'N/A'), 'NA'), etiquetas_scan_onu.password_router),
+            operador_email = EXCLUDED.operador_email,
+            imagem_url = COALESCE(EXCLUDED.imagem_url, etiquetas_scan_onu.imagem_url),
+            operacao = EXCLUDED.operacao,
+            data_leitura = CURRENT_TIMESTAMP
+        `;
         if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
           gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
-
         let finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
-        if (normalizedModelo === 'BC-UM221E') {
-          finalPasswordRouter = 'N/A';
-        }
-
         const insertValues = [
-          fabricante || 'N/A',
-          normalizedModelo || 'N/A',
-          cpe_sn || 'N/A',
+          fabricante || 'ZTE',
+          normalizedModelo || 'ZXHN F6600P',
           cpe_sn || 'N/A',
           gpon_sn,
           gpon_sn,
@@ -2453,24 +2500,71 @@ app.post('/api/save-label', async (req: any, res: any) => {
           finalPasswordRouter,
           operador || 'sistema',
           zplUrl || imagem_url || null,
+          operacao || 'CLARO'
+        ];
+        try {
+          await pool.query(insertQuery, insertValues);
+        } catch (insertErr: any) {
+          if (String(insertErr?.message).includes('column') || String(insertErr?.message).includes('d_sn') || String(insertErr?.message).includes('serial_number') || String(insertErr?.message).includes('pon_id')) {
+            try {
+              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
+              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
+              await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
+            } catch (altErr) {}
+            await pool.query(insertQuery, insertValues);
+          } else {
+            throw insertErr;
+          }
+        }
+        console.log(`Dados salvos com sucesso no banco ScanONU_Claro. Serial Number: ${cpe_sn}, PON ID: ${gpon_sn}`);
+      } else {
+        const insertQuery = `
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, password_router, operador_email, imagem_url, operacao)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (gpon_sn) DO UPDATE SET
+            fabricante = EXCLUDED.fabricante,
+            modelo = EXCLUDED.modelo,
+            cpe_sn = COALESCE(NULLIF(EXCLUDED.cpe_sn, 'N/A'), etiquetas_scan_onu.cpe_sn),
+            mac = COALESCE(NULLIF(EXCLUDED.mac, 'N/A'), etiquetas_scan_onu.mac),
+            wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, 'N/A'), etiquetas_scan_onu.wifi_ssid),
+            wifi_ssid_5g = COALESCE(NULLIF(EXCLUDED.wifi_ssid_5g, 'N/A'), etiquetas_scan_onu.wifi_ssid_5g),
+            wifi_key = COALESCE(NULLIF(EXCLUDED.wifi_key, 'N/A'), etiquetas_scan_onu.wifi_key),
+            usuario = COALESCE(NULLIF(EXCLUDED.usuario, 'N/A'), etiquetas_scan_onu.usuario),
+            web_key = COALESCE(NULLIF(EXCLUDED.web_key, 'N/A'), etiquetas_scan_onu.web_key),
+            password_router = COALESCE(NULLIF(NULLIF(EXCLUDED.password_router, 'N/A'), 'NA'), etiquetas_scan_onu.password_router),
+            operador_email = EXCLUDED.operador_email,
+            imagem_url = COALESCE(EXCLUDED.imagem_url, etiquetas_scan_onu.imagem_url),
+            operacao = EXCLUDED.operacao,
+            data_leitura = CURRENT_TIMESTAMP
+        `;
+        if (!gpon_sn || gpon_sn.trim() === '' || gpon_sn.toUpperCase() === 'N/A' || gpon_sn.toUpperCase() === 'NA') {
+          gpon_sn = 'N/A_' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        }
+
+        let finalPasswordRouter = (req.body.password_router !== undefined && req.body.password_router !== null && req.body.password_router.trim() !== '') ? req.body.password_router.trim() : 'N/A';
+        if (normalizedModelo === 'BC-UM221E') {
+          finalPasswordRouter = 'N/A';
+        }
+
+        const insertValues = [
+          fabricante || 'N/A',
+          normalizedModelo || 'N/A',
+          cpe_sn || 'N/A',
+          gpon_sn,
+          mac || 'N/A',
+          wifi_ssid || 'N/A',
+          resolvedWifiSsid5g,
+          wifi_key || 'N/A',
+          usuario || 'N/A',
+          resolvedWebKey || 'N/A',
+          finalPasswordRouter,
+          operador || 'sistema',
+          zplUrl || imagem_url || null,
           operacao || 'CTDI MATRIZ'
         ];
-      try {
         await pool.query(insertQuery, insertValues);
-      } catch (insertErr: any) {
-        if (String(insertErr?.message).includes('column') || String(insertErr?.message).includes('d_sn') || String(insertErr?.message).includes('serial_number') || String(insertErr?.message).includes('pon_id')) {
-          console.warn(`[Auto-Migration] Detectada coluna faltante em ${chosenDb}. Aplicando ALTER TABLE agora...`);
-          try {
-            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS d_sn VARCHAR(100) DEFAULT 'N/A'");
-            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) DEFAULT 'N/A'");
-            await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS pon_id VARCHAR(100) DEFAULT 'N/A'");
-          } catch (altErr) {}
-          await pool.query(insertQuery, insertValues);
-        } else {
-          throw insertErr;
-        }
+        console.log(`Dados salvos com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
       }
-      console.log(`Dados salvos com sucesso no banco ${chosenDb}. Serial GPON: ${gpon_sn}`);
     }
 
     return res.json({ 
