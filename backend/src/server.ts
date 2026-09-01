@@ -697,26 +697,29 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
   }
 
 
-  // Migração para remover a coluna ID caso ela já exista
-  try {
-    const checkColumn = await pool.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='id'"
-    );
-    if (checkColumn.rowCount && checkColumn.rowCount > 0) {
-      await pool.query('ALTER TABLE etiquetas_scan_onu DROP CONSTRAINT IF EXISTS etiquetas_scan_onu_pkey CASCADE');
-      await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS id CASCADE');
-      await pool.query('ALTER TABLE etiquetas_scan_onu ADD PRIMARY KEY (gpon_sn)');
-    }
-  } catch (e) {}
+  if (dbName !== 'ScanONU_Claro') {
+    // Migração para remover a coluna ID caso ela já exista (apenas TIM/padrão)
+    try {
+      const checkColumn = await pool.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='id'"
+      );
+      if (checkColumn.rowCount && checkColumn.rowCount > 0) {
+        await pool.query('ALTER TABLE etiquetas_scan_onu DROP CONSTRAINT IF EXISTS etiquetas_scan_onu_pkey CASCADE');
+        await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS id CASCADE');
+        await pool.query('ALTER TABLE etiquetas_scan_onu ADD PRIMARY KEY (gpon_sn)');
+      }
+    } catch (e) {}
 
-  // Garantir colunas base
-  try {
-    await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
-    await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
-    await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
-    await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS sap VARCHAR(100) DEFAULT 'N/A'");
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_sap ON etiquetas_scan_onu(sap)');
-    await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
+    // Garantir colunas base
+    try {
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid VARCHAR(100)');
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS wifi_ssid_5g VARCHAR(100)');
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(500)');
+      await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS sap VARCHAR(100) DEFAULT 'N/A'");
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_sap ON etiquetas_scan_onu(sap)');
+      await pool.query("CREATE INDEX IF NOT EXISTS idx_etiquetas_scan_onu_clean_mac ON etiquetas_scan_onu (UPPER(REGEXP_REPLACE(mac, '[^a-zA-Z0-9]', '', 'g')))");
+    } catch (e) {}
+  }
 
     if (dbName === 'ScanONU_Claro') {
       try {
@@ -802,39 +805,38 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         await pool.query("ALTER TABLE etiquetas_scan_onu DROP COLUMN IF EXISTS pon_id");
       } catch (cleanErr) {}
     }
-  } catch (e) {
-    console.error('Erro ao garantir colunas/indices adicionais:', e);
-  }
 
-  // Migração para mover data_leitura para a última posição
-  try {
-    const lastCol = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' ORDER BY ordinal_position DESC LIMIT 1");
-    if (lastCol.rowCount && lastCol.rowCount > 0 && lastCol.rows[0].column_name !== 'data_leitura') {
-      console.log('Movendo a coluna data_leitura para a ultima posicao no banco', dbName);
-      await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN data_leitura TO data_leitura_old');
-      await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
-      await pool.query('UPDATE etiquetas_scan_onu SET data_leitura = data_leitura_old');
-      await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN data_leitura_old');
+  if (dbName !== 'ScanONU_Claro') {
+    // Migração para mover data_leitura para a última posição
+    try {
+      const lastCol = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' ORDER BY ordinal_position DESC LIMIT 1");
+      if (lastCol.rowCount && lastCol.rowCount > 0 && lastCol.rows[0].column_name !== 'data_leitura') {
+        console.log('Movendo a coluna data_leitura para a ultima posicao no banco', dbName);
+        await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN data_leitura TO data_leitura_old');
+        await pool.query('ALTER TABLE etiquetas_scan_onu ADD COLUMN data_leitura TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+        await pool.query('UPDATE etiquetas_scan_onu SET data_leitura = data_leitura_old');
+        await pool.query('ALTER TABLE etiquetas_scan_onu DROP COLUMN data_leitura_old');
+      }
+    } catch (e) {
+      console.error('Erro ao mover a coluna data_leitura:', e);
     }
-  } catch (e) {
-    console.error('Erro ao mover a coluna data_leitura:', e);
+
+    // Garantir UNIQUE
+    try {
+      await pool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
+    } catch (e) {}
+
+    // Garantir coluna web_key (se for banco legado que tinha 'senha')
+    try {
+      const checkSenha = await pool.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='senha'"
+      );
+      if (checkSenha.rowCount && checkSenha.rowCount > 0) {
+        await pool.query('UPDATE etiquetas_scan_onu SET wifi_key = senha, senha = wifi_key');
+        await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN senha TO web_key');
+      }
+    } catch (e) {}
   }
-
-  // Garantir UNIQUE
-  try {
-    await pool.query('ALTER TABLE etiquetas_scan_onu ADD CONSTRAINT unique_gpon_sn UNIQUE (gpon_sn)');
-  } catch (e) {}
-
-  // Garantir coluna web_key (se for banco legado que tinha 'senha')
-  try {
-    const checkSenha = await pool.query(
-      "SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu' AND column_name='senha'"
-    );
-    if (checkSenha.rowCount && checkSenha.rowCount > 0) {
-      await pool.query('UPDATE etiquetas_scan_onu SET wifi_key = senha, senha = wifi_key');
-      await pool.query('ALTER TABLE etiquetas_scan_onu RENAME COLUMN senha TO web_key');
-    }
-  } catch (e) {}
 
   if (dbName !== 'ScanONU_Claro') {
     // Migração automática para padronizar Kaon PG2447 no banco (e preencher cpe_sn se vazio/NA)
@@ -1953,7 +1955,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
           let checkRes: any = { rowCount: 0, rows: [] as any[] };
           if (dbName === 'ScanONU_Claro' || normModelo === 'ZXHN F6600P') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, serial_number AS cpe_sn, serial_number, d_sn, gpon_sn, pon_id, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE ((gpon_sn = $1 AND gpon_sn <> 'N/A' AND gpon_sn <> 'NA' AND NOT gpon_sn LIKE 'N/A_%') OR (serial_number = $2 AND serial_number <> 'N/A' AND serial_number <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
+              "SELECT id, fabricante, modelo, serial_number, serial_number AS cpe_sn, mac, gpon_id, gpon_id AS gpon_sn, gpon_id AS pon_id, d_sn, ssid, ssid AS wifi_ssid, ssid_5ghz, ssid_5ghz AS wifi_ssid_5g, usuario, senha_web, senha_web AS web_key, senha_web AS senha, senha_wifi, senha_wifi AS wifi_key, operador, operador AS operador_email, data_da_captura, data_da_captura AS data_leitura FROM etiquetas_scan_onu WHERE ((gpon_id = $1 AND gpon_id <> 'N/A' AND gpon_id <> 'NA' AND NOT gpon_id LIKE 'N/A_%') OR (serial_number = $2 AND serial_number <> 'N/A' AND serial_number <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
               [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
             );
           } else if (normModelo === 'NP5454T') {
