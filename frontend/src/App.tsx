@@ -5320,19 +5320,37 @@ export default function App() {
 
                   {(() => {
                     const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
-                    const isWifiKeyInvalidLength = isFast5670Model && Boolean(data.wifi_key && data.wifi_key.toUpperCase() !== 'N/A' && data.wifi_key.trim().length !== 10);
-                    const isWebKeyInvalidLength = isFast5670Model && Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 8 && data.senha.trim().length !== 9);
-                    const has5670PasswordWarning = isWifiKeyInvalidLength || isWebKeyInvalidLength;
+                    const isClaroModel = data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro';
 
-                    if (!has5670PasswordWarning) return null;
+                    let isWifiKeyInvalidLength = false;
+                    let isWebKeyInvalidLength = false;
+                    let modelTitle = '';
+                    let expectedWifi = 10;
+                    let expectedWeb = 8;
+
+                    if (isFast5670Model) {
+                      isWifiKeyInvalidLength = Boolean(data.wifi_key && data.wifi_key.toUpperCase() !== 'N/A' && data.wifi_key.trim().length !== 10);
+                      isWebKeyInvalidLength = Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 8 && data.senha.trim().length !== 9);
+                      modelTitle = 'F@ST 5670';
+                    } else if (isClaroModel) {
+                      expectedWifi = 10;
+                      expectedWeb = 15;
+                      isWifiKeyInvalidLength = Boolean(data.wifi_key && data.wifi_key.toUpperCase() !== 'N/A' && data.wifi_key.trim().length !== 10);
+                      isWebKeyInvalidLength = Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 15);
+                      modelTitle = 'Claro ZTE F6600P';
+                    }
+
+                    const hasPasswordWarning = isWifiKeyInvalidLength || isWebKeyInvalidLength;
+
+                    if (!hasPasswordWarning) return null;
 
                     return (
                       <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-start gap-3 text-amber-900 animate-fadeIn">
                         <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                         <div className="text-xs space-y-1">
-                          <p className="font-bold">Atenção — Caracteres excedentes na extração (F@ST 5670)</p>
+                          <p className="font-bold">Atenção — Tamanho de senha incorreto ({modelTitle})</p>
                           <p className="text-amber-800 leading-relaxed">
-                            Identificamos que a extração da imagem detectou caracteres a mais na {isWifiKeyInvalidLength && isWebKeyInvalidLength ? 'Senha Wi-Fi e Senha WEB' : isWifiKeyInvalidLength ? 'Senha Wi-Fi' : 'Senha WEB'}. <span className="font-semibold underline">Por favor, confira na etiqueta e digite a senha correta manualmente nos campos abaixo antes de salvar.</span>
+                            Identificamos que a extração da imagem detectou tamanho incorreto na {isWifiKeyInvalidLength && isWebKeyInvalidLength ? 'Senha Wi-Fi e Senha WEB' : isWifiKeyInvalidLength ? 'Senha Wi-Fi' : 'Senha WEB'}. <span className="font-semibold underline">Por favor, confira na etiqueta e digite a senha correta manualmente nos campos abaixo antes de salvar (Wi-Fi: {expectedWifi} carac. / Web: {expectedWeb} carac.).</span>
                           </p>
                         </div>
                       </div>
@@ -5359,8 +5377,22 @@ export default function App() {
                       }
 
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
-                      const isWifiKeyInvalidLength = field === 'wifi_key' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
-                      const isWebKeyInvalidLength = field === 'senha' && isFast5670Model && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8 && value.trim().length !== 9);
+                      const isClaroModel = data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro';
+
+                      let isWifiKeyInvalidLength = false;
+                      let isWebKeyInvalidLength = false;
+                      let expectedLengthText = '';
+
+                      if (isFast5670Model) {
+                        isWifiKeyInvalidLength = field === 'wifi_key' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
+                        isWebKeyInvalidLength = field === 'senha' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8 && value.trim().length !== 9);
+                        expectedLengthText = field === 'wifi_key' ? `Esperado: 10 caracteres (atual: ${value.trim().length})` : `Esperado: 8 caracteres (atual: ${value.trim().length})`;
+                      } else if (isClaroModel) {
+                        isWifiKeyInvalidLength = field === 'wifi_key' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
+                        isWebKeyInvalidLength = field === 'senha' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 15);
+                        expectedLengthText = field === 'wifi_key' ? `Esperado: 10 caracteres (atual: ${value.trim().length})` : `Esperado: 15 caracteres (atual: ${value.trim().length})`;
+                      }
+
                       const isFieldInvalidLength = isWifiKeyInvalidLength || isWebKeyInvalidLength;
 
                       return (
@@ -5409,7 +5441,7 @@ export default function App() {
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 mt-1">
                               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                               <span>
-                                Digite a senha manualmente na tela — {field === 'wifi_key' ? `Esperado: 10 caracteres (atual: ${value.trim().length})` : `Esperado: 8 caracteres (atual: ${value.trim().length})`}
+                                Digite a senha manualmente na tela — {expectedLengthText}
                               </span>
                             </div>
                           )}
