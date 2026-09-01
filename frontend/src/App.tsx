@@ -2606,7 +2606,7 @@ export default function App() {
   const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key' | 'serial_number' | 'pon_id'> = {
     fabricante: 'Fabricante',
     modelo: 'Modelo',
-    cpe_sn: isClaroContext ? 'Serial Number (S/N)' : 'Serial Number (S/N)',
+    cpe_sn: 'Serial Number',
     gpon_sn: isClaroContext ? 'PON ID' : 'GPON Serial (S/N)',
     d_sn: 'D-SN',
     mac: isClaroContext ? 'ONT MAC' : 'Endereço MAC',
