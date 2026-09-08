@@ -2337,6 +2337,20 @@ export default function App() {
           console.log('MAC Address detectado localmente:', cleanMac);
           return { mac: cleanMac };
         }
+
+        // Padrão Serial Number numérico Claro ZTE (ex: 12 dígitos como 219579970175)
+        const snPattern = /^[0-9]{12}$/;
+        if (snPattern.test(rawValue)) {
+          console.log('Serial Number (Claro ZTE) detectado localmente:', rawValue);
+          return { gpon_sn: rawValue };
+        }
+
+        // Padrão D-SN ZTE Claro (ex: ZTE3ANNR1Y24995)
+        const dSnPattern = /^ZTE[A-Z0-9]{13,15}$/;
+        if (dSnPattern.test(rawValue)) {
+          console.log('D-SN detectado localmente:', rawValue);
+          return { gpon_sn: rawValue };
+        }
       }
     } catch (err) {
       console.error('Erro ao detectar código de barras localmente:', err);

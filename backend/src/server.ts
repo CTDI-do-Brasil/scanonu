@@ -262,7 +262,7 @@ ${rawZpl}`;
     for (const modelName of ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash']) {
       try {
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout de 10s no modelo ${modelName}`)), 10000)
+          setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
         );
         response = await Promise.race([
           ai.models.generateContent({
@@ -1765,7 +1765,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
           console.log(`Tentativa ${attempt} de escaneamento usando o modelo ${modelName}...`);
           
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout de 10s no modelo ${modelName}`)), 10000)
+            setTimeout(() => reject(new Error(`Timeout de 25s no modelo ${modelName}`)), 25000)
           );
 
           response = await Promise.race([
@@ -2625,6 +2625,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
 
         const snCol = dbName === 'ScanONU_Claro' ? 'serial_number' : 'cpe_sn';
         const dSnSelect = dbName === 'ScanONU_Claro' ? 'd_sn, pon_id, serial_number,' : '';
+        const dSnWhere = dbName === 'ScanONU_Claro' ? 'OR UPPER(d_sn) = $1 OR UPPER(pon_id) = $1' : '';
         const checkRes = await pool.query(
           `SELECT fabricante, modelo, ${snCol} AS cpe_sn, ${dSnSelect} gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha 
            FROM etiquetas_scan_onu 
@@ -2632,6 +2633,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
               OR UPPER(mac) = $1 
               OR UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1
               OR UPPER(${snCol}) = $1
+              ${dSnWhere}
               OR UPPER(wifi_ssid) = $1 
               OR UPPER(wifi_ssid_5g) = $1`,
           [cleanQuery]
