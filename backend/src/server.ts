@@ -530,6 +530,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       usuario VARCHAR(100),
       senha_web VARCHAR(100),
       senha_wifi VARCHAR(100),
+      resultado_de_teste VARCHAR(100) DEFAULT 'N/A',
       operador VARCHAR(150),
       data_da_captura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -723,12 +724,15 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
 
     if (dbName === 'ScanONU_Claro') {
       try {
+        await pool.query("ALTER TABLE etiquetas_scan_onu ADD COLUMN IF NOT EXISTS resultado_de_teste VARCHAR(100) DEFAULT 'N/A'");
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_resultado_teste ON etiquetas_scan_onu(resultado_de_teste)');
+
         const checkCols = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='etiquetas_scan_onu'");
         const cols = checkCols.rows.map((r: any) => r.column_name.toLowerCase());
         
         // Se a tabela possui qualquer coluna antiga, migra para a estrutura definitiva
         if (cols.includes('cpe_sn') || cols.includes('wifi_ssid') || cols.includes('gpon_sn') || cols.includes('data_leitura') || cols.includes('web_key') || cols.includes('operador_email')) {
-          console.log('[ScanONU_Claro] Migrando tabela para estrutura definitiva de 14 colunas...');
+          console.log('[ScanONU_Claro] Migrando tabela para estrutura definitiva de 15 colunas...');
           await pool.query(`
             CREATE TABLE IF NOT EXISTS etiquetas_scan_onu_new (
               id SERIAL PRIMARY KEY,
@@ -743,6 +747,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
               usuario VARCHAR(100),
               senha_web VARCHAR(100),
               senha_wifi VARCHAR(100),
+              resultado_de_teste VARCHAR(100) DEFAULT 'N/A',
               operador VARCHAR(150),
               data_da_captura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -761,11 +766,12 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
           const userCol = colSelect('usuario', "''");
           const webKeyCol = cols.includes('senha_web') ? 'senha_web' : (cols.includes('web_key') ? 'web_key' : "'N/A'");
           const wifiKeyCol = cols.includes('senha_wifi') ? 'senha_wifi' : (cols.includes('wifi_key') ? 'wifi_key' : "'N/A'");
+          const testResCol = cols.includes('resultado_de_teste') ? 'resultado_de_teste' : "'N/A'";
           const opCol = cols.includes('operador') ? 'operador' : (cols.includes('operador_email') ? 'operador_email' : "'sistema'");
           const dataCol = cols.includes('data_da_captura') ? 'data_da_captura' : (cols.includes('data_leitura') ? 'data_leitura' : 'CURRENT_TIMESTAMP');
 
           await pool.query(`
-            INSERT INTO etiquetas_scan_onu_new (fabricante, modelo, serial_number, mac, gpon_id, d_sn, ssid, ssid_5ghz, usuario, senha_web, senha_wifi, operador, data_da_captura)
+            INSERT INTO etiquetas_scan_onu_new (fabricante, modelo, serial_number, mac, gpon_id, d_sn, ssid, ssid_5ghz, usuario, senha_web, senha_wifi, resultado_de_teste, operador, data_da_captura)
             SELECT 
               COALESCE(${fabCol}, 'ZTE'),
               COALESCE(${modCol}, 'ZXHN F6600P'),
@@ -778,6 +784,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
               COALESCE(${userCol}, ''),
               COALESCE(${webKeyCol}, 'N/A'),
               COALESCE(${wifiKeyCol}, 'N/A'),
+              COALESCE(${testResCol}, 'N/A'),
               COALESCE(${opCol}, 'sistema'),
               COALESCE(${dataCol}, CURRENT_TIMESTAMP)
             FROM etiquetas_scan_onu;
@@ -785,16 +792,17 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
 
           await pool.query("DROP TABLE etiquetas_scan_onu CASCADE;");
           await pool.query("ALTER TABLE etiquetas_scan_onu_new RENAME TO etiquetas_scan_onu;");
-          console.log('[ScanONU_Claro] Tabela etiquetas_scan_onu migrada com sucesso para a nova estrutura de 14 colunas.');
+          console.log('[ScanONU_Claro] Tabela etiquetas_scan_onu migrada com sucesso para a nova estrutura de 15 colunas.');
         }
 
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_mac ON etiquetas_scan_onu(mac)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_gpon_id ON etiquetas_scan_onu(gpon_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_serial_number ON etiquetas_scan_onu(serial_number)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_d_sn ON etiquetas_scan_onu(d_sn)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_resultado_teste ON etiquetas_scan_onu(resultado_de_teste)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_data_captura ON etiquetas_scan_onu(data_da_captura)');
       } catch (renErr: any) {
-        console.error('[ScanONU_Claro] Erro ao migrar estrutura para 14 colunas:', renErr.message || renErr);
+        console.error('[ScanONU_Claro] Erro ao migrar estrutura para 15 colunas:', renErr.message || renErr);
       }
     } else {
       // Limpeza de testes da Claro e remoção de colunas exclusivas da Claro no banco TIM / padrão
@@ -1955,7 +1963,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
           let checkRes: any = { rowCount: 0, rows: [] as any[] };
           if (dbName === 'ScanONU_Claro' || normModelo === 'ZXHN F6600P') {
             checkRes = await pool.query(
-              "SELECT id, fabricante, modelo, serial_number, serial_number AS cpe_sn, mac, gpon_id, gpon_id AS gpon_sn, gpon_id AS pon_id, d_sn, ssid, ssid AS wifi_ssid, ssid_5ghz, ssid_5ghz AS wifi_ssid_5g, usuario, senha_web, senha_web AS web_key, senha_web AS senha, senha_wifi, senha_wifi AS wifi_key, operador, operador AS operador_email, data_da_captura, data_da_captura AS data_leitura FROM etiquetas_scan_onu WHERE ((gpon_id = $1 AND gpon_id <> 'N/A' AND gpon_id <> 'NA' AND NOT gpon_id LIKE 'N/A_%') OR (serial_number = $2 AND serial_number <> 'N/A' AND serial_number <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
+              "SELECT id, fabricante, modelo, serial_number, serial_number AS cpe_sn, mac, gpon_id, gpon_id AS gpon_sn, gpon_id AS pon_id, d_sn, ssid, ssid AS wifi_ssid, ssid_5ghz, ssid_5ghz AS wifi_ssid_5g, usuario, senha_web, senha_web AS web_key, senha_web AS senha, senha_wifi, senha_wifi AS wifi_key, resultado_de_teste, operador, operador AS operador_email, data_da_captura, data_da_captura AS data_leitura FROM etiquetas_scan_onu WHERE ((gpon_id = $1 AND gpon_id <> 'N/A' AND gpon_id <> 'NA' AND NOT gpon_id LIKE 'N/A_%') OR (serial_number = $2 AND serial_number <> 'N/A' AND serial_number <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
               [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
             );
           } else if (normModelo === 'NP5454T') {
@@ -2074,7 +2082,8 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
 
 app.post('/api/save-label', async (req: any, res: any) => {
   try {
-    let { fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao } = req.body;
+    let { fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao, resultado_de_teste, resultado_teste, resultado } = req.body;
+    let finalResultadoTeste = resultado_de_teste || resultado_teste || resultado || 'N/A';
 
     if (serial_number && (!cpe_sn || cpe_sn === 'N/A')) {
       cpe_sn = serial_number;
@@ -2448,9 +2457,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
             usuario = $9,
             senha_web = $10,
             senha_wifi = $11,
-            operador = $12,
+            resultado_de_teste = CASE WHEN $12 <> 'N/A' AND $12 <> '' THEN $12 ELSE COALESCE(etiquetas_scan_onu.resultado_de_teste, 'N/A') END,
+            operador = $13,
             data_da_captura = CURRENT_TIMESTAMP
-          WHERE (id = $13 AND $13 IS NOT NULL) OR gpon_id = $14 OR mac = $15 OR (serial_number = $16 AND serial_number <> 'N/A')
+          WHERE (id = $14 AND $14 IS NOT NULL) OR gpon_id = $15 OR mac = $16 OR (serial_number = $17 AND serial_number <> 'N/A')
         `;
         const updateValues = [
           finalFabricante || 'ZTE',
@@ -2464,6 +2474,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           finalUsuario || '',
           finalWebKey || 'N/A',
           finalWifiKey || 'N/A',
+          finalResultadoTeste || 'N/A',
           operador || 'sistema',
           targetId,
           targetGponId,
@@ -2514,8 +2525,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
     } else {
       if (chosenDb === 'ScanONU_Claro') {
         const insertQuery = `
-          INSERT INTO etiquetas_scan_onu (fabricante, modelo, serial_number, mac, gpon_id, d_sn, ssid, ssid_5ghz, usuario, senha_web, senha_wifi, operador, data_da_captura)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
+          INSERT INTO etiquetas_scan_onu (fabricante, modelo, serial_number, mac, gpon_id, d_sn, ssid, ssid_5ghz, usuario, senha_web, senha_wifi, resultado_de_teste, operador, data_da_captura)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
         `;
         let finalGponValue = gpon_sn;
         if (!finalGponValue || finalGponValue.trim() === '' || finalGponValue.toUpperCase() === 'N/A' || finalGponValue.toUpperCase() === 'NA') {
@@ -2533,6 +2544,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
           usuario || '',
           resolvedWebKey || 'N/A',
           wifi_key || 'N/A',
+          finalResultadoTeste || 'N/A',
           operador || 'sistema'
         ];
         await pool.query(insertQuery, insertValues);
@@ -2624,8 +2636,8 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
         await ensureDatabaseSchema(pool, dbName);
 
         const snCol = dbName === 'ScanONU_Claro' ? 'serial_number' : 'cpe_sn';
-        const dSnSelect = dbName === 'ScanONU_Claro' ? 'd_sn, pon_id, serial_number,' : '';
-        const dSnWhere = dbName === 'ScanONU_Claro' ? 'OR UPPER(d_sn) = $1 OR UPPER(pon_id) = $1' : '';
+        const dSnSelect = dbName === 'ScanONU_Claro' ? 'd_sn, gpon_id AS pon_id, serial_number, resultado_de_teste,' : '';
+        const dSnWhere = dbName === 'ScanONU_Claro' ? 'OR UPPER(d_sn) = $1 OR UPPER(gpon_id) = $1' : '';
         const checkRes = await pool.query(
           `SELECT fabricante, modelo, ${snCol} AS cpe_sn, ${dSnSelect} gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha 
            FROM etiquetas_scan_onu 
@@ -3431,6 +3443,7 @@ app.get('/api/admin/export-xml', authenticateSession, async (req: any, res: any)
           .ele('usuario').txt(row.usuario || '').up()
           .ele('senha_web').txt(row.senha_web || '').up()
           .ele('senha_wifi').txt(row.senha_wifi || '').up()
+          .ele('resultado_de_teste').txt(row.resultado_de_teste || 'N/A').up()
           .ele('operador').txt(row.operador || '').up()
           .ele('data_da_captura').txt(String(row.data_da_captura || '')).up()
         .up();
@@ -3533,6 +3546,7 @@ app.get('/api/admin/export-excel', authenticateSession, async (req: any, res: an
           'Usuario': row.usuario || '',
           'Senha_WEB': row.senha_web || '',
           'Senha_WIFI': row.senha_wifi || '',
+          'Resultado_de_Teste': row.resultado_de_teste || 'N/A',
           'Operador': row.operador || '',
           'Data_da_Captura': row.data_da_captura ? new Date(row.data_da_captura).toLocaleString('pt-BR') : ''
         };
@@ -5817,7 +5831,11 @@ const handleClaroUnitUpdate = async (req: express.Request, res: express.Response
       password_router,
       senha,
       operador,
-      operador_email
+      operador_email,
+      resultado_de_teste,
+      resultado_teste,
+      status_teste,
+      teste
     } = req.body || {};
 
     const whereClauses: string[] = [];
@@ -5919,6 +5937,12 @@ const handleClaroUnitUpdate = async (req: express.Request, res: express.Response
       queryParams.push(String(finalOp).trim());
     }
 
+    const finalResultadoTeste = resultado_de_teste !== undefined ? resultado_de_teste : (resultado_teste !== undefined ? resultado_teste : (status_teste !== undefined ? status_teste : teste));
+    if (finalResultadoTeste !== undefined) {
+      setClauses.push(`resultado_de_teste = $${pIdx++}`);
+      queryParams.push(String(finalResultadoTeste).trim());
+    }
+
     if (setClauses.length === 0) {
       return res.status(400).json({
         success: false,
@@ -5959,8 +5983,14 @@ const handleClaroUnitUpdate = async (req: express.Request, res: express.Response
 
 app.put('/api/external/claro/units', handleClaroUnitUpdate);
 app.post('/api/external/claro/units/edit', handleClaroUnitUpdate);
+app.patch('/api/external/claro/units', handleClaroUnitUpdate);
 app.put('/api/claro/units', handleClaroUnitUpdate);
 app.post('/api/claro/units/edit', handleClaroUnitUpdate);
+app.patch('/api/claro/units', handleClaroUnitUpdate);
+app.post('/api/claro/resultado-teste', handleClaroUnitUpdate);
+app.patch('/api/claro/resultado-teste', handleClaroUnitUpdate);
+app.post('/api/external/claro/resultado-teste', handleClaroUnitUpdate);
+app.patch('/api/external/claro/resultado-teste', handleClaroUnitUpdate);
 
 // Todas as outras rotas GET servem o index.html do React em produção
 app.get('*', (req, res) => {

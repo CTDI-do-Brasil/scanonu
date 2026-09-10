@@ -97,6 +97,7 @@ interface ScanData {
   usuario: string;
   senha: string;
   web_key?: string;
+  resultado_de_teste?: string;
   reimpressa?: boolean;
 }
 
@@ -127,6 +128,7 @@ const DEFAULT_SCAN_DATA: ScanData = {
   wifi_key: '',
   usuario: '',
   senha: '',
+  resultado_de_teste: 'N/A',
   reimpressa: false
 };
 
@@ -2652,7 +2654,7 @@ export default function App() {
 
   // Mapeamento amigável para rótulos de campos
   const isClaroContext = selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || provider === 'claro';
-  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key' | 'serial_number' | 'pon_id'> = {
+  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key' | 'serial_number' | 'pon_id' | 'resultado_de_teste'> = {
     fabricante: 'Fabricante',
     modelo: 'Modelo',
     cpe_sn: 'Serial Number',
@@ -4253,6 +4255,9 @@ export default function App() {
                             <th className="px-4 py-3 font-bold">GPON Serial / MAC</th>
                             <th className="px-4 py-3 font-bold">Wi-Fi (SSID / Senha)</th>
                             <th className="px-4 py-3 font-bold">Web Key</th>
+                            {(targetDatabase === 'ScanONU_Claro' || provider === 'claro') && (
+                              <th className="px-4 py-3 font-bold">Resultado de Teste</th>
+                            )}
                             <th className="px-4 py-3 font-bold">Operador / Data</th>
                             {['master', 'admin'].includes(user?.role || '') && (
                               <th className="px-4 py-3 font-bold text-right">Ações</th>
@@ -4261,17 +4266,17 @@ export default function App() {
                         </thead>
                         <tbody>
                           {queryResults.map((item: any, idx: number) => (
-                            <tr key={item.gpon_sn || idx} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors last:border-b-0">
+                            <tr key={item.gpon_sn || item.gpon_id || item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors last:border-b-0">
                               <td className="px-4 py-3.5 space-y-1">
                                 <div className="font-bold text-slate-800">{item.modelo || 'Modelo Desconhecido'}</div>
                                 <div className="text-[10px] text-slate-400 font-medium capitalize">{item.fabricante || 'Fabricante'}</div>
                               </td>
                               <td className="px-4 py-3.5 space-y-1 font-mono">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-slate-700">{formatGponForDisplay(item.gpon_sn)}</span>
+                                  <span className="font-bold text-slate-700">{formatGponForDisplay(item.gpon_sn || item.gpon_id)}</span>
                                   <button 
                                     onClick={() => {
-                                      navigator.clipboard.writeText(formatGponForDisplay(item.gpon_sn));
+                                      navigator.clipboard.writeText(formatGponForDisplay(item.gpon_sn || item.gpon_id));
                                       setCopiedField(`gpon_${idx}`);
                                       setTimeout(() => setCopiedField(null), 1500);
                                     }}
@@ -4299,20 +4304,33 @@ export default function App() {
                                 )}
                               </td>
                               <td className="px-4 py-3.5 space-y-1">
-                                {item.wifi_ssid && (
-                                  <div className="text-slate-600 font-medium">SSID: <span className="font-mono">{item.wifi_ssid}</span></div>
+                                {(item.wifi_ssid || item.ssid) && (
+                                  <div className="text-slate-600 font-medium">SSID: <span className="font-mono">{item.wifi_ssid || item.ssid}</span></div>
                                 )}
-                                {item.wifi_key && (
-                                  <div className="text-[10px] text-slate-400">Senha: <span className="font-mono text-slate-500">{item.wifi_key}</span></div>
+                                {(item.wifi_key || item.senha_wifi) && (
+                                  <div className="text-[10px] text-slate-400">Senha: <span className="font-mono text-slate-500">{item.wifi_key || item.senha_wifi}</span></div>
                                 )}
-                                {item.wifi_ssid_5g && (
-                                  <div className="text-[10px] text-slate-450 font-medium">5G: <span className="font-mono">{item.wifi_ssid_5g}</span></div>
+                                {(item.wifi_ssid_5g || item.ssid_5ghz) && (
+                                  <div className="text-[10px] text-slate-450 font-medium">5G: <span className="font-mono">{item.wifi_ssid_5g || item.ssid_5ghz}</span></div>
                                 )}
                               </td>
-                              <td className="px-4 py-3.5 font-mono text-slate-600">{item.web_key || '-'}</td>
+                              <td className="px-4 py-3.5 font-mono text-slate-600">{item.web_key || item.senha_web || '-'}</td>
+                              {(targetDatabase === 'ScanONU_Claro' || provider === 'claro') && (
+                                <td className="px-4 py-3.5">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-block ${
+                                    (item.resultado_de_teste || '').toUpperCase().includes('APROV')
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : (item.resultado_de_teste || '').toUpperCase().includes('REPROV') || (item.resultado_de_teste || '').toUpperCase().includes('FALH')
+                                      ? 'bg-red-50 text-red-700 border border-red-200'
+                                      : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                  }`}>
+                                    {item.resultado_de_teste || 'N/A'}
+                                  </span>
+                                </td>
+                              )}
                               <td className="px-4 py-3.5 space-y-0.5">
-                                <div className="text-slate-600 truncate max-w-[120px] font-medium" title={item.operador_email}>{item.operador_email?.split('@')[0]}</div>
-                                <div className="text-[9px] text-slate-400">{item.data_leitura ? new Date(item.data_leitura).toLocaleString('pt-BR') : '-'}</div>
+                                <div className="text-slate-600 truncate max-w-[120px] font-medium" title={item.operador || item.operador_email}>{(item.operador || item.operador_email)?.split('@')[0]}</div>
+                                <div className="text-[9px] text-slate-400">{item.data_da_captura ? new Date(item.data_da_captura).toLocaleString('pt-BR') : (item.data_leitura ? new Date(item.data_leitura).toLocaleString('pt-BR') : '-')}</div>
                               </td>
                               {['master', 'admin'].includes(user?.role || '') && (
                                 <td className="px-4 py-3.5 text-right">
