@@ -5779,6 +5779,170 @@ const handleTimUnitUpdate = async (req: express.Request, res: express.Response) 
 app.put('/api/external/units', handleTimUnitUpdate);
 app.post('/api/external/units/edit', handleTimUnitUpdate);
 
+// Rota da API externa para INCLUSÃO / CADASTRO de unidades - BANCO TIM (db-scanonu)
+const handleTimUnitCreate = async (req: express.Request, res: express.Response) => {
+  try {
+    const apiKeyHeader = req.headers['x-api-key'] || req.query.api_key || req.query.apiKey;
+    const expectedApiKey = process.env.EXTERNAL_API_KEY;
+
+    if (!expectedApiKey || expectedApiKey.trim() === '') {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Serviço de cadastro externo desativado por motivos de segurança. Configure a variável EXTERNAL_API_KEY no servidor.' 
+      });
+    }
+
+    if (apiKeyHeader !== expectedApiKey) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Acesso negado. Chave de API inválida ou ausente (informe no cabeçalho X-API-Key ou parâmetro ?api_key=).' 
+      });
+    }
+
+    if (!dbConnected || !dbPool) {
+      return res.status(503).json({ success: false, error: 'Banco de dados TIM não está conectado.' });
+    }
+
+    const {
+      gpon_sn,
+      modelo,
+      fabricante,
+      cpe_sn,
+      mac,
+      wifi_ssid,
+      wifi_ssid_5g,
+      wifi_key,
+      usuario,
+      web_key,
+      password_router,
+      senha,
+      operador_email,
+      operador,
+      operacao,
+      sap,
+      resultado_de_teste
+    } = req.body || {};
+
+    // 1. Validação de campos obrigatórios
+    const cleanGpon = gpon_sn ? String(gpon_sn).trim() : '';
+    const cleanModelo = modelo ? String(modelo).trim() : '';
+
+    if (!cleanGpon || cleanGpon.toUpperCase() === 'N/A' || cleanGpon.toUpperCase() === 'NA') {
+      return res.status(400).json({
+        success: false,
+        error: 'O campo \'gpon_sn\' é obrigatório e deve ser um identificador válido.'
+      });
+    }
+
+    if (!cleanModelo || cleanModelo.toUpperCase() === 'N/A') {
+      return res.status(400).json({
+        success: false,
+        error: 'O campo \'modelo\' é obrigatório.'
+      });
+    }
+
+    // Normalizar fabricante e modelo
+    const finalFabricante = normalizeFabricante(fabricante || 'ZTE', cleanModelo);
+    const finalModelo = normalizeModel(cleanModelo, finalFabricante);
+
+    // 2. Verificação de duplicidade no banco TIM (Rejeitar se já existir)
+    const cleanMac = mac ? String(mac).replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : '';
+
+    let checkQuery = 'SELECT gpon_sn, modelo, mac, cpe_sn, data_leitura FROM etiquetas_scan_onu WHERE gpon_sn = $1';
+    const checkParams: any[] = [cleanGpon];
+
+    if (cleanMac && cleanMac.length >= 6 && cleanMac !== 'NA' && cleanMac !== 'N/A') {
+      checkQuery += ' OR REPLACE(REPLACE(UPPER(mac), \':\', \'\'), \'-\', \'\') = UPPER($2)';
+      checkParams.push(cleanMac);
+    }
+
+    const checkRes = await dbPool.query(checkQuery, checkParams);
+
+    if (checkRes.rowCount && checkRes.rowCount > 0) {
+      const existing = checkRes.rows[0];
+      const dupField = (existing.gpon_sn && existing.gpon_sn.trim().toUpperCase() === cleanGpon.toUpperCase()) ? 'gpon_sn' : 'mac';
+      return res.status(409).json({
+        success: false,
+        database: 'db-scanonu',
+        error: `Unidade já cadastrada no banco TIM (duplicidade detectada pelo campo '${dupField}').`,
+        duplicateField: dupField,
+        existingUnit: existing
+      });
+    }
+
+    // 3. Inserção no banco TIM
+    const finalWebKey = web_key !== undefined && web_key !== null ? String(web_key).trim() : (password_router !== undefined && password_router !== null ? String(password_router).trim() : (senha ? String(senha).trim() : 'N/A'));
+    const finalPasswordRouter = password_router !== undefined && password_router !== null ? String(password_router).trim() : finalWebKey;
+    const finalCpe = cpe_sn ? String(cpe_sn).trim() : 'N/A';
+    const finalMac = mac ? String(mac).trim() : 'N/A';
+    const finalWifiSsid = wifi_ssid ? String(wifi_ssid).trim() : 'N/A';
+    const finalWifiSsid5g = wifi_ssid_5g ? String(wifi_ssid_5g).trim() : 'N/A';
+    const finalWifiKey = wifi_key ? String(wifi_key).trim() : 'N/A';
+    const finalUsuario = usuario ? String(usuario).trim() : 'N/A';
+    const finalOperador = operador_email ? String(operador_email).trim() : (operador ? String(operador).trim() : 'api_externa');
+    const finalOperacao = operacao ? String(operacao).trim() : 'CTDI MATRIZ';
+    const finalSap = sap ? String(sap).trim() : 'N/A';
+    const finalResultadoTeste = resultado_de_teste ? String(resultado_de_teste).trim() : 'N/A';
+
+    const insertQuery = `
+      INSERT INTO etiquetas_scan_onu (
+        gpon_sn,
+        fabricante,
+        modelo,
+        cpe_sn,
+        mac,
+        wifi_ssid,
+        wifi_ssid_5g,
+        wifi_key,
+        usuario,
+        web_key,
+        password_router,
+        operador_email,
+        operacao,
+        sap,
+        resultado_de_teste,
+        data_leitura
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+      RETURNING *;
+    `;
+
+    const insertValues = [
+      cleanGpon,
+      finalFabricante,
+      finalModelo,
+      finalCpe,
+      finalMac,
+      finalWifiSsid,
+      finalWifiSsid5g,
+      finalWifiKey,
+      finalUsuario,
+      finalWebKey,
+      finalPasswordRouter,
+      finalOperador,
+      finalOperacao,
+      finalSap,
+      finalResultadoTeste
+    ];
+
+    const insertResult = await dbPool.query(insertQuery, insertValues);
+
+    return res.status(201).json({
+      success: true,
+      database: 'db-scanonu',
+      message: 'Unidade cadastrada com sucesso no banco TIM.',
+      unit: insertResult.rows[0]
+    });
+
+  } catch (err: any) {
+    console.error('Erro na API de cadastro TIM:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro interno ao cadastrar unidade no banco TIM.' });
+  }
+};
+
+app.post('/api/external/units', handleTimUnitCreate);
+app.post('/api/external/units/create', handleTimUnitCreate);
+
+
 // Rota da API externa para EDIÇÃO / ATUALIZAÇÃO de unidades - BANCO CLARO (ScanONU_Claro)
 const handleClaroUnitUpdate = async (req: express.Request, res: express.Response) => {
   try {
