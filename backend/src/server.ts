@@ -1462,6 +1462,17 @@ app.get('/api/debug-models', async (req, res) => {
 // Função de parsing baseada em RegEx para extrair dados estruturados do OCR
 const KNOWN_SAGEMCOM_OUIS = ['8020DA', 'D87D7F', '700B01', '786559', '346BA6', '34DB1C', '34DB9C', 'D8D7F7'];
 
+// Função para verificar se a coluna operador do banco TIM possui a marcação de reimpressão
+function isReimpressaoOperador(operador?: string | null): boolean {
+  if (!operador) return false;
+  const clean = String(operador)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  return clean.includes('reimpressao');
+}
+
 function matchMacAndSsidSuffix(mac: string, ssid: string): boolean {
   if (!mac || !ssid) return false;
   const cleanMac = mac.replace(/[^0-9A-FA-F]/g, '');
@@ -1968,27 +1979,27 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             );
           } else if (normModelo === 'NP5454T') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE modelo = 'NP5454T' AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
               [scanResult.cpe_sn, scanResult.mac]
             );
           } else if (normModelo === 'F@ST 5670' || normModelo === 'F@ST 5670V2') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
               [scanResult.cpe_sn, scanResult.mac]
             );
           } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA' && !scanResult.gpon_sn.toUpperCase().startsWith('N/A_')) {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
               [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
             );
           } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
               [scanResult.cpe_sn, scanResult.mac]
             );
           } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
               [scanResult.mac]
             );
           }
@@ -2003,7 +2014,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             if (isTempGpon && scanResult.wifi_ssid) {
               // Tenta achar um registro real pré-carregado no banco que tenha o MAC compatível
               const candidatesRes = await pool.query(
-                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn NOT LIKE 'N/A%' AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)"
+                "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, web_key AS senha FROM etiquetas_scan_onu WHERE gpon_sn NOT LIKE 'N/A%' AND (wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL)"
               );
               const realMatchedRow = candidatesRes.rows.find((row: any) => {
                 const candidateModel = (row.modelo || '').toUpperCase();
@@ -2021,10 +2032,21 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
                   mac: realMatchedRow.mac,
                   cpe_sn: realMatchedRow.cpe_sn,
                   fabricante: realMatchedRow.fabricante || existingData.fabricante,
-                  modelo: realMatchedRow.modelo || existingData.modelo
+                  modelo: realMatchedRow.modelo || existingData.modelo,
+                  operador_email: realMatchedRow.operador_email || existingData.operador_email
                 };
               }
             }
+
+            // REGRA TIM: Bloquear leitura se a coluna operador estiver como 'reimpressão'
+            if (foundDb === 'db-scanonu' && isReimpressaoOperador(existingData.operador_email)) {
+              return res.status(400).json({
+                success: false,
+                error: 'Enviar para a Atualização',
+                bloqueadoReimpressao: true
+              });
+            }
+
             break; // Se já encontrou em algum banco, encerra a busca
           }
         } catch (dbErr) {
@@ -2293,9 +2315,10 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let reconciledMac = null;
     let reconciledCpe = null;
     let reconciledModelo = null;
+    let reconciledOperador = null;
     if (!exists && wifi_ssid && wifi_ssid.toUpperCase() !== 'N/A' && wifi_ssid.toUpperCase() !== 'NA' && chosenDb !== 'ScanONU_Claro') {
       const candidatesRes = await pool.query(
-        "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
+        "SELECT gpon_sn, mac, cpe_sn, fabricante, modelo, operador_email FROM etiquetas_scan_onu WHERE wifi_ssid = 'N/A' OR wifi_ssid = 'NA' OR wifi_ssid IS NULL"
       );
       const matchingRows = candidatesRes.rows.filter((row: any) => {
           const normModel = row.modelo ? row.modelo.toUpperCase() : '';
@@ -2326,10 +2349,23 @@ app.post('/api/save-label', async (req: any, res: any) => {
           reconciledMac = bestMatch.mac;
           reconciledCpe = bestMatch.cpe_sn;
           reconciledModelo = bestMatch.modelo;
+          reconciledOperador = bestMatch.operador_email;
         }
     }
 
     if (exists || reconciledGpon) {
+        // REGRA TIM: Bloquear salvamento/edição se a unidade estiver marcada como reimpressão
+        if (chosenDb === 'db-scanonu') {
+          const checkOperador = exists ? (checkRes.rows[0]?.operador_email || checkRes.rows[0]?.operador) : reconciledOperador;
+          if (isReimpressaoOperador(checkOperador)) {
+            return res.status(400).json({
+              success: false,
+              error: 'Enviar para a Atualização',
+              bloqueadoReimpressao: true
+            });
+          }
+        }
+
         const targetGpon = exists ? (checkRes.rows[0].gpon_id || checkRes.rows[0].gpon_sn) : reconciledGpon;
 
         if (!exists && reconciledGpon) {
@@ -2636,7 +2672,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
         await ensureDatabaseSchema(pool, dbName);
 
         const snCol = dbName === 'ScanONU_Claro' ? 'serial_number' : 'cpe_sn';
-        const dSnSelect = dbName === 'ScanONU_Claro' ? 'd_sn, gpon_id AS pon_id, serial_number, resultado_de_teste,' : '';
+        const dSnSelect = dbName === 'ScanONU_Claro' ? 'd_sn, gpon_id AS pon_id, serial_number, resultado_de_teste, operador,' : 'operador_email, operador_email AS operador,';
         const dSnWhere = dbName === 'ScanONU_Claro' ? 'OR UPPER(d_sn) = $1 OR UPPER(gpon_id) = $1' : '';
         const checkRes = await pool.query(
           `SELECT fabricante, modelo, ${snCol} AS cpe_sn, ${dSnSelect} gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha 
@@ -2662,6 +2698,15 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
     }
 
     if (foundRecord) {
+      // REGRA TIM: Bloquear consulta/ajuste se a unidade no banco TIM estiver marcada como reimpressão
+      if (foundDb === 'db-scanonu' && isReimpressaoOperador(foundRecord.operador_email || foundRecord.operador)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Enviar para a Atualização',
+          bloqueadoReimpressao: true
+        });
+      }
+
       return res.json({
         success: true,
         existsInDb: true,
@@ -5687,6 +5732,21 @@ const handleTimUnitUpdate = async (req: express.Request, res: express.Response) 
       });
     }
 
+    // REGRA TIM: Bloquear edição se a unidade estiver marcada como reimpressão
+    const existingCheck = await dbPool.query(
+      `SELECT operador_email FROM etiquetas_scan_onu WHERE ${whereClauses.join(' AND ')} LIMIT 1`,
+      queryParams.slice(0, pIdx - 1)
+    );
+    if (existingCheck.rowCount && existingCheck.rowCount > 0) {
+      if (isReimpressaoOperador(existingCheck.rows[0].operador_email)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Enviar para a Atualização',
+          bloqueadoReimpressao: true
+        });
+      }
+    }
+
     const setClauses: string[] = [];
 
     if (modelo !== undefined) {
@@ -5848,7 +5908,7 @@ const handleTimUnitCreate = async (req: express.Request, res: express.Response) 
     // 2. Verificação de duplicidade no banco TIM (Rejeitar se já existir)
     const cleanMac = mac ? String(mac).replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : '';
 
-    let checkQuery = 'SELECT gpon_sn, modelo, mac, cpe_sn, data_leitura FROM etiquetas_scan_onu WHERE gpon_sn = $1';
+    let checkQuery = 'SELECT gpon_sn, modelo, mac, cpe_sn, data_leitura, operador_email FROM etiquetas_scan_onu WHERE gpon_sn = $1';
     const checkParams: any[] = [cleanGpon];
 
     if (cleanMac && cleanMac.length >= 6 && cleanMac !== 'NA' && cleanMac !== 'N/A') {
@@ -5860,6 +5920,13 @@ const handleTimUnitCreate = async (req: express.Request, res: express.Response) 
 
     if (checkRes.rowCount && checkRes.rowCount > 0) {
       const existing = checkRes.rows[0];
+      if (isReimpressaoOperador(existing.operador_email)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Enviar para a Atualização',
+          bloqueadoReimpressao: true
+        });
+      }
       const dupField = (existing.gpon_sn && existing.gpon_sn.trim().toUpperCase() === cleanGpon.toUpperCase()) ? 'gpon_sn' : 'mac';
       return res.status(409).json({
         success: false,

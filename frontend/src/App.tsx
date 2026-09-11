@@ -1969,9 +1969,16 @@ export default function App() {
                     'Authorization': `Bearer ${token}`
                   }
                 });
-                if (dbResponse.ok) {
-                  const dbResult = await dbResponse.json();
-                  if (dbResult.success && dbResult.data) {
+                const dbResult = await dbResponse.json().catch(() => ({}));
+                if (dbResult && (dbResult.error === 'Enviar para a Atualização' || dbResult.bloqueadoReimpressao)) {
+                  setBatchResults(prev => prev.map((item, idx) => idx === i ? { 
+                    ...item, 
+                    status: 'error',
+                    errorMsg: 'Enviar para a Atualização'
+                  } : item));
+                  continue;
+                }
+                if (dbResponse.ok && dbResult.success && dbResult.data) {
                     const hasCompleteWifi = dbResult.data.wifi_ssid && (
                       (dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A' && dbResult.data.wifi_key !== 'NA') ||
                       (dbResult.data.wifi_ssid === 'N/A' || dbResult.data.wifi_ssid === 'NA')
@@ -1985,7 +1992,6 @@ export default function App() {
                       };
                       skipGemini = true;
                     }
-                  }
                 }
               }
             }
@@ -2171,17 +2177,23 @@ export default function App() {
               'Authorization': `Bearer ${token}`
             }
           });
-          if (dbResponse.ok) {
-            const dbResult = await dbResponse.json();
-            if (dbResult.success && dbResult.data) {
-              result = {
-                success: true,
-                existsInDb: true,
-                data: dbResult.data,
-                existingData: dbResult.data
-              };
-              skipGemini = true;
-            }
+          const dbResult = await dbResponse.json().catch(() => ({}));
+          if (dbResult && (dbResult.error === 'Enviar para a Atualização' || dbResult.bloqueadoReimpressao)) {
+            setBatchResults(prev => prev.map(it => it.id === itemId ? { 
+              ...it, 
+              status: 'error',
+              errorMsg: 'Enviar para a Atualização'
+            } : it));
+            return;
+          }
+          if (dbResponse.ok && dbResult.success && dbResult.data) {
+            result = {
+              success: true,
+              existsInDb: true,
+              data: dbResult.data,
+              existingData: dbResult.data
+            };
+            skipGemini = true;
           }
         }
       }
@@ -2420,9 +2432,13 @@ export default function App() {
               'Authorization': `Bearer ${token}`
             }
           });
-          if (dbResponse.ok) {
-            const dbResult = await dbResponse.json();
-            if (dbResult.success && dbResult.data) {
+          const dbResult = await dbResponse.json().catch(() => ({}));
+          if (dbResult && (dbResult.error === 'Enviar para a Atualização' || dbResult.bloqueadoReimpressao)) {
+            setError('Enviar para a Atualização');
+            setScreen('idle');
+            return;
+          }
+          if (dbResponse.ok && dbResult.success && dbResult.data) {
               const safeDb = sanitizeData(dbResult.data);
               const hasCompleteWifi = safeDb.wifi_ssid && (
                 (safeDb.wifi_ssid !== 'N/A' && safeDb.wifi_ssid !== 'NA' && safeDb.wifi_key && safeDb.wifi_key !== 'N/A' && safeDb.wifi_key !== 'NA') ||
@@ -2454,7 +2470,6 @@ export default function App() {
             }
           }
         }
-      }
 
       // 2. Se não encontrou no banco, prossegue com Gemini (gastando 1 token)
       console.log('Código de barras não detectado localmente ou não cadastrado no banco. Chamando Gemini Vision...');
@@ -3988,13 +4003,30 @@ export default function App() {
         )}
           {/* Notificação de Erro */}
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5 text-red-800 text-sm">
-              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+            <div className={`mb-4 rounded-xl p-3.5 flex items-start gap-3 text-sm shadow-sm transition-all ${
+              error === 'Enviar para a Atualização'
+                ? 'bg-amber-50 border-2 border-amber-400 text-amber-900'
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}>
+              <AlertTriangle className={`w-5 h-5 mt-0.5 shrink-0 ${
+                error === 'Enviar para a Atualização' ? 'text-amber-600 animate-pulse' : 'text-red-600'
+              }`} />
               <div className="flex-1">
-                <p className="font-semibold">Falha na Leitura</p>
-                <p className="text-red-700/90 text-xs mt-0.5">{error}</p>
+                <p className="font-bold text-sm">
+                  {error === 'Enviar para a Atualização' ? 'Atenção - Bloqueio de Unidade' : 'Falha na Leitura'}
+                </p>
+                <p className={`mt-0.5 ${
+                  error === 'Enviar para a Atualização'
+                    ? 'text-base font-extrabold text-amber-800 tracking-wide'
+                    : 'text-xs text-red-700/90'
+                }`}>
+                  {error}
+                </p>
               </div>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+              <button 
+                onClick={() => setError(null)} 
+                className={error === 'Enviar para a Atualização' ? 'text-amber-500 hover:text-amber-700' : 'text-red-400 hover:text-red-600'}
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
