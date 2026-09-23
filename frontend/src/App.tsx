@@ -99,6 +99,8 @@ interface ScanData {
   web_key?: string;
   resultado_de_teste?: string;
   reimpressa?: boolean;
+  operador?: string;
+  operador_email?: string;
 }
 
 interface BatchItem {
@@ -2669,7 +2671,7 @@ export default function App() {
 
   // Mapeamento amigável para rótulos de campos
   const isClaroContext = selectedClientMenu === 'claro' || targetDatabase === 'ScanONU_Claro' || provider === 'claro';
-  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key' | 'serial_number' | 'pon_id' | 'resultado_de_teste'> = {
+  const fieldLabels: Omit<Record<keyof ScanData, string>, 'reimpressa' | 'web_key' | 'serial_number' | 'pon_id' | 'resultado_de_teste' | 'operador' | 'operador_email'> = {
     fabricante: 'Fabricante',
     modelo: 'Modelo',
     cpe_sn: 'Serial Number',
@@ -3891,7 +3893,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.46</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.47</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5381,6 +5383,21 @@ export default function App() {
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parâmetros analisados</span>
                   </div>
+
+                  {equipmentExistsInDb && (
+                    (existingEquipmentData?.operador_email && String(existingEquipmentData.operador_email).toLowerCase().includes('reimpressao')) ||
+                    (existingEquipmentData?.operador && String(existingEquipmentData.operador).toLowerCase().includes('reimpressao'))
+                  ) && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-900 animate-fadeIn">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Unidade com marcação de Reimpressão</p>
+                        <p className="text-amber-800 text-[11px] mt-0.5">
+                          Esta unidade estava com bloqueio para Enviar para Atualização. A consulta e edição foram liberadas exclusivamente para seu perfil ({user?.role === 'master' ? 'Master' : 'Administrador'}).
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {(() => {
                     const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';

@@ -1473,6 +1473,41 @@ function isReimpressaoOperador(operador?: string | null): boolean {
   return clean.includes('reimpressao');
 }
 
+// Função para verificar se o papel do usuário possui privilégios para ignorar o bloqueio de reimpressão
+function isPrivilegedRole(role?: string | null): boolean {
+  if (!role) return false;
+  const cleanRole = String(role).trim().toLowerCase();
+  return cleanRole === 'master' || cleanRole === 'admin' || cleanRole === 'administrador';
+}
+
+// Resolver o usuário logado a partir do token de autorização, caso ainda não esteja injetado no req
+async function getSessionUser(req: any): Promise<{ email: string; role: string; operacao: string } | null> {
+  if (req.user) return req.user;
+  try {
+    const authHeader = req.headers?.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return null;
+    if (token === 'fallback-admin-token') {
+      return { email: 'admin@scanonu.com', role: 'admin', operacao: 'CTDI MATRIZ' };
+    }
+    if (!dbConnected || !dbPool) return null;
+    const sessionRes = await dbPool.query(
+      'SELECT email, role, operacao FROM sessoes_scan_onu WHERE token = $1 AND data_expiracao > NOW()',
+      [token]
+    );
+    if (sessionRes.rowCount && sessionRes.rowCount > 0) {
+      return {
+        email: sessionRes.rows[0].email,
+        role: sessionRes.rows[0].role,
+        operacao: sessionRes.rows[0].operacao || 'CTDI MATRIZ'
+      };
+    }
+  } catch (err) {
+    console.error('Erro ao resolver usuário de sessão:', err);
+  }
+  return null;
+}
+
 function matchMacAndSsidSuffix(mac: string, ssid: string): boolean {
   if (!mac || !ssid) return false;
   const cleanMac = mac.replace(/[^0-9A-FA-F]/g, '');
@@ -2039,12 +2074,16 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             }
 
             // REGRA TIM: Bloquear leitura se a coluna operador estiver como 'reimpressão'
+            // Exceção: Liberado para Administrador e Master
             if (foundDb === 'db-scanonu' && isReimpressaoOperador(existingData.operador_email)) {
-              return res.status(400).json({
-                success: false,
-                error: 'Enviar para a Atualização',
-                bloqueadoReimpressao: true
-              });
+              const userRole = (req as any).user?.role;
+              if (!isPrivilegedRole(userRole)) {
+                return res.status(400).json({
+                  success: false,
+                  error: 'Enviar para a Atualização',
+                  bloqueadoReimpressao: true
+                });
+              }
             }
 
             break; // Se já encontrou em algum banco, encerra a busca
@@ -2355,14 +2394,18 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     if (exists || reconciledGpon) {
         // REGRA TIM: Bloquear salvamento/edição se a unidade estiver marcada como reimpressão
+        // Exceção: Liberado para Administrador e Master
         if (chosenDb === 'db-scanonu') {
           const checkOperador = exists ? (checkRes.rows[0]?.operador_email || checkRes.rows[0]?.operador) : reconciledOperador;
           if (isReimpressaoOperador(checkOperador)) {
-            return res.status(400).json({
-              success: false,
-              error: 'Enviar para a Atualização',
-              bloqueadoReimpressao: true
-            });
+            const currentUser = req.user || await getSessionUser(req);
+            if (!isPrivilegedRole(currentUser?.role)) {
+              return res.status(400).json({
+                success: false,
+                error: 'Enviar para a Atualização',
+                bloqueadoReimpressao: true
+              });
+            }
           }
         }
 
@@ -2699,19 +2742,25 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
 
     if (foundRecord) {
       // REGRA TIM: Bloquear consulta/ajuste se a unidade no banco TIM estiver marcada como reimpressão
-      if (foundDb === 'db-scanonu' && isReimpressaoOperador(foundRecord.operador_email || foundRecord.operador)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Enviar para a Atualização',
-          bloqueadoReimpressao: true
-        });
+      // Exceção: Liberado para Administrador e Master
+      const isReimpressao = isReimpressaoOperador(foundRecord.operador_email || foundRecord.operador);
+      if (foundDb === 'db-scanonu' && isReimpressao) {
+        const userRole = (req as any).user?.role;
+        if (!isPrivilegedRole(userRole)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Enviar para a Atualização',
+            bloqueadoReimpressao: true
+          });
+        }
       }
 
       return res.json({
         success: true,
         existsInDb: true,
         data: foundRecord,
-        database: foundDb
+        database: foundDb,
+        avisoReimpressao: isReimpressao
       });
     } else {
       return res.status(404).json({
@@ -5733,17 +5782,21 @@ const handleTimUnitUpdate = async (req: express.Request, res: express.Response) 
     }
 
     // REGRA TIM: Bloquear edição se a unidade estiver marcada como reimpressão
+    // Exceção: Liberado para Administrador e Master
     const existingCheck = await dbPool.query(
       `SELECT operador_email FROM etiquetas_scan_onu WHERE ${whereClauses.join(' AND ')} LIMIT 1`,
       queryParams.slice(0, pIdx - 1)
     );
     if (existingCheck.rowCount && existingCheck.rowCount > 0) {
       if (isReimpressaoOperador(existingCheck.rows[0].operador_email)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Enviar para a Atualização',
-          bloqueadoReimpressao: true
-        });
+        const currentUser = (req as any).user || await getSessionUser(req);
+        if (!isPrivilegedRole(currentUser?.role)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Enviar para a Atualização',
+            bloqueadoReimpressao: true
+          });
+        }
       }
     }
 
@@ -5921,11 +5974,14 @@ const handleTimUnitCreate = async (req: express.Request, res: express.Response) 
     if (checkRes.rowCount && checkRes.rowCount > 0) {
       const existing = checkRes.rows[0];
       if (isReimpressaoOperador(existing.operador_email)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Enviar para a Atualização',
-          bloqueadoReimpressao: true
-        });
+        const currentUser = (req as any).user || await getSessionUser(req);
+        if (!isPrivilegedRole(currentUser?.role)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Enviar para a Atualização',
+            bloqueadoReimpressao: true
+          });
+        }
       }
       const dupField = (existing.gpon_sn && existing.gpon_sn.trim().toUpperCase() === cleanGpon.toUpperCase()) ? 'gpon_sn' : 'mac';
       return res.status(409).json({
