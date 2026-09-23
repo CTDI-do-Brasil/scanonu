@@ -5393,7 +5393,7 @@ export default function App() {
                     let expectedWeb = 8;
 
                     if (isFast5670Model) {
-                      isWifiKeyInvalidLength = Boolean(data.wifi_key && data.wifi_key.toUpperCase() !== 'N/A' && data.wifi_key.trim().length !== 10);
+                      isWifiKeyInvalidLength = false;
                       isWebKeyInvalidLength = Boolean(data.senha && data.senha.toUpperCase() !== 'N/A' && data.senha.trim().length !== 8 && data.senha.trim().length !== 9);
                       modelTitle = 'F@ST 5670';
                     } else if (isClaroModel) {
@@ -5412,9 +5412,13 @@ export default function App() {
                       <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-start gap-3 text-amber-900 animate-fadeIn">
                         <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                         <div className="text-xs space-y-1">
-                          <p className="font-bold">Atenção — Tamanho de senha incorreto ({modelTitle})</p>
+                          <p className="font-bold">Atenção — Tamanho de senha {isFast5670Model ? 'WEB ' : ''}incorreto ({modelTitle})</p>
                           <p className="text-amber-800 leading-relaxed">
-                            Identificamos que a extração da imagem detectou tamanho incorreto na {isWifiKeyInvalidLength && isWebKeyInvalidLength ? 'Senha Wi-Fi e Senha WEB' : isWifiKeyInvalidLength ? 'Senha Wi-Fi' : 'Senha WEB'}. <span className="font-semibold underline">Por favor, confira na etiqueta e digite a senha correta manualmente nos campos abaixo antes de salvar (Wi-Fi: {expectedWifi} carac. / Web: {expectedWeb} carac.).</span>
+                            {isFast5670Model ? (
+                              <>Identificamos que a extração detectou tamanho incorreto na Senha WEB. <span className="font-semibold underline">Por favor, confira na etiqueta e digite a senha WEB correta (8 caracteres) no campo abaixo antes de salvar.</span></>
+                            ) : (
+                              <>Identificamos que a extração da imagem detectou tamanho incorreto na {isWifiKeyInvalidLength && isWebKeyInvalidLength ? 'Senha Wi-Fi e Senha WEB' : isWifiKeyInvalidLength ? 'Senha Wi-Fi' : 'Senha WEB'}. <span className="font-semibold underline">Por favor, confira na etiqueta e digite a senha correta manualmente nos campos abaixo antes de salvar (Wi-Fi: {expectedWifi} carac. / Web: {expectedWeb} carac.).</span></>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -5441,6 +5445,7 @@ export default function App() {
                       }
 
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
+                      const isLockedForModel = isFast5670Model && field !== 'senha';
                       const isClaroModel = data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro';
 
                       let isWifiKeyInvalidLength = false;
@@ -5448,9 +5453,9 @@ export default function App() {
                       let expectedLengthText = '';
 
                       if (isFast5670Model) {
-                        isWifiKeyInvalidLength = field === 'wifi_key' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
+                        isWifiKeyInvalidLength = false;
                         isWebKeyInvalidLength = field === 'senha' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8 && value.trim().length !== 9);
-                        expectedLengthText = field === 'wifi_key' ? `Esperado: 10 caracteres (atual: ${value.trim().length})` : `Esperado: 8 caracteres (atual: ${value.trim().length})`;
+                        expectedLengthText = `Esperado: 8 caracteres (atual: ${value.trim().length})`;
                       } else if (isClaroModel) {
                         isWifiKeyInvalidLength = field === 'wifi_key' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
                         isWebKeyInvalidLength = field === 'senha' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 15);
@@ -5461,15 +5466,28 @@ export default function App() {
 
                       return (
                         <div key={field} className="flex flex-col gap-1">
-                          <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-                            {label}
+                          <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                            <span>{label}</span>
+                            {isLockedForModel && (
+                              <span className="text-[10px] font-medium lowercase tracking-normal text-slate-400 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                <Lock className="w-2.5 h-2.5 text-slate-400" /> não editável
+                              </span>
+                            )}
+                            {isFast5670Model && field === 'senha' && (
+                              <span className="text-[10px] font-bold tracking-normal text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                editável
+                              </span>
+                            )}
                           </label>
                           
                           <div className="relative flex items-center">
                             <input 
                               type="text"
                               value={value}
+                              disabled={isLockedForModel}
+                              readOnly={isLockedForModel}
                               onChange={(e) => {
+                                if (isLockedForModel) return;
                                 const newValue = e.target.value;
                                 let updated = { ...data, [field]: newValue } as any;
                                 if (field === 'senha') {
@@ -5480,12 +5498,14 @@ export default function App() {
                                 }
                                 setData(updated);
                               }}
-                              className={`w-full bg-slate-50 border rounded-lg pl-3 pr-10 py-2 text-sm text-slate-800 outline-none transition-all font-medium ${
-                                isFieldInvalidLength
-                                  ? 'border-amber-500 bg-amber-50/40 focus:border-amber-600 focus:ring-1 focus:ring-amber-500'
-                                  : 'border-slate-200 focus:border-[#003865] focus:ring-1 focus:ring-[#003865]'
+                              className={`w-full border rounded-lg pl-3 pr-10 py-2 text-sm outline-none transition-all font-medium ${
+                                isLockedForModel
+                                  ? 'bg-slate-100/90 text-slate-500 border-slate-200 cursor-not-allowed select-none'
+                                  : isFieldInvalidLength
+                                    ? 'bg-amber-50/40 border-amber-500 text-slate-800 focus:border-amber-600 focus:ring-1 focus:ring-amber-500'
+                                    : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-[#003865] focus:ring-1 focus:ring-[#003865]'
                               }`}
-                              placeholder={`Insira o ${label.toLowerCase()}`}
+                              placeholder={isLockedForModel ? label : `Insira o ${label.toLowerCase()}`}
                             />
                             {value && (
                               <button 
@@ -6049,64 +6069,58 @@ export default function App() {
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  <span className="text-xs font-bold text-slate-500 uppercase">Dados do QR Code (Não editáveis)</span>
+                  <Lock className="w-4 h-4 text-slate-400" />
+                  <span className="text-xs font-bold text-slate-500 uppercase">Dados da Unidade (Bloqueados para edição)</span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold">SERIAL NUMBER</span>
-                  <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.cpe_sn}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold">MAC ADDRESS</span>
-                  <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.mac}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold">PON ID</span>
-                  <div className="font-mono text-sm text-slate-700">{formatGponForDisplay(fast5670ConfirmData.gpon_sn)}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold">SERIAL NUMBER</span>
+                    <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.cpe_sn}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold">MAC ADDRESS</span>
+                    <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.mac}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold">PON ID</span>
+                    <div className="font-mono text-sm text-slate-700">{formatGponForDisplay(fast5670ConfirmData.gpon_sn)}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold">WIFI KEY</span>
+                    <div className="font-mono text-sm text-slate-700">{fast5670ConfirmData.wifi_key || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold">WIFI SSID (2.4G)</span>
+                    <div className="font-mono text-sm text-slate-700 truncate" title={fast5670ConfirmData.wifi_ssid}>{fast5670ConfirmData.wifi_ssid || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold">WIFI SSID (5G)</span>
+                    <div className="font-mono text-sm text-slate-700 truncate" title={fast5670ConfirmData.wifi_ssid_5g}>{fast5670ConfirmData.wifi_ssid_5g || 'N/A'}</div>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                  <span className="text-xs font-bold text-blue-800 uppercase">Dados da Câmera (Editáveis)</span>
+              <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold text-blue-800 uppercase">Única Informação Editável</span>
+                  </div>
+                  <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
+                    Senha WEB
+                  </span>
                 </div>
                 
                 <div>
-                  <label className="text-[10px] text-blue-600 font-bold">WIFI KEY</label>
-                  <input
-                    type="text"
-                    value={fast5670ConfirmData.wifi_key || ''}
-                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_key: e.target.value})}
-                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-blue-600 font-bold">WEB KEY / ADMIN</label>
+                  <label className="text-[10px] text-blue-600 font-bold block mb-1">WEB KEY / ADMIN</label>
                   <input
                     type="text"
                     value={fast5670ConfirmData.senha || fast5670ConfirmData.web_key || ''}
                     onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, senha: e.target.value, web_key: e.target.value})}
-                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
+                    className="w-full bg-white border border-blue-300 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865] focus:ring-1 focus:ring-[#003865]"
+                    placeholder="Digite a senha WEB"
                   />
-                </div>
-                <div>
-                  <label className="text-[10px] text-blue-600 font-bold">WIFI SSID (2.4G)</label>
-                  <input
-                    type="text"
-                    value={fast5670ConfirmData.wifi_ssid || ''}
-                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_ssid: e.target.value})}
-                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-blue-600 font-bold">WIFI SSID (5G)</label>
-                  <input
-                    type="text"
-                    value={fast5670ConfirmData.wifi_ssid_5g || ''}
-                    onChange={(e) => setFast5670ConfirmData({...fast5670ConfirmData, wifi_ssid_5g: e.target.value})}
-                    className="w-full bg-white border border-blue-200 px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-[#003865]"
-                  />
+                  <p className="text-[10px] text-blue-500 mt-1">Conforme regra, apenas a Senha WEB pode ser editada para o modelo F@ST 5670.</p>
                 </div>
               </div>
             </div>
