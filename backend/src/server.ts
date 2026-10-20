@@ -2143,7 +2143,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
 
 app.post('/api/save-label', async (req: any, res: any) => {
   try {
-    let { fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao, resultado_de_teste, resultado_teste, resultado } = req.body;
+    let { fabricante, modelo, cpe_sn, serial_number, gpon_sn, pon_id, d_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, senha, web_key, operador, overwrite, targetDb, imagem_url, operacao, resultado_de_teste, resultado_teste, resultado, original_gpon } = req.body;
     let finalResultadoTeste = resultado_de_teste || resultado_teste || resultado || 'N/A';
 
     if (serial_number && (!cpe_sn || cpe_sn === 'N/A')) {
@@ -2305,7 +2305,18 @@ app.post('/api/save-label', async (req: any, res: any) => {
     const checkParams: any[] = [];
     let paramIndex = 1;
 
-    if (cleanGpon && cleanGpon !== 'N/A' && cleanGpon !== 'NA' && !cleanGpon.startsWith('N/A_')) {
+    const cleanOriginalGpon = original_gpon ? String(original_gpon).trim().toUpperCase() : '';
+
+    if (cleanOriginalGpon && cleanOriginalGpon !== 'N/A' && cleanOriginalGpon !== 'NA' && !cleanOriginalGpon.startsWith('N/A_')) {
+      if (chosenDb === 'ScanONU_Claro') {
+        checkQueries.push(`gpon_id = $${paramIndex++}`);
+      } else {
+        checkQueries.push(`gpon_sn = $${paramIndex++}`);
+      }
+      checkParams.push(original_gpon);
+    }
+
+    if (cleanGpon && cleanGpon !== 'N/A' && cleanGpon !== 'NA' && !cleanGpon.startsWith('N/A_') && cleanGpon !== cleanOriginalGpon) {
       if (chosenDb === 'ScanONU_Claro') {
         checkQueries.push(`gpon_id = $${paramIndex++}`);
       } else {
@@ -2462,6 +2473,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
           (dbRow?.modelo && (dbRow.modelo.toUpperCase().includes('5670') || dbRow.modelo.toUpperCase().includes('5670V2'))) ||
           normalizedModelo === 'F@ST 5670' || 
           normalizedModelo === 'F@ST 5670V2';
+        const isBcUm221e = 
+          (dbRow?.modelo && (dbRow.modelo.toUpperCase().includes('BC-UM221E') || dbRow.modelo.toUpperCase().includes('UM221E'))) ||
+          normalizedModelo === 'BC-UM221E';
 
         if (exists && dbRow && (isNP5454T || is5670)) {
           if (is5670) {
@@ -2513,6 +2527,31 @@ app.post('/api/save-label', async (req: any, res: any) => {
               finalSsid = `TIM_ULTRAFIBRA_${last4}_2G`;
               finalSsid5g = `TIM_ULTRAFIBRA_${last4}_5G`;
             }
+          }
+        }
+
+        if (exists && dbRow && isBcUm221e) {
+          finalFabricante = (fabricante && fabricante !== dbRow.fabricante) ? fabricante : (dbRow.fabricante || 'Blu-Castle');
+          finalModelo = (modelo && modelo !== dbRow.modelo) ? modelo : (dbRow.modelo || 'BC-UM221E');
+          finalCpe = 'N/A';
+          finalPasswordRouter = 'N/A';
+          finalMac = (mac && mac !== dbRow.mac) ? mac : (dbRow.mac || 'N/A');
+          finalSsid = (wifi_ssid && wifi_ssid !== dbRow.wifi_ssid) ? wifi_ssid : (dbRow.wifi_ssid || wifi_ssid || 'N/A');
+          finalSsid5g = (resolvedWifiSsid5g && resolvedWifiSsid5g !== dbRow.wifi_ssid_5g) ? resolvedWifiSsid5g : (dbRow.wifi_ssid_5g || resolvedWifiSsid5g || 'N/A');
+          finalWifiKey = (wifi_key && wifi_key !== dbRow.wifi_key) ? wifi_key : ((dbRow.wifi_key && dbRow.wifi_key !== 'N/A' && dbRow.wifi_key !== 'NA') ? dbRow.wifi_key : (wifi_key || 'N/A'));
+          finalWebKey = (resolvedWebKey && resolvedWebKey !== dbRow.web_key) ? resolvedWebKey : ((dbRow.web_key && dbRow.web_key !== 'N/A' && dbRow.web_key !== 'NA') ? dbRow.web_key : (resolvedWebKey || 'N/A'));
+          finalUsuario = (usuario && usuario !== dbRow.usuario) ? usuario : (dbRow.usuario || 'N/A');
+
+          const isValidNewGpon = gpon_sn && 
+            gpon_sn.trim() !== '' && 
+            gpon_sn.toUpperCase() !== 'N/A' && 
+            gpon_sn.toUpperCase() !== 'NA' && 
+            !gpon_sn.toUpperCase().startsWith('N/A_');
+
+          if (isValidNewGpon && gpon_sn.trim().toUpperCase() !== dbRow.gpon_sn) {
+            finalGpon = gpon_sn.trim().toUpperCase();
+          } else {
+            finalGpon = dbRow.gpon_sn || ('N/A_' + (mac && mac !== 'N/A' ? mac : Math.random().toString(36).substring(2, 10).toUpperCase()));
           }
         }
 
