@@ -2055,6 +2055,13 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
               "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo = 'F@ST 5670' OR modelo = 'F@ST 5670V2') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
               [scanResult.cpe_sn, scanResult.mac]
             );
+          } else if (normModelo === 'BC-UM221E' || (scanResult.modelo && String(scanResult.modelo).toUpperCase().includes('UM221E'))) {
+            const cleanScanMac = scanResult.mac ? scanResult.mac.replace(/[^0-9A-F]/ig, '').toUpperCase() : '';
+            const cleanScanGpon = scanResult.gpon_sn ? scanResult.gpon_sn.trim().toUpperCase() : '';
+            checkRes = await pool.query(
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo ILIKE '%BC-UM221E%' OR modelo ILIKE '%UM221E%') AND ((gpon_sn = $1 AND gpon_sn <> 'N/A' AND gpon_sn <> 'NA') OR (REPLACE(REPLACE(mac, ':', ''), '-', '') = $2 AND mac <> 'N/A'))",
+              [cleanScanGpon, cleanScanMac]
+            );
           } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA' && !scanResult.gpon_sn.toUpperCase().startsWith('N/A_')) {
             checkRes = await pool.query(
               "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
@@ -2328,7 +2335,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
     let checkRes: any = { rowCount: 0 };
     let duplicateType = 'GPON Serial';
 
-    const isReconcileModel = normalizedModelo === 'NP5454T' || normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2' || normalizedModelo === 'ZXHN F6600P' || chosenDb === 'ScanONU_Claro';
+    const isBcUm221eModel = normalizedModelo === 'BC-UM221E' || (modelo && (modelo.toUpperCase().includes('BC-UM221E') || modelo.toUpperCase().includes('UM221E')));
+    const isReconcileModel = normalizedModelo === 'NP5454T' || normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2' || normalizedModelo === 'ZXHN F6600P' || isBcUm221eModel || chosenDb === 'ScanONU_Claro';
 
     const cleanMac = mac ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : '';
     const cleanCpe = (serial_number || cpe_sn) ? (serial_number || cpe_sn).trim().toUpperCase() : '';
@@ -2581,7 +2589,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
             gpon_sn.toUpperCase() !== 'NA' && 
             !gpon_sn.toUpperCase().startsWith('N/A_');
 
-          if (isValidNewGpon && gpon_sn.trim().toUpperCase() !== dbRow.gpon_sn) {
+          if (isValidNewGpon && gpon_sn.trim().toUpperCase() !== (dbRow.gpon_sn ? dbRow.gpon_sn.trim().toUpperCase() : '')) {
             finalGpon = gpon_sn.trim().toUpperCase();
           } else {
             finalGpon = dbRow.gpon_sn || ('N/A_' + (mac && mac !== 'N/A' ? mac : Math.random().toString(36).substring(2, 10).toUpperCase()));
@@ -2652,8 +2660,9 @@ app.post('/api/save-label', async (req: any, res: any) => {
               password_router = $14,
               gpon_sn = $15,
               data_leitura = CURRENT_TIMESTAMP
-            WHERE gpon_sn = $11
+            WHERE gpon_sn = $11 OR (REPLACE(REPLACE(mac, ':', ''), '-', '') = $16 AND mac IS NOT NULL AND mac <> 'N/A' AND mac <> '')
         `;
+        const cleanMacParam = cleanMac || (mac ? mac.replace(/[^0-9A-Z]/ig, '').toUpperCase() : '');
         const updateValues = [
           finalFabricante,
           finalModelo,
@@ -2669,7 +2678,8 @@ app.post('/api/save-label', async (req: any, res: any) => {
           zplUrl || imagem_url || null,
           operacao || 'CTDI MATRIZ',
           finalPasswordRouter,
-          finalGpon
+          finalGpon,
+          cleanMacParam
         ];
         await pool.query(updateQuery, updateValues);
       }

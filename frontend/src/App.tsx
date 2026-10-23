@@ -411,6 +411,9 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
                   (String(safeScanned.modelo || '').toUpperCase().includes('6600')) ||
                   (String(safeExisting.fabricante || '').toUpperCase().includes('ZTE') && String(safeScanned.modelo || '').toUpperCase().includes('6600'));
 
+  const isBcUm221e = (String(safeExisting.modelo || '').toUpperCase().includes('UM221E')) ||
+                     (String(safeScanned.modelo || '').toUpperCase().includes('UM221E'));
+
   if (isClaro) {
     merged.fabricante = 'ZTE';
     merged.modelo = 'ZXHN F6600P';
@@ -481,6 +484,37 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
         merged.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4}_5G`;
       }
     }
+  } else if (isBcUm221e) {
+    merged.fabricante = 'Blu-Castle';
+    merged.modelo = 'BC-UM221E';
+    merged.cpe_sn = 'N/A';
+    merged.password_router = 'N/A';
+    merged.usuario = 'admin';
+
+    merged.mac = (safeScanned.mac && safeScanned.mac !== 'N/A' && safeScanned.mac !== 'NA') 
+      ? safeScanned.mac 
+      : (safeExisting.mac || 'N/A');
+
+    merged.gpon_sn = (safeScanned.gpon_sn && safeScanned.gpon_sn !== 'N/A' && safeScanned.gpon_sn !== 'NA' && !safeScanned.gpon_sn.startsWith('N/A_')) 
+      ? safeScanned.gpon_sn 
+      : (safeExisting.gpon_sn || 'N/A');
+
+    merged.wifi_ssid = (safeScanned.wifi_ssid && safeScanned.wifi_ssid !== 'N/A' && safeScanned.wifi_ssid !== 'NA') 
+      ? safeScanned.wifi_ssid 
+      : (safeExisting.wifi_ssid || 'N/A');
+
+    merged.wifi_ssid_5g = (safeScanned.wifi_ssid_5g && safeScanned.wifi_ssid_5g !== 'N/A' && safeScanned.wifi_ssid_5g !== 'NA') 
+      ? safeScanned.wifi_ssid_5g 
+      : (safeExisting.wifi_ssid_5g || 'N/A');
+
+    const dbWifiKey = safeExisting.wifi_key;
+    const scanWifiKey = safeScanned.wifi_key;
+    merged.wifi_key = (scanWifiKey && scanWifiKey !== 'N/A' && scanWifiKey !== 'NA') ? scanWifiKey : (dbWifiKey || 'N/A');
+
+    const dbSenha = safeExisting.senha || (safeExisting as any).web_key;
+    const scanSenha = safeScanned.senha || (safeScanned as any).web_key;
+    merged.senha = (scanSenha && scanSenha !== 'N/A' && scanSenha !== 'NA') ? scanSenha : (dbSenha || 'N/A');
+    merged.web_key = merged.senha;
   } else {
     Object.keys(safeScanned).forEach(key => {
       const val = String((safeScanned as any)[key] || '');
@@ -3930,7 +3964,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.49</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.50</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
