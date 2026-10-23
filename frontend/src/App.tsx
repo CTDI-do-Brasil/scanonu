@@ -193,6 +193,17 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'Tellescom';
   }
 
+  // Normalizar modelo se for Huawei HG8145X6
+  if (
+    modelUpper.includes('8145X6') ||
+    modelUpper.includes('HG8145X6') ||
+    modelUpper.includes('8145-X6') ||
+    (mfgUpper.includes('HUAWEI') && (modelUpper.includes('X6') || modelUpper.includes('OPTIXSTAR')))
+  ) {
+    dataCopy.modelo = 'HG8145X6';
+    dataCopy.fabricante = 'Huawei';
+  }
+
   // Se for Kaon, restaurar o GPON correto (começando com GPO...) se foi jogado em cpe_sn
   if (isKaonModel) {
     let actualGpon = '';
@@ -222,6 +233,21 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   // (PG2447 now requires CPE SN collection)
   if (modelUpper.includes('BCSKV630') || modelUpper.includes('BCSK') || modelUpper.includes('BC-UM221E') || modelUpper.includes('UM221E') || mfgUpper.includes('BLU')) {
     dataCopy.cpe_sn = 'N/A';
+  }
+
+  // Limpeza de MAC: se houver range/pool como 90F97013771F-28(10), isola os primeiros 12 hexadecimais
+  const rawMacStr = dataCopy.mac || '';
+  const mac12Match = rawMacStr.match(/([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}/);
+  if (mac12Match) {
+    dataCopy.mac = mac12Match[0].replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+  }
+
+  // Limpeza de S/N Huawei: isola 20 caracteres se começar com 21 e tiver sufixo de hardware
+  if ((dataCopy.fabricante === 'Huawei' || modelUpper.includes('8145')) && dataCopy.cpe_sn) {
+    const rawCpe = dataCopy.cpe_sn.trim();
+    if (rawCpe.startsWith('21') && rawCpe.length > 20) {
+      dataCopy.cpe_sn = rawCpe.substring(0, 20);
+    }
   }
 
   if (!dataCopy.mac) return dataCopy;
@@ -307,6 +333,17 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
       const last4 = cleanSn.slice(-4);
       dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4}_2G`;
       dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4}_5G`;
+    }
+  }
+
+  // Rule 1.9: Huawei HG8145X6 (TIM UltraFibra)
+  else if (modelUpper.includes('HG8145X6') || modelUpper.includes('8145X6') || (mfgUpper.includes('HUAWEI') && modelUpper.includes('X6'))) {
+    dataCopy.modelo = 'HG8145X6';
+    dataCopy.fabricante = 'Huawei';
+    dataCopy.wifi_ssid = `TUF_${last4Hex}_2G`;
+    dataCopy.wifi_ssid_5g = `TUF_${last4Hex}_5G`;
+    if (!dataCopy.usuario || dataCopy.usuario.toUpperCase() === 'N/A' || dataCopy.usuario.trim() === '') {
+      dataCopy.usuario = 'admin';
     }
   }
   
@@ -3893,7 +3930,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.48</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.49</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5464,6 +5501,7 @@ export default function App() {
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
                       const isLockedForModel = isFast5670Model && field !== 'senha';
                       const isClaroModel = data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro';
+                      const isHG8145X6Model = data.modelo === 'HG8145X6';
 
                       let isWifiKeyInvalidLength = false;
                       let isWebKeyInvalidLength = false;
@@ -5477,6 +5515,10 @@ export default function App() {
                         isWifiKeyInvalidLength = field === 'wifi_key' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 10);
                         isWebKeyInvalidLength = field === 'senha' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 15);
                         expectedLengthText = field === 'wifi_key' ? `Esperado: 10 caracteres (atual: ${value.trim().length})` : `Esperado: 15 caracteres (atual: ${value.trim().length})`;
+                      } else if (isHG8145X6Model) {
+                        isWifiKeyInvalidLength = field === 'wifi_key' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8);
+                        isWebKeyInvalidLength = field === 'senha' && Boolean(value && value.toUpperCase() !== 'N/A' && value.trim().length !== 8);
+                        expectedLengthText = `Esperado: 8 caracteres (atual: ${value.trim().length})`;
                       }
 
                       const isFieldInvalidLength = isWifiKeyInvalidLength || isWebKeyInvalidLength;

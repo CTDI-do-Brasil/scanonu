@@ -1299,7 +1299,8 @@ async function connectToDatabase() {
         // Normalizar modelos ZTE e Huawei
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F670L' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F670L%' OR modelo ILIKE '%F670%') AND modelo != 'F670L'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F6600' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F6600%' OR modelo ILIKE '%F660%') AND modelo != 'F6600'");
-        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145V5%' OR modelo ILIKE '%8145V5%' OR modelo ILIKE '%HG8145%') AND modelo != 'HG8145V5'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145X6' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145X6%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145-X6%') AND modelo != 'HG8145X6'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145V5%' OR modelo ILIKE '%8145V5%' OR (modelo ILIKE '%HG8145%' AND modelo NOT ILIKE '%X6%')) AND modelo != 'HG8145V5'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
         console.log('Normalização de dados históricos concluída com sucesso!');
 
@@ -1719,10 +1720,18 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'F6600';
   }
 
+  // Huawei HG8145X6
+  if (
+    mfgUpper.includes('HUAWEI') &&
+    (modelClean.includes('HG8145X6') || modelClean.includes('8145X6') || modelClean.includes('8145-X6') || modelClean.includes('X6'))
+  ) {
+    return 'HG8145X6';
+  }
+
   // Huawei HG8145V5
   if (
     mfgUpper.includes('HUAWEI') &&
-    (modelClean.includes('HG8145V5') || modelClean.includes('8145V5') || modelClean.includes('HG8145'))
+    (modelClean.includes('HG8145V5') || modelClean.includes('8145V5') || (modelClean.includes('HG8145') && !modelClean.includes('X6')))
   ) {
     return 'HG8145V5';
   }
@@ -1770,16 +1779,16 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
         const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM). Para a etiqueta Claro da ZTE, retorne 'ZTE'.
-2. modelo: Modelo exato da ONU (ex: ZXHN F6600P, ZXHN F6645P, F670L, HG8145V5, EG8145V5, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Para ZTE F6600P da Claro, retorne exatamente 'ZXHN F6600P'.
-3. cpe_sn: Serial CPE/Equipamento (ex: S/N: 219579970175). Na etiqueta ZTE Claro capture exatamente o valor do campo 'S/N:'. Se não houver, escreva 'N/A'.
-4. gpon_sn: Serial GPON / PON ID (ex: PON ID: ZTEGD970D7FE, SMBS12345678, ZTEG12345678, FHTT12345678). Na etiqueta ZTE Claro capture exatamente o valor do campo 'PON ID:'. Se a etiqueta NÃO TIVER, escreva 'N/A'.
+2. modelo: Modelo exato da ONU (ex: HG8145X6, ZXHN F6600P, ZXHN F6645P, F670L, HG8145V5, EG8145V5, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Para Huawei HG8145X6 ou HG8145X6-10-V2, retorne exatamente 'HG8145X6'. Para ZTE F6600P da Claro, retorne exatamente 'ZXHN F6600P'.
+3. cpe_sn: Serial CPE/Equipamento (ex: S/N: 219579970175 ou 2102315FEWRYRC902325). Na Huawei, o S/N tem 20 caracteres (iniciando em 21); capture exclusivamente os 20 caracteres do serial e desconsidere qualquer sufixo após o espaço (ex: 'Y HG8M...'). Na etiqueta ZTE Claro capture exatamente o valor do campo 'S/N:'. Se não houver, escreva 'N/A'.
+4. gpon_sn: Serial GPON / PON ID (ex: PON ID: HWTC6FA0B2B7, ZTEGD970D7FE, SMBS12345678, ZTEG12345678, FHTT12345678). Na etiqueta ZTE Claro capture exatamente o valor do campo 'PON ID:'. Se a etiqueta NÃO TIVER, escreva 'N/A'.
 5. d_sn: Device Serial Number / D-SN (ex: D-SN: ZTE3ANNR1Y24995). Capture do campo 'D-SN:' se presente na etiqueta. Se não encontrar, escreva 'N/A'.
-6. mac: Endereço MAC físico ONT MAC de 12 caracteres hexadecimais (ex: ONT MAC: 14CA56CEF44D). ATENÇÃO CRÍTICA: Se a etiqueta tiver 'ONT MAC' e 'MTA MAC', capture EXCLUSIVAMENTE o ONT MAC. Ignore completamente o MTA MAC. Se a etiqueta NÃO TIVER MAC explícito, escreva 'N/A'.
-7. wifi_ssid: Nome da rede Wi-Fi principal. Para etiquetas Claro ZTE (ex: CLARO_CEF44D), capture o SSID ou 'CLARO_' + últimos 6 dígitos do ONT MAC.
+6. mac: Endereço MAC físico ONT MAC de 12 caracteres hexadecimais (ex: ONT MAC: 14CA56CEF44D ou 90F97013771F). ATENÇÃO CRÍTICA: Se a etiqueta tiver 'ONT MAC' e 'MTA MAC', capture EXCLUSIVAMENTE o ONT MAC. Ignore completamente o MTA MAC. Se a etiqueta Huawei contiver indicação de range/pool de MACs como '90F97013771F-28(10)', capture EXCLUSIVAMENTE os 12 caracteres hexadecimais do MAC principal ('90F97013771F'), descartando o sufixo '-XX(YY)'. Se a etiqueta NÃO TIVER MAC explícito, escreva 'N/A'.
+7. wifi_ssid: Nome da rede Wi-Fi principal. Para etiquetas Claro ZTE (ex: CLARO_CEF44D), capture o SSID ou 'CLARO_' + últimos 6 dígitos do ONT MAC. Para etiquetas TIM UltraFibra Huawei (ex: TUF_771F_2G), capture o SSID.
 8. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz (se houver, senão 'N/A').
-9. wifi_key: Senha padrão do Wi-Fi (ex: U9HxCHt$K9, Z2UukTxTGt). REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A senha do Wi-Fi tem OBRIGATORIAMENTE EXATOS 10 CARACTERES. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas e símbolos especiais ($ , # , ! , etc.). CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
+9. wifi_key: Senha padrão do Wi-Fi (ex: U9HxCHt$K9, Z2UukTxTGt, pqMc2#!3). REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A senha do Wi-Fi tem OBRIGATORIAMENTE EXATOS 10 CARACTERES. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas e símbolos especiais ($ , # , ! , etc.). CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
 10. usuario: Usuário padrão de acesso web (ex: CLARO_CEF44D ou admin). Na Claro ZTE, capture do campo Usuário ou gere 'CLARO_' + 6 últimos dígitos do MAC.
-11. web_key: Senha de acesso web / Interface Web (ex: 492AuzG#CTN#GHu, RUH7Ac4NGRNtGAy). REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A Senha WEB tem OBRIGATORIAMENTE EXATOS 15 CARACTERES. Não corte nem adicione caracteres, capture com precisão absoluta os 15 caracteres do campo Senha. Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
+11. web_key: Senha de acesso web / Interface Web (ex: 492AuzG#CTN#GHu, 7AXh%26g). REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A Senha WEB tem OBRIGATORIAMENTE EXATOS 15 CARACTERES. Não corte nem adicione caracteres, capture com precisão absoluta os 15 caracteres do campo Senha. Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
 12. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.
 
 DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
@@ -1915,8 +1924,11 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       gponNorm = 'SMBS' + gponNorm.substring(4);
     }
 
-    let macNorm = (geminiData.mac || '').replace(/[^0-9A-F]/ig, '').toUpperCase();
-    if (macNorm && macNorm.length === 12) {
+    let rawMac = String(geminiData.mac || '').trim();
+    const macMatch = rawMac.match(/([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}/);
+    let macNorm = macMatch ? macMatch[0].replace(/[^0-9A-F]/ig, '').toUpperCase() : rawMac.replace(/[^0-9A-F]/ig, '').toUpperCase();
+    if (macNorm && macNorm.length >= 12) {
+      macNorm = macNorm.substring(0, 12);
       macNorm = correctMacPrefix(macNorm);
     } else {
       macNorm = 'N/A';
@@ -1925,6 +1937,10 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     let cpeNorm = (geminiData.cpe_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
     if (fabricanteNorm === 'SagemCOM' && cpeNorm && cpeNorm.length >= 14 && !cpeNorm.startsWith('N7')) {
       cpeNorm = 'N7' + cpeNorm.substring(2);
+    }
+    // Huawei: se tiver mais de 20 caracteres e começar com 21, isola os 20 caracteres do serial
+    if (fabricanteNorm === 'Huawei' && cpeNorm.startsWith('21') && cpeNorm.length > 20) {
+      cpeNorm = cpeNorm.substring(0, 20);
     }
 
     let dsnNorm = (geminiData.d_sn || '').replace(/[^A-Z0-9_-]/ig, '').toUpperCase();
@@ -1963,6 +1979,23 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       }
       if (!resolvedWifiSsid || resolvedWifiSsid.toUpperCase() === 'N/A' || resolvedWifiSsid.toUpperCase().startsWith('CLARO')) {
         resolvedWifiSsid = `CLARO_${last6Mac}`;
+      }
+    }
+
+    // Regra Huawei HG8145X6: usuario = admin, SSIDs = TUF_ + últimos 4 dígitos do MAC + _2G / _5G
+    if (modelNormTemp === 'HG8145X6') {
+      fabricanteNorm = 'Huawei';
+      if (!resolvedUsuario || resolvedUsuario.toUpperCase() === 'N/A' || resolvedUsuario.trim() === '') {
+        resolvedUsuario = 'admin';
+      }
+      if (macNorm && macNorm !== 'N/A' && macNorm.length >= 4) {
+        const last4Mac = macNorm.slice(-4);
+        if (!resolvedWifiSsid || resolvedWifiSsid.toUpperCase() === 'N/A' || resolvedWifiSsid.toUpperCase().startsWith('TUF')) {
+          resolvedWifiSsid = `TUF_${last4Mac}_2G`;
+        }
+        if (!geminiData.wifi_ssid_5g || geminiData.wifi_ssid_5g.toUpperCase() === 'N/A' || geminiData.wifi_ssid_5g.toUpperCase().startsWith('TUF')) {
+          geminiData.wifi_ssid_5g = `TUF_${last4Mac}_5G`;
+        }
       }
     }
 
