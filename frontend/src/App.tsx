@@ -193,12 +193,15 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.fabricante = 'Tellescom';
   }
 
-  // Normalizar modelo se for Huawei HG8145X6
+  // Normalizar modelo se for Huawei HG8145X6 (incluindo variação HG8145V6)
   if (
     modelUpper.includes('8145X6') ||
     modelUpper.includes('HG8145X6') ||
     modelUpper.includes('8145-X6') ||
-    (mfgUpper.includes('HUAWEI') && (modelUpper.includes('X6') || modelUpper.includes('OPTIXSTAR')))
+    modelUpper.includes('8145V6') ||
+    modelUpper.includes('HG8145V6') ||
+    modelUpper.includes('8145-V6') ||
+    (mfgUpper.includes('HUAWEI') && (modelUpper.includes('X6') || modelUpper.includes('V6') || modelUpper.includes('OPTIXSTAR')))
   ) {
     dataCopy.modelo = 'HG8145X6';
     dataCopy.fabricante = 'Huawei';
@@ -337,7 +340,7 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   }
 
   // Rule 1.9: Huawei HG8145X6 (TIM UltraFibra)
-  else if (modelUpper.includes('HG8145X6') || modelUpper.includes('8145X6') || (mfgUpper.includes('HUAWEI') && modelUpper.includes('X6'))) {
+  else if (modelUpper.includes('HG8145X6') || modelUpper.includes('8145X6') || modelUpper.includes('HG8145V6') || modelUpper.includes('8145V6') || (mfgUpper.includes('HUAWEI') && (modelUpper.includes('X6') || modelUpper.includes('V6')))) {
     dataCopy.modelo = 'HG8145X6';
     dataCopy.fabricante = 'Huawei';
     dataCopy.wifi_ssid = `TUF_${last4Hex}_2G`;
@@ -3964,7 +3967,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.50</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.51</p>
                 </div>
                 <div className="flex gap-1">
                   <button 

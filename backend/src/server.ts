@@ -873,6 +873,32 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
     } catch (e: any) {
       console.error(`Erro ao padronizar Kaon PG2447 no banco ${dbName}:`, e.message);
     }
+
+    // Migração automática exclusiva para o banco db-scanonu (TIM): padronizar Huawei HG8145X6 (incluindo HG8145V6 e registros salvos como HG8145V5)
+    if (dbName === 'db-scanonu') {
+      try {
+        const resHuawei = await pool.query(`
+        UPDATE etiquetas_scan_onu
+        SET fabricante = 'Huawei', modelo = 'HG8145X6'
+        WHERE (fabricante ILIKE '%Huawei%' OR modelo ILIKE '%HG8145%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145V6%')
+          AND (
+            modelo ILIKE '%HG8145X6%'
+            OR modelo ILIKE '%8145X6%'
+            OR modelo ILIKE '%8145-X6%'
+            OR modelo ILIKE '%HG8145V6%'
+            OR modelo ILIKE '%8145V6%'
+            OR modelo ILIKE '%8145-V6%'
+            OR modelo = 'HG8145V5'
+          )
+          AND (fabricante IS DISTINCT FROM 'Huawei' OR modelo IS DISTINCT FROM 'HG8145X6')
+      `);
+        if ((resHuawei.rowCount || 0) > 0) {
+          console.log(`[Auto-Migração] Padronizados ${resHuawei.rowCount} registros como Huawei HG8145X6 no banco ${dbName}`);
+        }
+      } catch (e: any) {
+        console.error(`Erro ao padronizar Huawei HG8145X6 no banco ${dbName}:`, e.message);
+      }
+    }
   }
 
   // Garantir admin
@@ -1299,8 +1325,7 @@ async function connectToDatabase() {
         // Normalizar modelos ZTE e Huawei
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F670L' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F670L%' OR modelo ILIKE '%F670%') AND modelo != 'F670L'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F6600' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F6600%' OR modelo ILIKE '%F660%') AND modelo != 'F6600'");
-        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145X6' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145X6%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145-X6%') AND modelo != 'HG8145X6'");
-        await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'HG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%HG8145V5%' OR modelo ILIKE '%8145V5%' OR (modelo ILIKE '%HG8145%' AND modelo NOT ILIKE '%X6%')) AND modelo != 'HG8145V5'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Huawei', modelo = 'HG8145X6' WHERE (fabricante = 'Huawei' OR fabricante ILIKE '%Huawei%' OR modelo ILIKE '%HG8145%') AND (modelo ILIKE '%HG8145X6%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145-X6%' OR modelo ILIKE '%HG8145V6%' OR modelo ILIKE '%8145V6%' OR modelo ILIKE '%8145-V6%' OR modelo = 'HG8145V5') AND (fabricante != 'Huawei' OR modelo != 'HG8145X6')");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
         console.log('Normalização de dados históricos concluída com sucesso!');
 
@@ -1610,6 +1635,9 @@ function normalizeFabricante(fabricante: string, modelo: string): string {
   if (modelUpper.includes('2447') || modelUpper.includes('PG2447') || modelUpper.includes('P82447') || mfgUpper.includes('KAON') || mfgUpper === 'KAO') {
     return 'Kaon';
   }
+  if (modelUpper.includes('HG8145') || modelUpper.includes('EG8145') || modelUpper.includes('8145X6') || modelUpper.includes('8145V6') || mfgUpper.includes('HUAWEI')) {
+    return 'Huawei';
+  }
   return fabricante || 'N/A';
 }
 
@@ -1720,10 +1748,19 @@ function normalizeModel(modelo: string, fabricante: string): string {
     return 'F6600';
   }
 
-  // Huawei HG8145X6
+  // Huawei HG8145X6 (incluindo variação HG8145V6)
   if (
-    mfgUpper.includes('HUAWEI') &&
-    (modelClean.includes('HG8145X6') || modelClean.includes('8145X6') || modelClean.includes('8145-X6') || modelClean.includes('X6'))
+    (mfgUpper.includes('HUAWEI') || modelClean.includes('HG8145') || modelClean.includes('8145')) &&
+    (
+      modelClean.includes('HG8145X6') ||
+      modelClean.includes('8145X6') ||
+      modelClean.includes('8145-X6') ||
+      modelClean.includes('HG8145V6') ||
+      modelClean.includes('8145V6') ||
+      modelClean.includes('8145-V6') ||
+      modelClean.includes('X6') ||
+      modelClean.includes('V6')
+    )
   ) {
     return 'HG8145X6';
   }
@@ -1731,7 +1768,7 @@ function normalizeModel(modelo: string, fabricante: string): string {
   // Huawei HG8145V5
   if (
     mfgUpper.includes('HUAWEI') &&
-    (modelClean.includes('HG8145V5') || modelClean.includes('8145V5') || (modelClean.includes('HG8145') && !modelClean.includes('X6')))
+    (modelClean.includes('HG8145V5') || modelClean.includes('8145V5'))
   ) {
     return 'HG8145V5';
   }
