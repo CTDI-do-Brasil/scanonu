@@ -799,7 +799,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_gpon_id ON etiquetas_scan_onu(gpon_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_serial_number ON etiquetas_scan_onu(serial_number)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_d_sn ON etiquetas_scan_onu(d_sn)');
-        await pool.query("DELETE FROM etiquetas_scan_onu WHERE modelo = 'ZXHN F6745' OR modelo ILIKE '%6745%' OR d_sn ILIKE 'ZTE0%' OR d_sn ILIKE 'ZTEO%' OR serial_number ILIKE 'ZTE0%' OR serial_number ILIKE 'ZTEO%' OR ssid ILIKE '%TIM_ULTRAFIBRA%' OR (fabricante = 'ZTE' AND LOWER(usuario) = 'admin')");
+        await pool.query("DELETE FROM etiquetas_scan_onu WHERE modelo = 'ZXHN F6745' OR modelo ILIKE '%6745%' OR d_sn ILIKE 'ZTE0%' OR d_sn ILIKE 'ZTEO%' OR serial_number ILIKE 'ZTE0%' OR serial_number ILIKE 'ZTEO%' OR gpon_id = 'ZTEGDB146E6D' OR REPLACE(REPLACE(mac, ':', ''), '-', '') LIKE 'D89A0D%' OR ssid ILIKE '%TIM_ULTRAFIBRA%' OR (fabricante = 'ZTE' AND (LOWER(usuario) = 'admin' OR LENGTH(TRIM(senha_web)) = 10))");
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_resultado_teste ON etiquetas_scan_onu(resultado_de_teste)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_data_captura ON etiquetas_scan_onu(data_da_captura)');
       } catch (renErr: any) {
@@ -903,15 +903,22 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       try {
         const resZte6745 = await pool.query(`
         UPDATE etiquetas_scan_onu
-        SET fabricante = 'ZTE', modelo = 'ZXHN F6745'
+        SET
+          fabricante = 'ZTE',
+          modelo = 'ZXHN F6745',
+          usuario = 'admin',
+          wifi_ssid = CASE WHEN LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4 THEN 'TIM_ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4) ELSE wifi_ssid END,
+          wifi_ssid_5g = CASE WHEN LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4 THEN 'TIM_ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4) ELSE wifi_ssid_5g END
         WHERE (
           modelo ILIKE '%6745%'
           OR modelo ILIKE '%F674%'
           OR cpe_sn ILIKE 'ZTE0%'
           OR cpe_sn ILIKE 'ZTEO%'
-          OR (fabricante = 'ZTE' AND (wifi_ssid ILIKE 'TIM_ULTRAFIBRA_%' OR usuario = 'admin') AND modelo NOT ILIKE '%680%' AND modelo NOT ILIKE '%6645%' AND modelo NOT ILIKE '%670%')
+          OR gpon_sn = 'ZTEGDB146E6D'
+          OR REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') ILIKE 'D89A0D%'
+          OR (fabricante = 'ZTE' AND (wifi_ssid ILIKE 'TIM_ULTRAFIBRA_%' OR usuario = 'admin' OR LENGTH(TRIM(COALESCE(web_key, ''))) = 10) AND modelo NOT ILIKE '%680%' AND modelo NOT ILIKE '%6645%' AND modelo NOT ILIKE '%670%')
         )
-        AND (fabricante IS DISTINCT FROM 'ZTE' OR modelo IS DISTINCT FROM 'ZXHN F6745')
+        AND (fabricante IS DISTINCT FROM 'ZTE' OR modelo IS DISTINCT FROM 'ZXHN F6745' OR usuario IS DISTINCT FROM 'admin' OR wifi_ssid ILIKE 'CLARO_%')
       `);
         if ((resZte6745.rowCount || 0) > 0) {
           console.log(`[Auto-Migração] Padronizados ${resZte6745.rowCount} registros como ZTE ZXHN F6745 no banco ${dbName}`);
@@ -2028,12 +2035,15 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
     // Regra ZTE ZXHN F6745 (TIM UltraFibra): fixar Fabricante = ZTE e Modelo = ZXHN F6745 mesmo se a captura ler algo errado no modelo (inclusive se confundir com F6600P)
     const rawSsidUpper = String(geminiData.wifi_ssid || '').toUpperCase();
     const rawUserUpper = String(geminiData.usuario || '').trim().toUpperCase();
+    const rawWebKeyLen = String(geminiData.web_key || geminiData.senha || '').trim().length;
     const isZteF6745Scan =
       modelUpper.includes('F6745') ||
       modelUpper.includes('6745') ||
       modelUpper.includes('F674') ||
       dsnNorm.startsWith('ZTE0') ||
       cpeNorm.startsWith('ZTE0') ||
+      macNorm.startsWith('D89A0D') ||
+      gponNorm.startsWith('ZTEGDB') ||
       ((fabricanteNorm === 'ZTE' || gponNorm.startsWith('ZTEG') || dsnNorm.startsWith('ZTE')) &&
         !modelUpper.includes('6645') &&
         !modelUpper.includes('680') &&
@@ -2041,6 +2051,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
         (rawSsidUpper.includes('TIM') ||
           rawSsidUpper.includes('ULTRAFIBRA') ||
           rawUserUpper === 'ADMIN' ||
+          rawWebKeyLen === 10 ||
           (!rawSsidUpper.startsWith('CLARO') &&
             !rawUserUpper.startsWith('CLARO') &&
             !/^219\d{9}$/.test(cpeNorm) &&
@@ -2153,6 +2164,14 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
         try {
           const pool = getPoolForDatabase(dbName);
           await ensureDatabaseSchema(pool, dbName);
+
+          if (normModelo === 'ZXHN F6745' && dbName === 'ScanONU_Claro') {
+            await pool.query(
+              "DELETE FROM etiquetas_scan_onu WHERE gpon_id = $1 OR mac = $2 OR d_sn = $3 OR serial_number = $3",
+              [scanResult.gpon_sn, scanResult.mac, scanResult.cpe_sn]
+            ).catch(() => {});
+            continue;
+          }
 
           let checkRes: any = { rowCount: 0, rows: [] as any[] };
           if (dbName === 'ScanONU_Claro' || normModelo === 'ZXHN F6600P') {
@@ -2950,7 +2969,42 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
         );
 
         if (checkRes.rowCount && checkRes.rowCount > 0) {
-          foundRecord = checkRes.rows[0];
+          const candidate = checkRes.rows[0];
+          const candMacClean = String(candidate.mac || '').replace(/[^0-9A-F]/ig, '').toUpperCase();
+          const candCpeUpper = String(candidate.cpe_sn || '').toUpperCase();
+          const candDsnUpper = String(candidate.d_sn || '').toUpperCase();
+          const candGponUpper = String(candidate.gpon_sn || '').toUpperCase();
+          const candWebLen = String(candidate.web_key || candidate.senha || '').trim().length;
+          const isCandidateF6745 =
+            String(candidate.modelo || '').toUpperCase().includes('6745') ||
+            candCpeUpper.startsWith('ZTE0') ||
+            candCpeUpper.startsWith('ZTEO') ||
+            candDsnUpper.startsWith('ZTE0') ||
+            candDsnUpper.startsWith('ZTEO') ||
+            candMacClean.startsWith('D89A0D') ||
+            candGponUpper.startsWith('ZTEGDB') ||
+            (String(candidate.fabricante || '').toUpperCase() === 'ZTE' && candWebLen === 10);
+
+          if (isCandidateF6745 && dbName === 'ScanONU_Claro') {
+            await pool.query("DELETE FROM etiquetas_scan_onu WHERE gpon_id = $1 OR mac = $2", [candidate.gpon_sn, candidate.mac]).catch(() => {});
+            continue;
+          }
+
+          if (isCandidateF6745) {
+            candidate.fabricante = 'ZTE';
+            candidate.modelo = 'ZXHN F6745';
+            candidate.usuario = 'admin';
+            if ((candDsnUpper.startsWith('ZTE0') || candDsnUpper.startsWith('ZTEO')) && (!candCpeUpper || candCpeUpper === 'N/A')) {
+              candidate.cpe_sn = candDsnUpper.replace(/^ZTEO/, 'ZTE0');
+            }
+            if (candMacClean.length >= 4) {
+              const last4 = candMacClean.slice(-4);
+              candidate.wifi_ssid = `TIM_ULTRAFIBRA_${last4}`;
+              candidate.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4}`;
+            }
+          }
+
+          foundRecord = candidate;
           foundDb = dbName;
           break;
         }

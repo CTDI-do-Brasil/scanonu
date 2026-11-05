@@ -173,12 +173,15 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTEO') ||
     ((dataCopy as any).d_sn || '').toUpperCase().startsWith('ZTE0') ||
     ((dataCopy as any).d_sn || '').toUpperCase().startsWith('ZTEO') ||
+    (dataCopy.mac || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase().startsWith('D89A0D') ||
+    (dataCopy.gpon_sn || '').toUpperCase().startsWith('ZTEGDB') ||
     ((mfgUpper.includes('ZTE') || modelUpper.includes('ZXHN') || (dataCopy.gpon_sn || '').toUpperCase().startsWith('ZTEG')) &&
       !modelUpper.includes('F6645') &&
       !modelUpper.includes('6645') &&
       !modelUpper.includes('F670') &&
       ((dataCopy.wifi_ssid || '').toUpperCase().includes('TIM') ||
         (dataCopy.usuario || '').trim().toLowerCase() === 'admin' ||
+        String(dataCopy.senha || (dataCopy as any).web_key || '').trim().length === 10 ||
         (!(dataCopy.wifi_ssid || '').toUpperCase().startsWith('CLARO') &&
           !(dataCopy.usuario || '').toUpperCase().startsWith('CLARO') &&
           !/^219\d{9}$/.test(String(dataCopy.cpe_sn || '').trim()) &&
@@ -351,15 +354,15 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     modelUpper.includes('F6745') ||
     modelUpper.includes('6745') ||
     modelUpper.includes('F674') ||
-    (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTE0')
+    (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTE0') ||
+    cleanMac.startsWith('D89A0D') ||
+    (dataCopy.gpon_sn || '').toUpperCase().startsWith('ZTEGDB')
   ) {
     dataCopy.modelo = 'ZXHN F6745';
     dataCopy.fabricante = 'ZTE';
     dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4Hex}`;
     dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Hex}`;
-    if (!dataCopy.usuario || dataCopy.usuario.toUpperCase() === 'N/A' || dataCopy.usuario.trim() === '') {
-      dataCopy.usuario = 'admin';
-    }
+    dataCopy.usuario = 'admin';
   }
 
   // Rule 1.7.3: ZTE ZXHN F6600P (Claro)
@@ -2450,7 +2453,7 @@ export default function App() {
   };
 
   // Helper para detectar GPON SN ou MAC a partir de códigos de barras locais em uma imagem base64
-  const detectBarcodeLocally = async (base64Image: string): Promise<{ gpon_sn?: string; mac?: string } | null> => {
+  const detectBarcodeLocally = async (base64Image: string): Promise<{ gpon_sn?: string; mac?: string; d_sn?: string } | null> => {
     if (!('BarcodeDetector' in window)) {
       console.log('BarcodeDetector API não é suportada neste navegador.');
       return null;
@@ -2475,6 +2478,7 @@ export default function App() {
         return null;
       }
 
+      const found: { gpon_sn?: string; mac?: string; d_sn?: string } = {};
       for (const item of detected) {
         const rawValue = (item.rawValue || '').trim().toUpperCase();
         
@@ -2482,7 +2486,8 @@ export default function App() {
         const gponPattern = /^[A-Z]{4}[A-Z0-9]{8}$/;
         if (gponPattern.test(rawValue)) {
           console.log('GPON SN detectado localmente:', rawValue);
-          return { gpon_sn: rawValue };
+          found.gpon_sn = rawValue;
+          continue;
         }
 
         // Padrão MAC Address: 12 hexadecimais (limpando separadores)
@@ -2490,22 +2495,28 @@ export default function App() {
         const macPattern = /^[0-9A-F]{12}$/;
         if (macPattern.test(cleanMac)) {
           console.log('MAC Address detectado localmente:', cleanMac);
-          return { mac: cleanMac };
+          found.mac = cleanMac;
+          continue;
+        }
+
+        // Padrão D-SN ZTE (ex: ZTE0QT6R9T00574 ou ZTE3ANNR1Y24995)
+        const dSnPattern = /^ZTE[A-Z0-9]{11,15}$/;
+        if (dSnPattern.test(rawValue)) {
+          console.log('D-SN detectado localmente:', rawValue);
+          found.d_sn = rawValue;
+          if (!found.gpon_sn) found.gpon_sn = rawValue;
+          continue;
         }
 
         // Padrão Serial Number numérico Claro ZTE (ex: 12 dígitos como 219579970175)
         const snPattern = /^[0-9]{12}$/;
-        if (snPattern.test(rawValue)) {
+        if (snPattern.test(rawValue) && !rawValue.startsWith('180000')) {
           console.log('Serial Number (Claro ZTE) detectado localmente:', rawValue);
-          return { gpon_sn: rawValue };
+          if (!found.gpon_sn) found.gpon_sn = rawValue;
         }
-
-        // Padrão D-SN ZTE Claro (ex: ZTE3ANNR1Y24995)
-        const dSnPattern = /^ZTE[A-Z0-9]{13,15}$/;
-        if (dSnPattern.test(rawValue)) {
-          console.log('D-SN detectado localmente:', rawValue);
-          return { gpon_sn: rawValue };
-        }
+      }
+      if (found.gpon_sn || found.mac || found.d_sn) {
+        return found;
       }
     } catch (err) {
       console.error('Erro ao detectar código de barras localmente:', err);
@@ -4033,7 +4044,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.53</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.54</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5541,7 +5552,7 @@ export default function App() {
 
                   {(() => {
                     const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
-                    const isF6745Model = data.modelo === 'ZXHN F6745' || String(data.modelo || '').toUpperCase().includes('6745') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTE0') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTEO') || String(data.wifi_ssid || '').toUpperCase().includes('TIM');
+                    const isF6745Model = data.modelo === 'ZXHN F6745' || String(data.modelo || '').toUpperCase().includes('6745') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTE0') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTEO') || String(data.mac || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase().startsWith('D89A0D') || String(data.gpon_sn || '').toUpperCase().startsWith('ZTEGDB') || String(data.wifi_ssid || '').toUpperCase().includes('TIM') || (String(data.fabricante || '').toUpperCase() === 'ZTE' && String(data.senha || '').trim().length === 10);
                     const isClaroModel = !isF6745Model && (data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro');
 
                     let isWifiKeyInvalidLength = false;
@@ -5604,7 +5615,7 @@ export default function App() {
 
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
                       const isLockedForModel = isFast5670Model && field !== 'senha';
-                      const isF6745Model = data.modelo === 'ZXHN F6745' || String(data.modelo || '').toUpperCase().includes('6745') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTE0') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTEO') || String(data.wifi_ssid || '').toUpperCase().includes('TIM');
+                      const isF6745Model = data.modelo === 'ZXHN F6745' || String(data.modelo || '').toUpperCase().includes('6745') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTE0') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTEO') || String(data.mac || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase().startsWith('D89A0D') || String(data.gpon_sn || '').toUpperCase().startsWith('ZTEGDB') || String(data.wifi_ssid || '').toUpperCase().includes('TIM') || (String(data.fabricante || '').toUpperCase() === 'ZTE' && String(data.senha || '').trim().length === 10);
                       const isClaroModel = !isF6745Model && (data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro');
                       const isHG8145X6Model = data.modelo === 'HG8145X6';
 
