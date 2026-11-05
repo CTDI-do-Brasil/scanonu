@@ -898,6 +898,24 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
       } catch (e: any) {
         console.error(`Erro ao padronizar Huawei HG8145X6 no banco ${dbName}:`, e.message);
       }
+
+      try {
+        const resZte6745 = await pool.query(`
+        UPDATE etiquetas_scan_onu
+        SET fabricante = 'ZTE', modelo = 'ZXHN F6745'
+        WHERE (
+          modelo ILIKE '%6745%'
+          OR modelo ILIKE '%F674%'
+          OR cpe_sn ILIKE 'ZTE0%'
+        )
+        AND (fabricante IS DISTINCT FROM 'ZTE' OR modelo IS DISTINCT FROM 'ZXHN F6745')
+      `);
+        if ((resZte6745.rowCount || 0) > 0) {
+          console.log(`[Auto-Migração] Padronizados ${resZte6745.rowCount} registros como ZTE ZXHN F6745 no banco ${dbName}`);
+        }
+      } catch (e: any) {
+        console.error(`Erro ao padronizar ZTE ZXHN F6745 no banco ${dbName}:`, e.message);
+      }
     }
   }
 
@@ -1325,6 +1343,7 @@ async function connectToDatabase() {
         // Normalizar modelos ZTE e Huawei
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F670L' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F670L%' OR modelo ILIKE '%F670%') AND modelo != 'F670L'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F6600' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F6600%' OR modelo ILIKE '%F660%') AND modelo != 'F6600'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'ZTE', modelo = 'ZXHN F6745' WHERE (modelo ILIKE '%6745%' OR modelo ILIKE '%F674%' OR cpe_sn ILIKE 'ZTE0%') AND (fabricante != 'ZTE' OR modelo != 'ZXHN F6745')");
         await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Huawei', modelo = 'HG8145X6' WHERE (fabricante = 'Huawei' OR fabricante ILIKE '%Huawei%' OR modelo ILIKE '%HG8145%') AND (modelo ILIKE '%HG8145X6%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145-X6%' OR modelo ILIKE '%HG8145V6%' OR modelo ILIKE '%8145V6%' OR modelo ILIKE '%8145-V6%' OR modelo = 'HG8145V5') AND (fabricante != 'Huawei' OR modelo != 'HG8145X6')");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
         console.log('Normalização de dados históricos concluída com sucesso!');
@@ -1638,6 +1657,9 @@ function normalizeFabricante(fabricante: string, modelo: string): string {
   if (modelUpper.includes('HG8145') || modelUpper.includes('EG8145') || modelUpper.includes('8145X6') || modelUpper.includes('8145V6') || mfgUpper.includes('HUAWEI')) {
     return 'Huawei';
   }
+  if (modelUpper.includes('ZXHN') || modelUpper.includes('F6745') || modelUpper.includes('6745') || modelUpper.includes('F674') || modelUpper.includes('F6645') || modelUpper.includes('F6600') || modelUpper.includes('F680') || modelUpper.includes('F670') || mfgUpper.includes('ZTE')) {
+    return 'ZTE';
+  }
   return fabricante || 'N/A';
 }
 
@@ -1680,6 +1702,11 @@ function normalizeModel(modelo: string, fabricante: string): string {
   // ZTE ZXHN F680
   if (modelClean.includes('F680') || modelClean.includes('680')) {
     return 'ZXHN F680';
+  }
+
+  // ZTE ZXHN F6745
+  if (modelClean.includes('F6745') || modelClean.includes('6745') || modelClean.includes('F674')) {
+    return 'ZXHN F6745';
   }
 
   // ZTE ZXHN F6645P
@@ -1816,8 +1843,8 @@ app.post('/api/scan-label', authenticateSession, async (req, res) => {
         const prompt = `Analise a imagem da etiqueta do equipamento ONU/ONT e extraia os seguintes campos de forma estruturada. 
 Siga atentamente as instruções abaixo para cada campo:
 1. fabricante: Fabricante da ONU (ex: Huawei, ZTE, FiberHome, Intelbras, Nokia, Alcatel, SagemCOM). Para a etiqueta Claro da ZTE, retorne 'ZTE'.
-2. modelo: Modelo exato da ONU (ex: HG8145X6, ZXHN F6600P, ZXHN F6645P, F670L, HG8145V5, EG8145V5, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Para Huawei HG8145X6 ou HG8145X6-10-V2, retorne exatamente 'HG8145X6'. Para ZTE F6600P da Claro, retorne exatamente 'ZXHN F6600P'.
-3. cpe_sn: Serial CPE/Equipamento (ex: S/N: 219579970175 ou 2102315FEWRYRC902325). Na Huawei, o S/N tem 20 caracteres (iniciando em 21); capture exclusivamente os 20 caracteres do serial e desconsidere qualquer sufixo após o espaço (ex: 'Y HG8M...'). Na etiqueta ZTE Claro capture exatamente o valor do campo 'S/N:'. Se não houver, escreva 'N/A'.
+2. modelo: Modelo exato da ONU (ex: HG8145X6, ZXHN F6745, ZXHN F6600P, ZXHN F6645P, F670L, HG8145V5, EG8145V5, F680, F673, XC-FIT-150, F@ST 5655V2, etc.). Para Huawei HG8145X6 ou HG8145X6-10-V2, retorne exatamente 'HG8145X6'. Para ZTE ZXHN F6745 da TIM UltraFibra (Produto: GPON ONT / Wi-Fi 7), retorne exatamente 'ZXHN F6745'. Para ZTE F6600P da Claro, retorne exatamente 'ZXHN F6600P'.
+3. cpe_sn: Serial CPE/Equipamento (ex: S/N: 219579970175 ou 2102315FEWRYRC902325). Na Huawei, o S/N tem 20 caracteres (iniciando em 21); capture exclusivamente os 20 caracteres do serial e desconsidere qualquer sufixo após o espaço (ex: 'Y HG8M...'). Na etiqueta ZTE TIM UltraFibra (ZXHN F6745 / ZXHN F6645P), capture exatamente o valor do campo 'D-SN:' (ex: ZTE0QT6R9T00574) e ignore o campo 'P/N:'. Na etiqueta ZTE Claro capture exatamente o valor do campo 'S/N:'. Se não houver, escreva 'N/A'.
 4. gpon_sn: Serial GPON / PON ID (ex: PON ID: HWTC6FA0B2B7, ZTEGD970D7FE, SMBS12345678, ZTEG12345678, FHTT12345678). Na etiqueta ZTE Claro capture exatamente o valor do campo 'PON ID:'. Se a etiqueta NÃO TIVER, escreva 'N/A'.
 5. d_sn: Device Serial Number / D-SN (ex: D-SN: ZTE3ANNR1Y24995). Capture do campo 'D-SN:' se presente na etiqueta. Se não encontrar, escreva 'N/A'.
 6. mac: Endereço MAC físico ONT MAC de 12 caracteres hexadecimais (ex: ONT MAC: 14CA56CEF44D ou 90F97013771F). ATENÇÃO CRÍTICA: Se a etiqueta tiver 'ONT MAC' e 'MTA MAC', capture EXCLUSIVAMENTE o ONT MAC. Ignore completamente o MTA MAC. Se a etiqueta Huawei contiver indicação de range/pool de MACs como '90F97013771F-28(10)', capture EXCLUSIVAMENTE os 12 caracteres hexadecimais do MAC principal ('90F97013771F'), descartando o sufixo '-XX(YY)'. Se a etiqueta NÃO TIVER MAC explícito, escreva 'N/A'.
@@ -1991,6 +2018,38 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       modelNormTemp = 'ZXHN F6600P';
     }
 
+    // Regra ZTE ZXHN F6745 (TIM UltraFibra): fixar Fabricante = ZTE e Modelo = ZXHN F6745 mesmo se a captura ler algo errado no modelo
+    const isZteF6745Scan =
+      modelUpper.includes('F6745') ||
+      modelUpper.includes('6745') ||
+      modelUpper.includes('F674') ||
+      dsnNorm.startsWith('ZTE0') ||
+      cpeNorm.startsWith('ZTE0') ||
+      ((fabricanteNorm === 'ZTE' || gponNorm.startsWith('ZTEG') || dsnNorm.startsWith('ZTE')) &&
+        modelNormTemp !== 'ZXHN F6600P' &&
+        !modelUpper.includes('6645') &&
+        !modelUpper.includes('680') &&
+        !modelUpper.includes('670') &&
+        !String(geminiData.wifi_ssid || '').toUpperCase().startsWith('CLARO') &&
+        (String(geminiData.wifi_ssid || '').toUpperCase().includes('TIM_ULTRAFIBRA') ||
+          modelUpper.includes('GPON') ||
+          modelUpper.includes('ONT') ||
+          modelUpper.includes('ZXHN') ||
+          modelUpper.includes('WIFI') ||
+          modelUpper === 'ZTE' ||
+          modelUpper === 'N/A' ||
+          modelUpper === ''));
+
+    if (isZteF6745Scan) {
+      fabricanteNorm = 'ZTE';
+      modelNormTemp = 'ZXHN F6745';
+      if (dsnNorm && dsnNorm !== 'N/A' && (!cpeNorm || cpeNorm === 'N/A' || cpeNorm.startsWith('180000'))) {
+        cpeNorm = dsnNorm;
+      } else if (cpeNorm && cpeNorm.startsWith('ZTE') && (!dsnNorm || dsnNorm === 'N/A')) {
+        dsnNorm = cpeNorm;
+      }
+    }
+
     if (modelUpper.includes('PG2447') || modelUpper.includes('P82447') || fabricanteNorm.toUpperCase().includes('KAON')) {
       let actualGpon = cleanAndNormalizePG2447Serial(gponNorm) || 
                        cleanAndNormalizePG2447Serial(geminiData.cpe_sn || '') || 
@@ -2033,6 +2092,19 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
         if (!geminiData.wifi_ssid_5g || geminiData.wifi_ssid_5g.toUpperCase() === 'N/A' || geminiData.wifi_ssid_5g.toUpperCase().startsWith('TUF')) {
           geminiData.wifi_ssid_5g = `TUF_${last4Mac}_5G`;
         }
+      }
+    }
+
+    // Regra ZTE ZXHN F6745 (TIM UltraFibra): fabricante = ZTE, modelo = ZXHN F6745, usuario = admin, SSIDs = TIM_ULTRAFIBRA_ + 4 últimos dígitos do MAC
+    if (modelNormTemp === 'ZXHN F6745') {
+      fabricanteNorm = 'ZTE';
+      if (!resolvedUsuario || resolvedUsuario.toUpperCase() === 'N/A' || resolvedUsuario.trim() === '') {
+        resolvedUsuario = 'admin';
+      }
+      if (macNorm && macNorm !== 'N/A' && macNorm.length >= 4) {
+        const last4Mac = macNorm.slice(-4);
+        resolvedWifiSsid = `TIM_ULTRAFIBRA_${last4Mac}`;
+        geminiData.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Mac}`;
       }
     }
 
@@ -2233,6 +2305,28 @@ app.post('/api/save-label', async (req: any, res: any) => {
     fabricante = normalizeFabricante(fabricante || 'N/A', modelo || '');
     let normalizedModelo = normalizeModel(modelo, fabricante);
     const isFast5670 = normalizedModelo === 'F@ST 5670' || normalizedModelo === 'F@ST 5670V2';
+
+    if (
+      normalizedModelo === 'ZXHN F6745' ||
+      (modelo && (modelo.toUpperCase().includes('6745') || modelo.toUpperCase().includes('F674'))) ||
+      (cpe_sn && String(cpe_sn).toUpperCase().startsWith('ZTE0')) ||
+      (d_sn && String(d_sn).toUpperCase().startsWith('ZTE0'))
+    ) {
+      fabricante = 'ZTE';
+      normalizedModelo = 'ZXHN F6745';
+      if ((!cpe_sn || cpe_sn === 'N/A' || String(cpe_sn).startsWith('180000')) && d_sn && d_sn !== 'N/A') {
+        cpe_sn = d_sn;
+      }
+      if (!usuario || usuario.toUpperCase() === 'N/A' || usuario.toUpperCase() === 'NA' || usuario.trim() === '') {
+        usuario = 'admin';
+      }
+      const cleanMacF6745 = mac ? mac.replace(/[^0-9A-F]/ig, '').toUpperCase() : '';
+      if (cleanMacF6745.length >= 4) {
+        const last4 = cleanMacF6745.slice(-4);
+        wifi_ssid = `TIM_ULTRAFIBRA_${last4}`;
+        wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4}`;
+      }
+    }
 
     if (normalizedModelo === 'ZXHN F6600P' || (modelo && modelo.toUpperCase().includes('6600'))) {
       fabricante = 'ZTE';

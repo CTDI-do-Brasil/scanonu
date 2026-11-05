@@ -164,6 +164,38 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.modelo = 'ZXHN F680';
     dataCopy.fabricante = 'ZTE';
   }
+  // Normalizar modelo se for ZTE ZXHN F6745 (TIM UltraFibra) - fixado como ZTE / ZXHN F6745
+  else if (
+    modelUpper.includes('F6745') ||
+    modelUpper.includes('6745') ||
+    modelUpper.includes('F674') ||
+    (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTE0') ||
+    ((dataCopy as any).d_sn || '').toUpperCase().startsWith('ZTE0') ||
+    ((mfgUpper.includes('ZTE') || modelUpper.includes('ZXHN') || (dataCopy.gpon_sn || '').toUpperCase().startsWith('ZTEG')) &&
+      !modelUpper.includes('F6645') &&
+      !modelUpper.includes('6645') &&
+      !modelUpper.includes('F6600') &&
+      !modelUpper.includes('6600') &&
+      !modelUpper.includes('F670') &&
+      !(dataCopy.wifi_ssid || '').toUpperCase().startsWith('CLARO') &&
+      !(dataCopy.usuario || '').toUpperCase().startsWith('CLARO') &&
+      ((dataCopy.wifi_ssid || '').toUpperCase().includes('TIM_ULTRAFIBRA') ||
+        modelUpper.includes('GPON') ||
+        modelUpper.includes('ONT') ||
+        modelUpper.includes('ZXHN') ||
+        modelUpper.includes('WIFI') ||
+        modelUpper === 'ZTE' ||
+        modelUpper === 'N/A' ||
+        modelUpper === ''))
+  ) {
+    dataCopy.modelo = 'ZXHN F6745';
+    dataCopy.fabricante = 'ZTE';
+    const dSnVal = String((dataCopy as any).d_sn || '').trim().toUpperCase();
+    const cpeVal = String(dataCopy.cpe_sn || '').trim().toUpperCase();
+    if (dSnVal && dSnVal !== 'N/A' && dSnVal !== 'NA' && (!cpeVal || cpeVal === 'N/A' || cpeVal === 'NA' || cpeVal.startsWith('180000'))) {
+      dataCopy.cpe_sn = dSnVal;
+    }
+  }
   // Normalizar modelo se for ZTE ZXHN F6645P
   else if (modelUpper.includes('F6645') || modelUpper.includes('6645P') || modelUpper.includes('6645')) {
     dataCopy.modelo = 'ZXHN F6645P';
@@ -308,6 +340,23 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     } else {
       dataCopy.wifi_ssid = `LIVE TIM_${last4Hex}_2G`;
       dataCopy.wifi_ssid_5g = `LIVE TIM_${last4Hex}_5G`;
+    }
+  }
+
+  // Rule 1.7.1: ZTE ZXHN F6745 (TIM UltraFibra)
+  else if (
+    dataCopy.modelo === 'ZXHN F6745' ||
+    modelUpper.includes('F6745') ||
+    modelUpper.includes('6745') ||
+    modelUpper.includes('F674') ||
+    (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTE0')
+  ) {
+    dataCopy.modelo = 'ZXHN F6745';
+    dataCopy.fabricante = 'ZTE';
+    dataCopy.wifi_ssid = `TIM_ULTRAFIBRA_${last4Hex}`;
+    dataCopy.wifi_ssid_5g = `TIM_ULTRAFIBRA_${last4Hex}`;
+    if (!dataCopy.usuario || dataCopy.usuario.toUpperCase() === 'N/A' || dataCopy.usuario.trim() === '') {
+      dataCopy.usuario = 'admin';
     }
   }
 
@@ -3967,7 +4016,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.51</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.52</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
