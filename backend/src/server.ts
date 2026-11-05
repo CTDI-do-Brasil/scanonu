@@ -799,6 +799,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_gpon_id ON etiquetas_scan_onu(gpon_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_serial_number ON etiquetas_scan_onu(serial_number)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_d_sn ON etiquetas_scan_onu(d_sn)');
+        await pool.query("DELETE FROM etiquetas_scan_onu WHERE modelo = 'ZXHN F6745' OR modelo ILIKE '%6745%' OR d_sn ILIKE 'ZTE0%' OR d_sn ILIKE 'ZTEO%' OR serial_number ILIKE 'ZTE0%' OR serial_number ILIKE 'ZTEO%' OR ssid ILIKE '%TIM_ULTRAFIBRA%' OR (fabricante = 'ZTE' AND LOWER(usuario) = 'admin')");
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_resultado_teste ON etiquetas_scan_onu(resultado_de_teste)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_data_captura ON etiquetas_scan_onu(data_da_captura)');
       } catch (renErr: any) {
@@ -907,6 +908,8 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
           modelo ILIKE '%6745%'
           OR modelo ILIKE '%F674%'
           OR cpe_sn ILIKE 'ZTE0%'
+          OR cpe_sn ILIKE 'ZTEO%'
+          OR (fabricante = 'ZTE' AND (wifi_ssid ILIKE 'TIM_ULTRAFIBRA_%' OR usuario = 'admin') AND modelo NOT ILIKE '%680%' AND modelo NOT ILIKE '%6645%' AND modelo NOT ILIKE '%670%')
         )
         AND (fabricante IS DISTINCT FROM 'ZTE' OR modelo IS DISTINCT FROM 'ZXHN F6745')
       `);
@@ -2018,7 +2021,13 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       modelNormTemp = 'ZXHN F6600P';
     }
 
-    // Regra ZTE ZXHN F6745 (TIM UltraFibra): fixar Fabricante = ZTE e Modelo = ZXHN F6745 mesmo se a captura ler algo errado no modelo
+    // Normalizar ZTEO -> ZTE0 caso OCR leia letra O no lugar do zero em D-SN/CPE_SN
+    if (dsnNorm.startsWith('ZTEO')) dsnNorm = 'ZTE0' + dsnNorm.substring(4);
+    if (cpeNorm.startsWith('ZTEO')) cpeNorm = 'ZTE0' + cpeNorm.substring(4);
+
+    // Regra ZTE ZXHN F6745 (TIM UltraFibra): fixar Fabricante = ZTE e Modelo = ZXHN F6745 mesmo se a captura ler algo errado no modelo (inclusive se confundir com F6600P)
+    const rawSsidUpper = String(geminiData.wifi_ssid || '').toUpperCase();
+    const rawUserUpper = String(geminiData.usuario || '').trim().toUpperCase();
     const isZteF6745Scan =
       modelUpper.includes('F6745') ||
       modelUpper.includes('6745') ||
@@ -2026,19 +2035,16 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       dsnNorm.startsWith('ZTE0') ||
       cpeNorm.startsWith('ZTE0') ||
       ((fabricanteNorm === 'ZTE' || gponNorm.startsWith('ZTEG') || dsnNorm.startsWith('ZTE')) &&
-        modelNormTemp !== 'ZXHN F6600P' &&
         !modelUpper.includes('6645') &&
         !modelUpper.includes('680') &&
         !modelUpper.includes('670') &&
-        !String(geminiData.wifi_ssid || '').toUpperCase().startsWith('CLARO') &&
-        (String(geminiData.wifi_ssid || '').toUpperCase().includes('TIM_ULTRAFIBRA') ||
-          modelUpper.includes('GPON') ||
-          modelUpper.includes('ONT') ||
-          modelUpper.includes('ZXHN') ||
-          modelUpper.includes('WIFI') ||
-          modelUpper === 'ZTE' ||
-          modelUpper === 'N/A' ||
-          modelUpper === ''));
+        (rawSsidUpper.includes('TIM') ||
+          rawSsidUpper.includes('ULTRAFIBRA') ||
+          rawUserUpper === 'ADMIN' ||
+          (!rawSsidUpper.startsWith('CLARO') &&
+            !rawUserUpper.startsWith('CLARO') &&
+            !/^219\d{9}$/.test(cpeNorm) &&
+            !dsnNorm.startsWith('ZTE3'))));
 
     if (isZteF6745Scan) {
       fabricanteNorm = 'ZTE';

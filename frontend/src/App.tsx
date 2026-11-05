@@ -170,30 +170,32 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     modelUpper.includes('6745') ||
     modelUpper.includes('F674') ||
     (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTE0') ||
+    (dataCopy.cpe_sn || '').toUpperCase().startsWith('ZTEO') ||
     ((dataCopy as any).d_sn || '').toUpperCase().startsWith('ZTE0') ||
+    ((dataCopy as any).d_sn || '').toUpperCase().startsWith('ZTEO') ||
     ((mfgUpper.includes('ZTE') || modelUpper.includes('ZXHN') || (dataCopy.gpon_sn || '').toUpperCase().startsWith('ZTEG')) &&
       !modelUpper.includes('F6645') &&
       !modelUpper.includes('6645') &&
-      !modelUpper.includes('F6600') &&
-      !modelUpper.includes('6600') &&
       !modelUpper.includes('F670') &&
-      !(dataCopy.wifi_ssid || '').toUpperCase().startsWith('CLARO') &&
-      !(dataCopy.usuario || '').toUpperCase().startsWith('CLARO') &&
-      ((dataCopy.wifi_ssid || '').toUpperCase().includes('TIM_ULTRAFIBRA') ||
-        modelUpper.includes('GPON') ||
-        modelUpper.includes('ONT') ||
-        modelUpper.includes('ZXHN') ||
-        modelUpper.includes('WIFI') ||
-        modelUpper === 'ZTE' ||
-        modelUpper === 'N/A' ||
-        modelUpper === ''))
+      ((dataCopy.wifi_ssid || '').toUpperCase().includes('TIM') ||
+        (dataCopy.usuario || '').trim().toLowerCase() === 'admin' ||
+        (!(dataCopy.wifi_ssid || '').toUpperCase().startsWith('CLARO') &&
+          !(dataCopy.usuario || '').toUpperCase().startsWith('CLARO') &&
+          !/^219\d{9}$/.test(String(dataCopy.cpe_sn || '').trim()) &&
+          !String((dataCopy as any).d_sn || '').toUpperCase().startsWith('ZTE3') &&
+          !modelUpper.includes('F6600') &&
+          !modelUpper.includes('6600'))))
   ) {
     dataCopy.modelo = 'ZXHN F6745';
     dataCopy.fabricante = 'ZTE';
-    const dSnVal = String((dataCopy as any).d_sn || '').trim().toUpperCase();
-    const cpeVal = String(dataCopy.cpe_sn || '').trim().toUpperCase();
+    let dSnVal = String((dataCopy as any).d_sn || '').trim().toUpperCase();
+    let cpeVal = String(dataCopy.cpe_sn || '').trim().toUpperCase();
+    if (dSnVal.startsWith('ZTEO')) dSnVal = 'ZTE0' + dSnVal.substring(4);
+    if (cpeVal.startsWith('ZTEO')) cpeVal = 'ZTE0' + cpeVal.substring(4);
     if (dSnVal && dSnVal !== 'N/A' && dSnVal !== 'NA' && (!cpeVal || cpeVal === 'N/A' || cpeVal === 'NA' || cpeVal.startsWith('180000'))) {
       dataCopy.cpe_sn = dSnVal;
+    } else if (cpeVal) {
+      dataCopy.cpe_sn = cpeVal;
     }
   }
   // Normalizar modelo se for ZTE ZXHN F6645P
@@ -201,8 +203,8 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.modelo = 'ZXHN F6645P';
     dataCopy.fabricante = 'ZTE';
   }
-  // Normalizar modelo se for ZTE ZXHN F6600P
-  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+  // Normalizar modelo se for ZTE ZXHN F6600P (exclusivo Claro)
+  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600')) {
     dataCopy.modelo = 'ZXHN F6600P';
     dataCopy.fabricante = 'ZTE';
   }
@@ -361,7 +363,7 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
   }
 
   // Rule 1.7.3: ZTE ZXHN F6600P (Claro)
-  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600')) {
+  else if (dataCopy.modelo === 'ZXHN F6600P') {
     dataCopy.modelo = 'ZXHN F6600P';
     dataCopy.fabricante = 'ZTE';
     const cleanFullMac = dataCopy.mac.replace(/[:\s-]/g, '').toUpperCase();
@@ -459,9 +461,19 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
   const is5670 = (String(safeExisting.modelo || '').toUpperCase().includes('5670')) ||
                  (String(safeScanned.modelo || '').toUpperCase().includes('5670'));
 
-  const isClaro = (String(safeExisting.modelo || '').toUpperCase().includes('6600')) ||
+  const isF6745Merge =
+    String(safeScanned.modelo || '').toUpperCase().includes('6745') ||
+    String(safeExisting.modelo || '').toUpperCase().includes('6745') ||
+    String(safeScanned.cpe_sn || '').toUpperCase().startsWith('ZTE0') ||
+    String(safeScanned.cpe_sn || '').toUpperCase().startsWith('ZTEO') ||
+    String((safeScanned as any).d_sn || '').toUpperCase().startsWith('ZTE0') ||
+    String((safeScanned as any).d_sn || '').toUpperCase().startsWith('ZTEO') ||
+    String(safeScanned.wifi_ssid || '').toUpperCase().includes('TIM');
+
+  const isClaro = !isF6745Merge && (
+                  (String(safeExisting.modelo || '').toUpperCase().includes('6600')) ||
                   (String(safeScanned.modelo || '').toUpperCase().includes('6600')) ||
-                  (String(safeExisting.fabricante || '').toUpperCase().includes('ZTE') && String(safeScanned.modelo || '').toUpperCase().includes('6600'));
+                  (String(safeExisting.fabricante || '').toUpperCase().includes('ZTE') && String(safeScanned.modelo || '').toUpperCase().includes('6600')));
 
   const isBcUm221e = (String(safeExisting.modelo || '').toUpperCase().includes('UM221E')) ||
                      (String(safeScanned.modelo || '').toUpperCase().includes('UM221E'));
@@ -584,6 +596,10 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
     });
   }
 
+  if (isF6745Merge) {
+    merged.fabricante = 'ZTE';
+    merged.modelo = 'ZXHN F6745';
+  }
   return applyMacSsidRules(merged);
 }
 
@@ -2583,11 +2599,12 @@ export default function App() {
                       merged[key] = oldVal || 'N/A';
                     }
                   });
-                  return merged;
+                  return applyMacSsidRules(merged);
                 });
+                const normalizedLocal = applyMacSsidRules(safeDb);
                 setEquipmentExistsInDb(true);
-                setExistingEquipmentData(dbResult.data);
-                setTargetDb(dbResult.database || null);
+                setExistingEquipmentData(normalizedLocal);
+                setTargetDb(normalizedLocal.modelo === 'ZXHN F6745' ? 'db-scanonu' : (dbResult.database || null));
                 setShowDuplicateModal(true);
                 setScreen('result');
                 return; // Sai do fluxo economizando o token!
@@ -2640,7 +2657,7 @@ export default function App() {
             setTimeout(() => {
               setEquipmentExistsInDb(true);
               setExistingEquipmentData(safeExisting);
-              setTargetDb(result.database || null);
+              setTargetDb(merged.modelo === 'ZXHN F6745' ? 'db-scanonu' : (result.database || null));
               setShowDuplicateModal(true);
               setScreen('result');
             }, 100);
@@ -4016,7 +4033,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.52</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.53</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5524,7 +5541,8 @@ export default function App() {
 
                   {(() => {
                     const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
-                    const isClaroModel = data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro';
+                    const isF6745Model = data.modelo === 'ZXHN F6745' || String(data.modelo || '').toUpperCase().includes('6745') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTE0') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTEO') || String(data.wifi_ssid || '').toUpperCase().includes('TIM');
+                    const isClaroModel = !isF6745Model && (data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro');
 
                     let isWifiKeyInvalidLength = false;
                     let isWebKeyInvalidLength = false;
@@ -5586,7 +5604,8 @@ export default function App() {
 
                       const isFast5670Model = data.modelo === 'F@ST 5670' || data.modelo === 'F@ST 5670V2';
                       const isLockedForModel = isFast5670Model && field !== 'senha';
-                      const isClaroModel = data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro';
+                      const isF6745Model = data.modelo === 'ZXHN F6745' || String(data.modelo || '').toUpperCase().includes('6745') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTE0') || String(data.cpe_sn || '').toUpperCase().startsWith('ZTEO') || String(data.wifi_ssid || '').toUpperCase().includes('TIM');
+                      const isClaroModel = !isF6745Model && (data.modelo === 'ZXHN F6600P' || targetDatabase === 'ScanONU_Claro' || selectedClientMenu === 'claro');
                       const isHG8145X6Model = data.modelo === 'HG8145X6';
 
                       let isWifiKeyInvalidLength = false;
