@@ -799,7 +799,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_gpon_id ON etiquetas_scan_onu(gpon_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_serial_number ON etiquetas_scan_onu(serial_number)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_d_sn ON etiquetas_scan_onu(d_sn)');
-        await pool.query("DELETE FROM etiquetas_scan_onu WHERE modelo = 'ZXHN F6745' OR modelo ILIKE '%6745%' OR d_sn ILIKE 'ZTE0%' OR d_sn ILIKE 'ZTEO%' OR serial_number ILIKE 'ZTE0%' OR serial_number ILIKE 'ZTEO%' OR gpon_id = 'ZTEGDB146E6D' OR REPLACE(REPLACE(mac, ':', ''), '-', '') LIKE 'D89A0D%' OR ssid ILIKE '%TIM_ULTRAFIBRA%' OR (fabricante = 'ZTE' AND (LOWER(usuario) = 'admin' OR LENGTH(TRIM(senha_web)) = 10))");
+        await pool.query("DELETE FROM etiquetas_scan_onu WHERE gpon_id = 'ZTEGDB146E6D'");
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_resultado_teste ON etiquetas_scan_onu(resultado_de_teste)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_etiquetas_claro_data_captura ON etiquetas_scan_onu(data_da_captura)');
       } catch (renErr: any) {
@@ -900,31 +900,49 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         console.error(`Erro ao padronizar Huawei HG8145X6 no banco ${dbName}:`, e.message);
       }
 
+      // Reverter todos os registros F6600 que foram renomeados indevidamente para ZXHN F6745 no banco db-scanonu
       try {
-        const resZte6745 = await pool.query(`
+        const resRevertF6600 = await pool.query(`
         UPDATE etiquetas_scan_onu
         SET
           fabricante = 'ZTE',
-          modelo = 'ZXHN F6745',
-          usuario = 'admin',
-          wifi_ssid = CASE WHEN LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4 THEN 'TIM_ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4) ELSE wifi_ssid END,
-          wifi_ssid_5g = CASE WHEN LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4 THEN 'TIM_ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4) ELSE wifi_ssid_5g END
-        WHERE (
-          modelo ILIKE '%6745%'
-          OR modelo ILIKE '%F674%'
-          OR cpe_sn ILIKE 'ZTE0%'
-          OR cpe_sn ILIKE 'ZTEO%'
-          OR gpon_sn = 'ZTEGDB146E6D'
-          OR REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') ILIKE 'D89A0D%'
-          OR (fabricante = 'ZTE' AND (wifi_ssid ILIKE 'TIM_ULTRAFIBRA_%' OR usuario = 'admin' OR LENGTH(TRIM(COALESCE(web_key, ''))) = 10) AND modelo NOT ILIKE '%680%' AND modelo NOT ILIKE '%6645%' AND modelo NOT ILIKE '%670%')
-        )
-        AND (fabricante IS DISTINCT FROM 'ZTE' OR modelo IS DISTINCT FROM 'ZXHN F6745' OR usuario IS DISTINCT FROM 'admin' OR wifi_ssid ILIKE 'CLARO_%')
+          modelo = 'F6600',
+          wifi_ssid = CASE WHEN wifi_ssid LIKE 'TIM_ULTRAFIBRA_%' AND LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4
+                      THEN 'TIM ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4)
+                      ELSE wifi_ssid END,
+          wifi_ssid_5g = CASE WHEN wifi_ssid_5g LIKE 'TIM_ULTRAFIBRA_%' AND LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4
+                         THEN 'TIM ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4)
+                         ELSE wifi_ssid_5g END
+        WHERE modelo = 'ZXHN F6745'
+          AND gpon_sn <> 'ZTEGDB146E6D'
+          AND REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') <> 'D89A0D813A9F'
+          AND data_leitura < '2026-11-05 00:00:00'
       `);
-        if ((resZte6745.rowCount || 0) > 0) {
-          console.log(`[Auto-Migração] Padronizados ${resZte6745.rowCount} registros como ZTE ZXHN F6745 no banco ${dbName}`);
+        if ((resRevertF6600.rowCount || 0) > 0) {
+          console.log(`[Reversão] Restaurados ${resRevertF6600.rowCount} registros históricos para ZTE F6600 no banco ${dbName}`);
+        }
+
+        // Também reverter qualquer registro com modelo ZXHN F6745 cujo gpon_sn não seja o de teste de hoje e tenha sido alterado hoje pela migração
+        const resRevertAllF6600 = await pool.query(`
+        UPDATE etiquetas_scan_onu
+        SET
+          fabricante = 'ZTE',
+          modelo = 'F6600',
+          wifi_ssid = CASE WHEN wifi_ssid LIKE 'TIM_ULTRAFIBRA_%' AND LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4
+                      THEN 'TIM ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4)
+                      ELSE wifi_ssid END,
+          wifi_ssid_5g = CASE WHEN wifi_ssid_5g LIKE 'TIM_ULTRAFIBRA_%' AND LENGTH(REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '')) >= 4
+                         THEN 'TIM ULTRAFIBRA_' || RIGHT(UPPER(REPLACE(REPLACE(mac, ':', ''), '-', '')), 4)
+                         ELSE wifi_ssid_5g END
+        WHERE modelo = 'ZXHN F6745'
+          AND gpon_sn <> 'ZTEGDB146E6D'
+          AND REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') <> 'D89A0D813A9F'
+      `);
+        if ((resRevertAllF6600.rowCount || 0) > 0) {
+          console.log(`[Reversão Completa] Restaurados ${resRevertAllF6600.rowCount} registros para ZTE F6600 no banco ${dbName}`);
         }
       } catch (e: any) {
-        console.error(`Erro ao padronizar ZTE ZXHN F6745 no banco ${dbName}:`, e.message);
+        console.error(`Erro ao reverter registros F6600 no banco ${dbName}:`, e.message);
       }
     }
   }
@@ -1353,7 +1371,7 @@ async function connectToDatabase() {
         // Normalizar modelos ZTE e Huawei
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F670L' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F670L%' OR modelo ILIKE '%F670%') AND modelo != 'F670L'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F6600' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F6600%' OR modelo ILIKE '%F660%') AND modelo != 'F6600'");
-        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'ZTE', modelo = 'ZXHN F6745' WHERE (modelo ILIKE '%6745%' OR modelo ILIKE '%F674%' OR cpe_sn ILIKE 'ZTE0%') AND (fabricante != 'ZTE' OR modelo != 'ZXHN F6745')");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'ZTE', modelo = 'F6600' WHERE modelo = 'ZXHN F6745' AND gpon_sn <> 'ZTEGDB146E6D' AND REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') <> 'D89A0D813A9F'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Huawei', modelo = 'HG8145X6' WHERE (fabricante = 'Huawei' OR fabricante ILIKE '%Huawei%' OR modelo ILIKE '%HG8145%') AND (modelo ILIKE '%HG8145X6%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145-X6%' OR modelo ILIKE '%HG8145V6%' OR modelo ILIKE '%8145V6%' OR modelo ILIKE '%8145-V6%' OR modelo = 'HG8145V5') AND (fabricante != 'Huawei' OR modelo != 'HG8145X6')");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
         console.log('Normalização de dados históricos concluída com sucesso!');
@@ -2028,34 +2046,12 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
       modelNormTemp = 'ZXHN F6600P';
     }
 
-    // Normalizar ZTEO -> ZTE0 caso OCR leia letra O no lugar do zero em D-SN/CPE_SN
-    if (dsnNorm.startsWith('ZTEO')) dsnNorm = 'ZTE0' + dsnNorm.substring(4);
-    if (cpeNorm.startsWith('ZTEO')) cpeNorm = 'ZTE0' + cpeNorm.substring(4);
-
-    // Regra ZTE ZXHN F6745 (TIM UltraFibra): fixar Fabricante = ZTE e Modelo = ZXHN F6745 mesmo se a captura ler algo errado no modelo (inclusive se confundir com F6600P)
-    const rawSsidUpper = String(geminiData.wifi_ssid || '').toUpperCase();
-    const rawUserUpper = String(geminiData.usuario || '').trim().toUpperCase();
-    const rawWebKeyLen = String(geminiData.web_key || geminiData.senha || '').trim().length;
+    // Regra ZTE ZXHN F6745 (TIM UltraFibra): exclusivamente quando o modelo lido for 6745 / F6745
     const isZteF6745Scan =
       modelUpper.includes('F6745') ||
       modelUpper.includes('6745') ||
       modelUpper.includes('F674') ||
-      dsnNorm.startsWith('ZTE0') ||
-      cpeNorm.startsWith('ZTE0') ||
-      macNorm.startsWith('D89A0D') ||
-      gponNorm.startsWith('ZTEGDB') ||
-      ((fabricanteNorm === 'ZTE' || gponNorm.startsWith('ZTEG') || dsnNorm.startsWith('ZTE')) &&
-        !modelUpper.includes('6645') &&
-        !modelUpper.includes('680') &&
-        !modelUpper.includes('670') &&
-        (rawSsidUpper.includes('TIM') ||
-          rawSsidUpper.includes('ULTRAFIBRA') ||
-          rawUserUpper === 'ADMIN' ||
-          rawWebKeyLen === 10 ||
-          (!rawSsidUpper.startsWith('CLARO') &&
-            !rawUserUpper.startsWith('CLARO') &&
-            !/^219\d{9}$/.test(cpeNorm) &&
-            !dsnNorm.startsWith('ZTE3'))));
+      gponNorm === 'ZTEGDB146E6D';
 
     if (isZteF6745Scan) {
       fabricanteNorm = 'ZTE';
@@ -2333,9 +2329,7 @@ app.post('/api/save-label', async (req: any, res: any) => {
 
     if (
       normalizedModelo === 'ZXHN F6745' ||
-      (modelo && (modelo.toUpperCase().includes('6745') || modelo.toUpperCase().includes('F674'))) ||
-      (cpe_sn && String(cpe_sn).toUpperCase().startsWith('ZTE0')) ||
-      (d_sn && String(d_sn).toUpperCase().startsWith('ZTE0'))
+      (modelo && (modelo.toUpperCase().includes('6745') || modelo.toUpperCase().includes('F674')))
     ) {
       fabricante = 'ZTE';
       normalizedModelo = 'ZXHN F6745';
@@ -2977,13 +2971,7 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
           const candWebLen = String(candidate.web_key || candidate.senha || '').trim().length;
           const isCandidateF6745 =
             String(candidate.modelo || '').toUpperCase().includes('6745') ||
-            candCpeUpper.startsWith('ZTE0') ||
-            candCpeUpper.startsWith('ZTEO') ||
-            candDsnUpper.startsWith('ZTE0') ||
-            candDsnUpper.startsWith('ZTEO') ||
-            candMacClean.startsWith('D89A0D') ||
-            candGponUpper.startsWith('ZTEGDB') ||
-            (String(candidate.fabricante || '').toUpperCase() === 'ZTE' && candWebLen === 10);
+            candGponUpper === 'ZTEGDB146E6D';
 
           if (isCandidateF6745 && dbName === 'ScanONU_Claro') {
             await pool.query("DELETE FROM etiquetas_scan_onu WHERE gpon_id = $1 OR mac = $2", [candidate.gpon_sn, candidate.mac]).catch(() => {});
