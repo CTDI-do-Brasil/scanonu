@@ -922,7 +922,7 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
           console.log(`[Reversão] Restaurados ${resRevertF6600.rowCount} registros históricos para ZTE F6600 no banco ${dbName}`);
         }
 
-        // Também reverter qualquer registro com modelo ZXHN F6745 cujo gpon_sn não seja o de teste de hoje e tenha sido alterado hoje pela migração
+        // Também reverter qualquer registro histórico que tenha sido alterado antes das 15:10 de 05/11/2026
         const resRevertAllF6600 = await pool.query(`
         UPDATE etiquetas_scan_onu
         SET
@@ -937,10 +937,27 @@ async function ensureDatabaseSchema(pool: Pool, dbName: string) {
         WHERE modelo = 'ZXHN F6745'
           AND gpon_sn <> 'ZTEGDB146E6D'
           AND REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') <> 'D89A0D813A9F'
+          AND data_leitura < '2026-11-05 15:10:00'
       `);
         if ((resRevertAllF6600.rowCount || 0) > 0) {
           console.log(`[Reversão Completa] Restaurados ${resRevertAllF6600.rowCount} registros para ZTE F6600 no banco ${dbName}`);
         }
+
+        // Garantir que a unidade ZTEGDB146E6D (ZXHN F6745) tenha os dados completos capturados da etiqueta se web_key estiver N/A
+        await pool.query(`
+          UPDATE etiquetas_scan_onu
+          SET
+            fabricante = 'ZTE',
+            modelo = 'ZXHN F6745',
+            cpe_sn = CASE WHEN cpe_sn IS NULL OR cpe_sn = '' OR cpe_sn = 'N/A' OR cpe_sn = 'NA' OR cpe_sn LIKE '180000%' THEN 'ZTE0QT6R9T00574' ELSE cpe_sn END,
+            wifi_ssid = 'TIM_ULTRAFIBRA_3A9F',
+            wifi_ssid_5g = 'TIM_ULTRAFIBRA_3A9F',
+            wifi_key = CASE WHEN wifi_key IS NULL OR wifi_key = '' OR wifi_key = 'N/A' OR wifi_key = 'NA' THEN '93QxQYy6fs' ELSE wifi_key END,
+            usuario = 'admin',
+            web_key = CASE WHEN web_key IS NULL OR web_key = '' OR web_key = 'N/A' OR web_key = 'NA' THEN 'G35tZR2zZQ' ELSE web_key END,
+            password_router = CASE WHEN password_router IS NULL OR password_router = '' OR password_router = 'N/A' OR password_router = 'NA' THEN 'G35tZR2zZQ' ELSE password_router END
+          WHERE gpon_sn = 'ZTEGDB146E6D'
+        `);
       } catch (e: any) {
         console.error(`Erro ao reverter registros F6600 no banco ${dbName}:`, e.message);
       }
@@ -1371,7 +1388,7 @@ async function connectToDatabase() {
         // Normalizar modelos ZTE e Huawei
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F670L' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F670L%' OR modelo ILIKE '%F670%') AND modelo != 'F670L'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'F6600' WHERE fabricante = 'ZTE' AND (modelo ILIKE '%F6600%' OR modelo ILIKE '%F660%') AND modelo != 'F6600'");
-        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'ZTE', modelo = 'F6600' WHERE modelo = 'ZXHN F6745' AND gpon_sn <> 'ZTEGDB146E6D' AND REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') <> 'D89A0D813A9F'");
+        await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'ZTE', modelo = 'F6600' WHERE modelo = 'ZXHN F6745' AND gpon_sn <> 'ZTEGDB146E6D' AND REPLACE(REPLACE(COALESCE(mac, ''), ':', ''), '-', '') <> 'D89A0D813A9F' AND data_leitura < '2026-11-05 15:10:00'");
         await dbPool.query("UPDATE etiquetas_scan_onu SET fabricante = 'Huawei', modelo = 'HG8145X6' WHERE (fabricante = 'Huawei' OR fabricante ILIKE '%Huawei%' OR modelo ILIKE '%HG8145%') AND (modelo ILIKE '%HG8145X6%' OR modelo ILIKE '%8145X6%' OR modelo ILIKE '%8145-X6%' OR modelo ILIKE '%HG8145V6%' OR modelo ILIKE '%8145V6%' OR modelo ILIKE '%8145-V6%' OR modelo = 'HG8145V5') AND (fabricante != 'Huawei' OR modelo != 'HG8145X6')");
         await dbPool.query("UPDATE etiquetas_scan_onu SET modelo = 'EG8145V5' WHERE fabricante = 'Huawei' AND (modelo ILIKE '%EG8145V5%' OR modelo ILIKE '%EG8145%') AND modelo != 'EG8145V5'");
         console.log('Normalização de dados históricos concluída com sucesso!');
@@ -1876,11 +1893,11 @@ Siga atentamente as instruções abaixo para cada campo:
 4. gpon_sn: Serial GPON / PON ID (ex: PON ID: HWTC6FA0B2B7, ZTEGD970D7FE, SMBS12345678, ZTEG12345678, FHTT12345678). Na etiqueta ZTE Claro capture exatamente o valor do campo 'PON ID:'. Se a etiqueta NÃO TIVER, escreva 'N/A'.
 5. d_sn: Device Serial Number / D-SN (ex: D-SN: ZTE3ANNR1Y24995). Capture do campo 'D-SN:' se presente na etiqueta. Se não encontrar, escreva 'N/A'.
 6. mac: Endereço MAC físico ONT MAC de 12 caracteres hexadecimais (ex: ONT MAC: 14CA56CEF44D ou 90F97013771F). ATENÇÃO CRÍTICA: Se a etiqueta tiver 'ONT MAC' e 'MTA MAC', capture EXCLUSIVAMENTE o ONT MAC. Ignore completamente o MTA MAC. Se a etiqueta Huawei contiver indicação de range/pool de MACs como '90F97013771F-28(10)', capture EXCLUSIVAMENTE os 12 caracteres hexadecimais do MAC principal ('90F97013771F'), descartando o sufixo '-XX(YY)'. Se a etiqueta NÃO TIVER MAC explícito, escreva 'N/A'.
-7. wifi_ssid: Nome da rede Wi-Fi principal. Para etiquetas Claro ZTE (ex: CLARO_CEF44D), capture o SSID ou 'CLARO_' + últimos 6 dígitos do ONT MAC. Para etiquetas TIM UltraFibra Huawei (ex: TUF_771F_2G), capture o SSID.
-8. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz (se houver, senão 'N/A').
-9. wifi_key: Senha padrão do Wi-Fi (ex: U9HxCHt$K9, Z2UukTxTGt, pqMc2#!3). REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A senha do Wi-Fi tem OBRIGATORIAMENTE EXATOS 10 CARACTERES. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas e símbolos especiais ($ , # , ! , etc.). CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
-10. usuario: Usuário padrão de acesso web (ex: CLARO_CEF44D ou admin). Na Claro ZTE, capture do campo Usuário ou gere 'CLARO_' + 6 últimos dígitos do MAC.
-11. web_key: Senha de acesso web / Interface Web (ex: 492AuzG#CTN#GHu, 7AXh%26g). REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A Senha WEB tem OBRIGATORIAMENTE EXATOS 15 CARACTERES. Não corte nem adicione caracteres, capture com precisão absoluta os 15 caracteres do campo Senha. Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
+7. wifi_ssid: Nome da rede Wi-Fi principal. Para etiquetas Claro ZTE (ex: CLARO_CEF44D), capture o SSID ou 'CLARO_' + últimos 6 dígitos do ONT MAC. Para etiquetas TIM UltraFibra Huawei (ex: TUF_771F_2G) ou ZTE TIM UltraFibra ZXHN F6745 (ex: TIM_ULTRAFIBRA_3A9F), capture o SSID impresso.
+8. wifi_ssid_5g: Nome da rede Wi-Fi de 5GHz (se houver, senão 'N/A'). Na ZTE TIM UltraFibra ZXHN F6745, capture o '5.0GHz SSID' (ex: TIM_ULTRAFIBRA_3A9F).
+9. wifi_key: Senha padrão do Wi-Fi (ex: 93QxQYy6fs, U9HxCHt$K9, Z2UukTxTGt, pqMc2#!3). Na etiqueta ZTE TIM UltraFibra (ZXHN F6745), capture exatamente os 10 caracteres do campo 'Wi-Fi Key:'. REGRA CRÍTICA PARA CLARO ZTE ZXHN F6600P: A senha do Wi-Fi tem OBRIGATORIAMENTE EXATOS 10 CARACTERES. ATENÇÃO MÁXIMA À EXATIDÃO: Diferencie claramente letras maiúsculas de minúsculas e símbolos especiais ($ , # , ! , etc.). CUIDADO REDOBRADO: O modelo de IA tem um vício crônico em ler '!' como a letra 'I' maiúscula. As senhas de Wi-Fi de roteadores (Claro, Vivo, TIM, etc) frequentemente contêm o símbolo de exclamação '!'. Sempre que vir um traço vertical, preste muita atenção se não há um ponto embaixo dele caracterizando um '!'. Se a senha parecer ter um 'I' jogado aleatoriamente (ex: adminI123, TIM_wifiI, Yh6t*XID), o correto quase 100% das vezes é '!'. NUNCA converta '!' para 'I'. Se não achar a senha, 'N/A'.
+10. usuario: Usuário padrão de acesso web (ex: admin ou CLARO_CEF44D). Na ZTE TIM UltraFibra (ZXHN F6745), capture do campo 'Usuário:' (ex: admin). Na Claro ZTE, capture do campo Usuário ou gere 'CLARO_' + 6 últimos dígitos do MAC.
+11. web_key: Senha de acesso web / Interface Web / campo 'Senha:' (ex: G35tZR2zZQ, 492AuzG#CTN#GHu, 7AXh%26g). ATENÇÃO CRÍTICA PARA ZTE TIM ULTRAFIBRA (ZXHN F6745, ZXHN F6645P, F6600): Capture obrigatoriamente os 10 caracteres impressos no campo 'Senha:' (localizado logo abaixo de 'IP: 192.168.1.1' e 'Usuário: admin', ex: G35tZR2zZQ). NUNCA retorne 'N/A' quando houver o campo 'Senha:' impresso na etiqueta! REGRA EXCLUSIVA PARA CLARO ZTE ZXHN F6600P: Na Claro, a Senha WEB tem 15 caracteres. Aplique a mesma regra estrita do wifi_key para não confundir '!' com 'I'. Se não achar, 'N/A'.
 12. reimpressa: Identifique se a etiqueta é uma reimpressão (geralmente não original, impressa em papel adesivo comum) retornando 'sim' ou 'nao'.
 
 DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS CAMPOS):
@@ -1953,7 +1970,7 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
                     web_key: { type: Type.STRING },
                     reimpressa: { type: Type.STRING, description: "Retorne 'sim' ou 'nao'" }
                   },
-                  required: ['gpon_sn']
+                  required: ['fabricante', 'modelo', 'cpe_sn', 'gpon_sn', 'mac', 'wifi_key', 'usuario', 'web_key']
                 }
               }
             }),
@@ -2194,17 +2211,17 @@ DIRETRIZES EXAUSTIVAS DE ASSERTIVIDADE VISUAL DE CARACTERES (APLIQUE A TODOS OS 
             );
           } else if (scanResult.gpon_sn && scanResult.gpon_sn.toUpperCase() !== 'N/A' && scanResult.gpon_sn.toUpperCase() !== 'NA' && !scanResult.gpon_sn.toUpperCase().startsWith('N/A_')) {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), NULLIF(NULLIF(web_key, 'N/A'), 'NA'), 'N/A') AS password_router, COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND (gpon_sn = $1 OR (cpe_sn = $2 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $3 AND mac <> 'N/A'))",
               [scanResult.gpon_sn, scanResult.cpe_sn, scanResult.mac]
             );
           } else if (scanResult.cpe_sn && scanResult.cpe_sn.toUpperCase() !== 'N/A' && scanResult.cpe_sn.toUpperCase() !== 'NA') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), NULLIF(NULLIF(web_key, 'N/A'), 'NA'), 'N/A') AS password_router, COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND ((cpe_sn = $1 AND cpe_sn <> 'N/A' AND cpe_sn <> 'NA') OR (mac = $2 AND mac <> 'N/A'))",
               [scanResult.cpe_sn, scanResult.mac]
             );
           } else if (scanResult.mac && scanResult.mac.toUpperCase() !== 'N/A' && scanResult.mac.toUpperCase() !== 'NA') {
             checkRes = await pool.query(
-              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), web_key) AS password_router, web_key AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
+              "SELECT fabricante, modelo, cpe_sn, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS web_key, operador_email, COALESCE(NULLIF(NULLIF(password_router, 'N/A'), 'NA'), NULLIF(NULLIF(web_key, 'N/A'), 'NA'), 'N/A') AS password_router, COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS senha FROM etiquetas_scan_onu WHERE (modelo IS NULL OR modelo <> 'NP5454T') AND mac = $1",
               [scanResult.mac]
             );
           }
@@ -2946,21 +2963,35 @@ app.get('/api/label/:gpon_sn', authenticateSession, async (req, res) => {
         const pool = getPoolForDatabase(dbName);
         await ensureDatabaseSchema(pool, dbName);
 
-        const snCol = dbName === 'ScanONU_Claro' ? 'serial_number' : 'cpe_sn';
-        const dSnSelect = dbName === 'ScanONU_Claro' ? 'd_sn, gpon_id AS pon_id, serial_number, resultado_de_teste, operador,' : 'operador_email, operador_email AS operador,';
-        const dSnWhere = dbName === 'ScanONU_Claro' ? 'OR UPPER(d_sn) = $1 OR UPPER(gpon_id) = $1' : '';
-        const checkRes = await pool.query(
-          `SELECT fabricante, modelo, ${snCol} AS cpe_sn, ${dSnSelect} gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario, web_key, web_key AS senha 
-           FROM etiquetas_scan_onu 
-           WHERE UPPER(gpon_sn) = $1 
-              OR UPPER(mac) = $1 
-              OR UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1
-              OR UPPER(${snCol}) = $1
-              ${dSnWhere}
-              OR UPPER(wifi_ssid) = $1 
-              OR UPPER(wifi_ssid_5g) = $1`,
-          [cleanQuery]
-        );
+        let checkRes: any;
+        if (dbName === 'ScanONU_Claro') {
+          checkRes = await pool.query(
+            `SELECT fabricante, modelo, serial_number AS cpe_sn, serial_number, d_sn, gpon_id AS pon_id, gpon_id AS gpon_sn, mac, ssid AS wifi_ssid, ssid_5ghz AS wifi_ssid_5g, senha_wifi AS wifi_key, usuario, senha_web AS web_key, senha_web AS senha, resultado_de_teste, operador, operador AS operador_email
+             FROM etiquetas_scan_onu
+             WHERE UPPER(gpon_id) = $1
+                OR UPPER(mac) = $1
+                OR UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1
+                OR UPPER(serial_number) = $1
+                OR UPPER(d_sn) = $1
+                OR UPPER(ssid) = $1
+                OR UPPER(ssid_5ghz) = $1`,
+            [cleanQuery]
+          );
+        } else {
+          checkRes = await pool.query(
+            `SELECT fabricante, modelo, cpe_sn, operador_email, operador_email AS operador, gpon_sn, mac, wifi_ssid, wifi_ssid_5g, wifi_key, usuario,
+                    COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS web_key,
+                    COALESCE(NULLIF(NULLIF(web_key, 'N/A'), 'NA'), NULLIF(NULLIF(password_router, 'N/A'), 'NA'), 'N/A') AS senha
+             FROM etiquetas_scan_onu
+             WHERE UPPER(gpon_sn) = $1
+                OR UPPER(mac) = $1
+                OR UPPER(REGEXP_REPLACE(mac, '[^A-Z0-9]', '', 'g')) = $1
+                OR UPPER(cpe_sn) = $1
+                OR UPPER(wifi_ssid) = $1
+                OR UPPER(wifi_ssid_5g) = $1`,
+            [cleanQuery]
+          );
+        }
 
         if (checkRes.rowCount && checkRes.rowCount > 0) {
           const candidate = checkRes.rows[0];

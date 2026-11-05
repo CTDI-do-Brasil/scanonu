@@ -184,8 +184,17 @@ function applyMacSsidRules(currentData: ScanData): ScanData {
     dataCopy.modelo = 'ZXHN F6645P';
     dataCopy.fabricante = 'ZTE';
   }
-  // Normalizar modelo se for ZTE ZXHN F6600P
-  else if (modelUpper.includes('F6600') || modelUpper.includes('6600P') || modelUpper.includes('6600') || modelUpper.includes('ZXHN') || mfgUpper.includes('ZTE')) {
+  // Normalizar modelo se for ZTE F670L
+  else if (modelUpper.includes('F670') || modelUpper.includes('670L') || modelUpper.includes('670')) {
+    dataCopy.modelo = 'F670L';
+    dataCopy.fabricante = 'ZTE';
+  }
+  // Normalizar modelo se for ZTE F6600 (TIM) vs ZXHN F6600P (Claro)
+  else if (modelUpper === 'F6600') {
+    dataCopy.modelo = 'F6600';
+    dataCopy.fabricante = 'ZTE';
+  }
+  else if (modelUpper.includes('F6600P') || modelUpper.includes('6600P') || modelUpper.includes('ZXHN F6600')) {
     dataCopy.modelo = 'ZXHN F6600P';
     dataCopy.fabricante = 'ZTE';
   }
@@ -568,6 +577,13 @@ function mergeExistingAndScannedData(existing: ScanData, scanned: ScanData): Sca
         merged[key] = newVal;
       }
     });
+
+    const scanSenha = safeScanned.senha || (safeScanned as any).web_key;
+    const dbSenha = safeExisting.senha || (safeExisting as any).web_key;
+    merged.senha = (scanSenha && scanSenha.toUpperCase() !== 'N/A' && scanSenha.toUpperCase() !== 'NA' && scanSenha.trim() !== '')
+      ? scanSenha
+      : ((dbSenha && dbSenha.toUpperCase() !== 'N/A' && dbSenha.toUpperCase() !== 'NA' && dbSenha.trim() !== '') ? dbSenha : 'N/A');
+    merged.web_key = merged.senha;
   }
 
   if (isF6745Merge) {
@@ -2094,9 +2110,11 @@ export default function App() {
                   continue;
                 }
                 if (dbResponse.ok && dbResult.success && dbResult.data) {
-                    const hasCompleteWifi = dbResult.data.wifi_ssid && (
-                      (dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' && dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A' && dbResult.data.wifi_key !== 'NA') ||
-                      (dbResult.data.wifi_ssid === 'N/A' || dbResult.data.wifi_ssid === 'NA')
+                    const dbWebPass = dbResult.data.senha || dbResult.data.web_key;
+                    const hasCompleteWifi = Boolean(
+                      dbResult.data.wifi_ssid && dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' &&
+                      dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A' && dbResult.data.wifi_key !== 'NA' &&
+                      dbWebPass && dbWebPass !== 'N/A' && dbWebPass !== 'NA'
                     );
                     if (hasCompleteWifi) {
                       result = {
@@ -2302,13 +2320,21 @@ export default function App() {
             return;
           }
           if (dbResponse.ok && dbResult.success && dbResult.data) {
-            result = {
-              success: true,
-              existsInDb: true,
-              data: dbResult.data,
-              existingData: dbResult.data
-            };
-            skipGemini = true;
+            const dbWebPass = dbResult.data.senha || dbResult.data.web_key;
+            const hasCompleteData = Boolean(
+              dbResult.data.wifi_ssid && dbResult.data.wifi_ssid !== 'N/A' && dbResult.data.wifi_ssid !== 'NA' &&
+              dbResult.data.wifi_key && dbResult.data.wifi_key !== 'N/A' && dbResult.data.wifi_key !== 'NA' &&
+              dbWebPass && dbWebPass !== 'N/A' && dbWebPass !== 'NA'
+            );
+            if (hasCompleteData) {
+              result = {
+                success: true,
+                existsInDb: true,
+                data: dbResult.data,
+                existingData: dbResult.data
+              };
+              skipGemini = true;
+            }
           }
         }
       }
@@ -2542,61 +2568,9 @@ export default function App() {
     setShowDuplicateModal(false);
     try {
       const token = localStorage.getItem('scanonu_token');
-      // 1. Tenta detectar código de barras localmente para evitar gastar token se o equipamento já existir no banco
-      console.log('Tentando detectar código de barras localmente...');
-      const localDetection = await detectBarcodeLocally(base64Image);
-      
-      if (localDetection && !fast5670QrData) {
-        const lookupValue = localDetection.gpon_sn || localDetection.mac;
-        if (lookupValue) {
-          console.log(`Buscando no banco por GPON/MAC: ${lookupValue}...`);
-          const dbResponse = await fetch(`/api/label/${encodeURIComponent(lookupValue)}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          const dbResult = await dbResponse.json().catch(() => ({}));
-          if (dbResult && (dbResult.error === 'Enviar para a Atualização' || dbResult.bloqueadoReimpressao)) {
-            setError('Enviar para a Atualização');
-            setScreen('idle');
-            return;
-          }
-          if (dbResponse.ok && dbResult.success && dbResult.data) {
-              const safeDb = sanitizeData(dbResult.data);
-              const hasCompleteWifi = safeDb.wifi_ssid && (
-                (safeDb.wifi_ssid !== 'N/A' && safeDb.wifi_ssid !== 'NA' && safeDb.wifi_key && safeDb.wifi_key !== 'N/A' && safeDb.wifi_key !== 'NA') ||
-                (safeDb.wifi_ssid === 'N/A' || safeDb.wifi_ssid === 'NA')
-              );
-              if (hasCompleteWifi) {
-                console.log('Equipamento com dados completos encontrado no banco localmente (0 tokens gastos!).');
-                setData(prevData => {
-                  const merged = { ...prevData, ...safeDb } as any;
 
-                  Object.keys(dbResult.data).forEach(key => {
-                    const newVal = (dbResult.data as any)[key];
-                    const oldVal = merged[key];
-                    if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
-                      merged[key] = newVal;
-                    } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
-                      merged[key] = oldVal || 'N/A';
-                    }
-                  });
-                  return applyMacSsidRules(merged);
-                });
-                const normalizedLocal = applyMacSsidRules(safeDb);
-                setEquipmentExistsInDb(true);
-                setExistingEquipmentData(normalizedLocal);
-                setTargetDb(normalizedLocal.modelo === 'ZXHN F6745' ? 'db-scanonu' : (dbResult.database || null));
-                setShowDuplicateModal(true);
-                setScreen('result');
-                return; // Sai do fluxo economizando o token!
-              }
-            }
-          }
-        }
-
-      // 2. Se não encontrou no banco, prossegue com Gemini (gastando 1 token)
-      console.log('Código de barras não detectado localmente ou não cadastrado no banco. Chamando Gemini Vision...');
+      // Sempre chama o Gemini Vision na captura de imagem para ler e mostrar exatamente o que foi capturado na etiqueta
+      console.log('Processando captura da etiqueta via Gemini Vision...');
       const response = await fetch('/api/scan-label', {
         method: 'POST',
         headers: {
@@ -2634,8 +2608,8 @@ export default function App() {
             return applied;
           });
         } else if (result.existsInDb && safeExisting) {
-          setData(prevData => {
-            const merged = mergeExistingAndScannedData(safeExisting, safeScanned || prevData);
+          setData(() => {
+            const merged = mergeExistingAndScannedData(safeExisting, safeScanned);
             setTimeout(() => {
               setEquipmentExistsInDb(true);
               setExistingEquipmentData(safeExisting);
@@ -2646,17 +2620,19 @@ export default function App() {
             return merged;
           });
         } else {
-          setData(prevData => {
-            const merged = { ...prevData } as any;
+          setData(() => {
+            const merged = { ...DEFAULT_SCAN_DATA } as any;
             Object.keys(safeScanned).forEach(key => {
               const newVal = String((safeScanned as any)[key] || '');
-              const oldVal = String(merged[key] || '');
               if (newVal && newVal.toUpperCase() !== 'N/A' && newVal.toUpperCase() !== 'NA' && newVal.trim() !== '') {
                 merged[key] = newVal;
-              } else if (!oldVal || oldVal.toUpperCase() === 'N/A' || oldVal.toUpperCase() === 'NA' || oldVal.trim() === '') {
-                merged[key] = oldVal || 'N/A';
+              } else {
+                merged[key] = 'N/A';
               }
             });
+            const scanSenha = safeScanned.senha || (safeScanned as any).web_key;
+            merged.senha = (scanSenha && scanSenha.toUpperCase() !== 'N/A' && scanSenha.toUpperCase() !== 'NA' && scanSenha.trim() !== '') ? scanSenha : 'N/A';
+            merged.web_key = merged.senha;
             const applied = applyMacSsidRules(merged);
             
             setTimeout(() => {
@@ -2677,7 +2653,6 @@ export default function App() {
       setScreen('idle');
     }
   };
-
 
   const handleFast5670QrSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -4015,7 +3990,7 @@ export default function App() {
               <div className="flex items-center justify-between relative z-10">
                 <div className="overflow-hidden mr-2">
                   <p className="text-xs font-bold truncate text-white">{user?.email}</p>
-                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.55</p>
+                  <p className="text-[10px] text-blue-200/70 font-medium capitalize">{user?.role === 'master' ? 'Master' : user?.role === 'consulta' ? 'Técnico' : user?.role === 'operador' ? 'Operador - Smart Scan' : 'Administrador'} • v1.6.56</p>
                 </div>
                 <div className="flex gap-1">
                   <button 
@@ -5951,15 +5926,20 @@ export default function App() {
               O GPON <strong className="text-slate-800 font-semibold">{formatGponForDisplay(data.gpon_sn)}</strong> já está cadastrado. Deseja fazer algum ajuste? Você pode editar as informações na tela e salvá-las diretamente.
             </p>
             
-            <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-600">
-              <div className="font-bold text-slate-700 border-b border-slate-200 pb-1 mb-1">Dados anteriores salvos:</div>
-              <div>• Fabricante: <span className="font-medium text-slate-800">{existingEquipmentData.fabricante} ({existingEquipmentData.modelo})</span></div>
-              <div>• MAC: <span className="font-medium text-slate-800">{existingEquipmentData.mac}</span></div>
-              <div>• SSID 2.4G / Único: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_ssid || 'Não cadastrado'}</span></div>
-              {existingEquipmentData.wifi_ssid_5g && (
-                <div>• SSID 5G: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_ssid_5g}</span></div>
+            <div className="bg-blue-50/70 border border-blue-100 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-700">
+              <div className="font-bold text-[#003865] border-b border-blue-200/70 pb-1 mb-1">Dados capturados na etiqueta:</div>
+              <div>• Fabricante: <span className="font-semibold text-slate-900">{data.fabricante} ({data.modelo})</span></div>
+              {data.cpe_sn && data.cpe_sn !== 'N/A' && (
+                <div>• Serial Number: <span className="font-semibold text-slate-900">{data.cpe_sn}</span></div>
               )}
-              <div>• Senha WIFI: <span className="font-medium text-slate-800">{existingEquipmentData.wifi_key}</span></div>
+              <div>• MAC: <span className="font-semibold text-slate-900">{data.mac}</span></div>
+              <div>• SSID 2.4G / Único: <span className="font-semibold text-slate-900">{data.wifi_ssid || 'N/A'}</span></div>
+              {data.wifi_ssid_5g && data.wifi_ssid_5g !== 'N/A' && (
+                <div>• SSID 5G: <span className="font-semibold text-slate-900">{data.wifi_ssid_5g}</span></div>
+              )}
+              <div>• Senha WIFI: <span className="font-semibold text-slate-900">{data.wifi_key || 'N/A'}</span></div>
+              <div>• Usuário: <span className="font-semibold text-slate-900">{data.usuario || 'N/A'}</span></div>
+              <div>• Senha WEB: <span className="font-semibold text-slate-900">{data.senha || (data as any).web_key || 'N/A'}</span></div>
             </div>
             
             <div className="flex gap-2">
